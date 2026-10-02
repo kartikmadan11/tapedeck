@@ -1,0 +1,40 @@
+{
+  "name": "tapedeck",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Real-time equity trade blotter",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "workspaces": [
+    "shared",
+    "database",
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "npm run build --workspace @tapedeck/frontend",
+    "dev:api": "npm run dev --workspace @tapedeck/backend",
+    "dev:web": "npm run dev --workspace @tapedeck/frontend",
+    "db:generate": "npm run generate --workspace @tapedeck/database",
+    "db:migrate": "npm run migrate --workspace @tapedeck/database",
+    "db:seed": "npm run seed --workspace @tapedeck/database",
+    "start": "npm run start --workspace @tapedeck/backend"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/react": "16.3.3",
+    "@types/node": "22.20.5",
+    "jsdom": "29.1.1",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3",
+    "vitest": "5.0.3"
+  }
+}

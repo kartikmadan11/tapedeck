@@ -1,0 +1,8 @@
+# Normalise line endings so the container entrypoint stays LF on every platform.
+# Without this, a clone on Windows with core.autocrlf=true writes CRLF into
+# shell scripts and the image fails at startup with a bare `\r: not found`.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary

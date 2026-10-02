@@ -1,0 +1,21 @@
+{
+  "name": "@tapedeck/backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts"
+  },
+  "dependencies": {
+    "@fastify/static": "10.1.5",
+    "@fastify/websocket": "11.3.1",
+    "@tapedeck/database": "*",
+    "@tapedeck/shared": "*",
+    "fastify": "5.12.5"
+  },
+  "devDependencies": {
+    "@types/ws": "8.18.1",
+    "ws": "8.22.0"
+  }
+}
