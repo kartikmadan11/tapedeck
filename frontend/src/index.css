@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+/* Tailwind 4 is CSS-first: this block is the config, and there is no
+   tailwind.config.js, no postcss.config.js and no autoprefixer. */
+@theme {
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --color-tape-bg: oklch(0.17 0.01 260);
+  --color-tape-panel: oklch(0.21 0.012 260);
+  --color-tape-line: oklch(0.29 0.014 260);
+  --color-tape-text: oklch(0.92 0.005 260);
+  --color-tape-muted: oklch(0.65 0.012 260);
+  --color-tape-buy: oklch(0.74 0.14 160);
+  --color-tape-sell: oklch(0.7 0.16 25);
+  --color-tape-accent: oklch(0.75 0.13 230);
+}
+
+body {
+  margin: 0;
+  background: var(--color-tape-bg);
+  color: var(--color-tape-text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+/* A new or changed row flashes once. The cheapest possible proof to someone
+   watching two windows that the blotter is genuinely live. */
+@keyframes tape-flash {
+  from {
+    background-color: color-mix(in oklch, var(--color-tape-accent) 35%, transparent);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+.tape-flash {
+  animation: tape-flash 900ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tape-flash {
+    animation: none;
+  }
+}

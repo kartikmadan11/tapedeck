@@ -23,6 +23,9 @@ export default defineConfig({
           hookTimeout: 30_000,
         },
       },
+      // A path, not an inline block: the frontend tests need the app's own Vite
+      // plugins, which live in frontend/vite.config.ts.
+      './frontend',
     ],
   },
 })
