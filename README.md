@@ -307,6 +307,19 @@ hour not spent on the concurrency story the brief actually asks about.
 
 ---
 
+## Deployment
+
+`fly.toml` deploys the same image that `docker compose up --build` builds, with
+`DATABASE_URL` supplied as a secret by `fly postgres attach` and the entrypoint's
+migrate-then-seed-if-empty step doing the rest. The machine is configured not to
+suspend on idle, because a suspended machine drops every open websocket and the
+demonstration is two windows staying connected.
+
+`docker compose up --build` is the primary instruction regardless. A hosted URL is
+additive, never a substitute for a repository that runs in one command.
+
+---
+
 ## Repository layout
 
 ```

@@ -1,0 +1,39 @@
+# Fly builds the same Dockerfile that `docker compose up --build` builds, so the
+# hosted deployment and the local one are the same image. DATABASE_URL is set as
+# a secret rather than here:
+#
+#   fly launch --no-deploy
+#   fly postgres create --name tapedeck-db --region lhr
+#   fly postgres attach tapedeck-db      # sets DATABASE_URL for you
+#   fly deploy
+#
+# The entrypoint migrates and seeds-if-empty on every start, so there is no
+# release_command to keep in step with it.
+
+app = 'tapedeck'
+primary_region = 'lhr'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+
+  # Not suspended on idle. A suspended machine drops every open websocket and
+  # makes the first visit pay a cold start, and the live demo is two browser
+  # windows staying connected.
+  auto_stop_machines = 'off'
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    interval = '15s'
+    timeout = '3s'
+    grace_period = '20s'
+    method = 'GET'
+    path = '/api/health'
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '512mb'
