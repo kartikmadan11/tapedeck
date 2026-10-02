@@ -4,5 +4,5 @@
     "lib": ["ES2023"],
     "types": ["node"]
   },
-  "include": ["shared/src", "database/src", "backend/src", "*.config.ts"]
+  "include": ["shared/src", "database/src", "backend/src", "backend/test", "*.config.ts"]
 }

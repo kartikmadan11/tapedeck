@@ -10,6 +10,19 @@ export default defineConfig({
           include: ['shared/src/**/*.test.ts'],
         },
       },
+      {
+        test: {
+          name: 'backend',
+          environment: 'node',
+          include: ['backend/test/**/*.test.ts'],
+          // Every file truncates the one test database, so they cannot overlap.
+          fileParallelism: false,
+          // Migrations on a cold database plus a real listener are slower than
+          // the 5s default allows.
+          testTimeout: 20_000,
+          hookTimeout: 30_000,
+        },
+      },
     ],
   },
 })
