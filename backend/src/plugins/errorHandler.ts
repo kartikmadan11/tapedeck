@@ -64,7 +64,7 @@ export function registerErrorHandler(app: FastifyInstance, options: ErrorHandler
       const payload: ApiError = {
         code: 'NOT_FOUND',
         message: `No such route: ${request.method} ${request.url}`,
-        details: { tradeId: '' },
+        details: {},
       }
       return reply.status(404).send(payload)
     }

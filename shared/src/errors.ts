@@ -21,10 +21,15 @@ export const validationFailedError = z.object({
   }),
 })
 
+/**
+ * One 404 serves two cases: an unknown trade, which names it, and an unknown
+ * route, which has no trade to name. Hence the optional id rather than an empty
+ * string standing in for one.
+ */
 export const notFoundError = z.object({
   code: z.literal('NOT_FOUND'),
   message: z.string(),
-  details: z.object({ tradeId: z.string() }),
+  details: z.object({ tradeId: z.string().optional() }),
 })
 
 /**
