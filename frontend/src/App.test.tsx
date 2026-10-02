@@ -220,4 +220,18 @@ describe('App', () => {
     expect(screen.getByText('TRD-100002')).toBeInTheDocument()
     expect(fetchMock.mock.calls).toHaveLength(callsBefore)
   })
+
+  it('re-reads the API when refresh is pressed', async () => {
+    renderApp()
+    await screen.findByText('TRD-100001')
+
+    // A trade this client never heard about, because it was booked while the
+    // socket was down. Nothing but a re-read will find it.
+    respondWith([aTrade(), aTrade({ tradeId: 'TRD-100002', symbol: 'HSBA' })], [aPosition()], 2)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+
+    expect(await screen.findByText('TRD-100002')).toBeInTheDocument()
+    expect(badge()).toHaveTextContent('seq 2')
+  })
 })

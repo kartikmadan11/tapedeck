@@ -2,6 +2,7 @@ import type { ReactElement } from 'react'
 import { useCallback, useMemo, useState } from 'react'
 import { ConnectionBadge } from './components/ConnectionBadge.js'
 import { ErrorNotice } from './components/ErrorNotice.js'
+import { RefreshButton } from './components/RefreshButton.js'
 import { BlotterTable } from './features/blotter/BlotterTable.js'
 import type { RowActions } from './features/blotter/columns.js'
 import { HistoryDrawer } from './features/history/HistoryDrawer.js'
@@ -10,13 +11,14 @@ import { useRealtime } from './features/realtime/useRealtime.js'
 import { AmendDialog } from './features/trades/AmendDialog.js'
 import { TradeForm } from './features/trades/TradeForm.js'
 import { useCancelTrade } from './features/trades/useCancelTrade.js'
-import { useBlotter, usePendingTradeIds } from './features/trades/useTrades.js'
+import { useBlotter, usePendingTradeIds, useRefreshBlotter } from './features/trades/useTrades.js'
 
 export function App(): ReactElement {
   const { status } = useRealtime()
   const blotter = useBlotter()
   const pendingIds = usePendingTradeIds()
   const cancel = useCancelTrade()
+  const refresh = useRefreshBlotter()
 
   const [amendingId, setAmendingId] = useState<string | null>(null)
   const [historyId, setHistoryId] = useState<string | null>(null)
@@ -52,7 +54,8 @@ export function App(): ReactElement {
       <header className="flex items-baseline gap-3">
         <h1 className="text-lg font-semibold tracking-tight">tapedeck</h1>
         <span className="text-tape-muted">equity trade blotter</span>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <RefreshButton onRefresh={refresh} refreshing={blotter.isFetching} />
           <ConnectionBadge status={status} cursor={blotter.data?.seq ?? 0} />
         </div>
       </header>

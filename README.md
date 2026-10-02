@@ -83,9 +83,10 @@ TanStack Query entry holding `{ seq, trades, positions }`. The REST load writes
 it and the socket writes it, and **both refuse a payload whose `seq` is behind
 the cached one**. That guard is what makes a refetch safe: without it, a refetch
 replaces the cache when it lands and silently discards every frame that arrived
-while it was in flight. The socket writes through a pure reducer,
-`apply(state, frame)`, which is where the delivery rules are tested without a
-server: stale frames, duplicate frames, out-of-order frames and gaps.
+while it was in flight. The **Refresh** button in the header is that refetch, and
+it is safe to press at any time for the same reason. The socket writes through a
+pure reducer, `apply(state, frame)`, which is where the delivery rules are tested
+without a server: stale frames, duplicate frames, out-of-order frames and gaps.
 
 **Positions are netted in Postgres, never derived in the browser.** They arrive
 in the snapshot, so the panel is populated on first paint rather than after the
