@@ -12,6 +12,17 @@ import {
   timestamp,
 } from 'drizzle-orm/pg-core'
 
+/**
+ * Stored exactly as the wire carries it: UTC, millisecond precision, mapped to a
+ * Date so the projection can emit canonical ISO.
+ *
+ * mode: 'string' would hand back Postgres's own literal, whose offset follows the
+ * server's timezone setting, so the API's timestamp format would depend on a
+ * database session variable. precision: 3 matches the contract, so the value the
+ * database orders by is the value the client sorts by.
+ */
+const WIRE_TIME = { withTimezone: true, precision: 3, mode: 'date' } as const
+
 export const sideEnum = pgEnum('trade_side', ['BUY', 'SELL'])
 export const statusEnum = pgEnum('trade_status', ['ACTIVE', 'CANCELLED'])
 export const eventTypeEnum = pgEnum('trade_event_type', ['CREATED', 'AMENDED', 'CANCELLED'])
@@ -44,15 +55,11 @@ export const trades = pgTable(
     trader: text('trader').notNull(),
     book: text('book').notNull(),
     counterparty: text('counterparty').notNull(),
-    tradeTimestamp: timestamp('trade_timestamp', { withTimezone: true, mode: 'string' }).notNull(),
+    tradeTimestamp: timestamp('trade_timestamp', WIRE_TIME).notNull(),
     status: statusEnum('status').notNull().default('ACTIVE'),
     version: integer('version').notNull().default(1),
-    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp('created_at', WIRE_TIME).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', WIRE_TIME).notNull().defaultNow(),
   },
   (t) => [
     index('trades_symbol_idx').on(t.symbol),
@@ -94,7 +101,7 @@ export const tradeEvents = pgTable(
     before: jsonb('before').$type<Trade | null>(),
     after: jsonb('after').$type<Trade>().notNull(),
     actor: text('actor').notNull(),
-    at: timestamp('at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+    at: timestamp('at', WIRE_TIME).notNull().defaultNow(),
   },
   (t) => [index('trade_events_trade_idx').on(t.tradeId, t.seq)],
 )

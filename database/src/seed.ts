@@ -3,12 +3,12 @@ import {
   type DecimalString,
   fromMinorUnits,
   type Side,
-  type Trade,
   toDecimal,
   toMinorUnits,
 } from '@tapedeck/shared'
 import { sql } from 'drizzle-orm'
 import { createDatabase, type DatabaseHandle } from './client.js'
+import { toTrade } from './projection.js'
 import { BOOKS, COUNTERPARTIES, INSTRUMENTS, SEED_ACTOR, TRADERS } from './reference.js'
 import { Rng } from './rng.js'
 import { tradeEvents, trades } from './schema.js'
@@ -72,7 +72,7 @@ export async function seed(handle: DatabaseHandle): Promise<SeedSummary> {
       const instrument = rng.pick(INSTRUMENTS)
       const side: Side = rng.chance(0.52) ? 'BUY' : 'SELL'
       const minutesAgo = rng.int(0, WINDOW_HOURS * 60)
-      const tradeTimestamp = new Date(now.getTime() - minutesAgo * 60_000).toISOString()
+      const tradeTimestamp = new Date(now.getTime() - minutesAgo * 60_000)
 
       const [created] = await tx
         .insert(trades)
@@ -106,9 +106,7 @@ export async function seed(handle: DatabaseHandle): Promise<SeedSummary> {
       // Re-priced or re-sized after booking. Only the amendable fields move.
       if (rng.chance(AMEND_RATE)) {
         const before = toTrade(current)
-        const amendedAt = new Date(
-          new Date(tradeTimestamp).getTime() + rng.int(1, 20) * 60_000,
-        ).toISOString()
+        const amendedAt = new Date(tradeTimestamp.getTime() + rng.int(1, 20) * 60_000)
 
         const [next] = await tx
           .update(trades)
@@ -143,9 +141,7 @@ export async function seed(handle: DatabaseHandle): Promise<SeedSummary> {
       // so a cancelled trade can carry a three-event history.
       if (rng.chance(CANCEL_RATE)) {
         const before = toTrade(current)
-        const cancelledAt = new Date(
-          new Date(current.updatedAt).getTime() + rng.int(1, 30) * 60_000,
-        ).toISOString()
+        const cancelledAt = new Date(current.updatedAt.getTime() + rng.int(1, 30) * 60_000)
 
         const [next] = await tx
           .update(trades)
@@ -177,24 +173,6 @@ export async function seed(handle: DatabaseHandle): Promise<SeedSummary> {
   })
 
   return { trades: TRADE_COUNT, amended, cancelled, events }
-}
-
-/** Projects a row onto the wire contract. Price stays a string. */
-function toTrade(row: typeof trades.$inferSelect): Trade {
-  return {
-    tradeId: row.tradeId,
-    symbol: row.symbol,
-    side: row.side,
-    quantity: row.quantity,
-    price: row.price as Trade['price'],
-    trader: row.trader,
-    book: row.book,
-    counterparty: row.counterparty,
-    tradeTimestamp: row.tradeTimestamp,
-    status: row.status,
-    version: row.version,
-    updatedAt: row.updatedAt,
-  }
 }
 
 /**

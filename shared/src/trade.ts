@@ -24,6 +24,14 @@ const symbol = z
 
 const party = z.string().trim().min(1).max(64)
 
+/**
+ * UTC ISO-8601 at millisecond precision, which is what `Date.toISOString()`
+ * produces. Offsets are refused on purpose: a single format means these strings
+ * sort chronologically by byte order, which the blotter's ordering relies on,
+ * and the wire format cannot drift with a database session's timezone.
+ */
+const timestamp = z.iso.datetime()
+
 const quantity = z
   .number()
   .int({ error: 'quantity must be a whole number of shares' })
@@ -39,10 +47,10 @@ export const trade = z.object({
   trader: party,
   book: party,
   counterparty: party,
-  tradeTimestamp: z.string(),
+  tradeTimestamp: timestamp,
   status: tradeStatus,
   version: z.number().int().positive(),
-  updatedAt: z.string(),
+  updatedAt: timestamp,
 })
 export type Trade = z.infer<typeof trade>
 
@@ -58,7 +66,7 @@ export const createTradeInput = z.strictObject({
   trader: party,
   book: party,
   counterparty: party,
-  tradeTimestamp: z.string().optional(),
+  tradeTimestamp: timestamp.optional(),
 })
 export type CreateTradeInput = z.infer<typeof createTradeInput>
 
@@ -97,7 +105,7 @@ export const tradeEvent = z.object({
   before: trade.nullable(),
   after: trade,
   actor: party,
-  at: z.string(),
+  at: timestamp,
 })
 export type TradeEvent = z.infer<typeof tradeEvent>
 

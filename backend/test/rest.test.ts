@@ -42,6 +42,26 @@ describe('POST /api/trades', () => {
     })
   })
 
+  it('returns timestamps as UTC ISO, not a Postgres literal', async () => {
+    const trade = await createTrade(app, { tradeTimestamp: '2026-10-02T09:15:00.000Z' })
+
+    // A Postgres timestamptz rendered as a string would be
+    // '2026-10-02 09:15:00+00', whose offset follows the server's timezone
+    // setting. The format must not depend on a database session variable.
+    expect(trade).toMatchObject({ tradeTimestamp: '2026-10-02T09:15:00.000Z' })
+    expect(trade.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+  })
+
+  it('refuses a trade timestamp that is not UTC ISO', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/trades',
+      payload: newTradeBody({ tradeTimestamp: '2026-10-02 09:15:00+01' }),
+    })
+
+    expect(response.statusCode).toBe(400)
+  })
+
   it('uppercases the symbol through the shared schema', async () => {
     const trade = await createTrade(app, { symbol: 'vod.l' })
     expect(trade).toMatchObject({ symbol: 'VOD.L' })

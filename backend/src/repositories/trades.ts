@@ -1,5 +1,5 @@
 import type { Database, Queryable } from '@tapedeck/database'
-import { tradeEvents, trades } from '@tapedeck/database'
+import { toTrade, toTradeEvent, tradeEvents, trades } from '@tapedeck/database'
 import {
   type AmendTradeInput,
   type CreateTradeInput,
@@ -34,24 +34,6 @@ const WRITE_LOCK_KEY = 8_427_301
  */
 async function acquireWriteLock(tx: Queryable): Promise<void> {
   await tx.execute(sql`select pg_advisory_xact_lock(${WRITE_LOCK_KEY})`)
-}
-
-/** Projects a row onto the wire contract. Price stays the string pg returned. */
-function toTrade(row: typeof trades.$inferSelect): Trade {
-  return {
-    tradeId: row.tradeId,
-    symbol: row.symbol,
-    side: row.side,
-    quantity: row.quantity,
-    price: row.price as Trade['price'],
-    trader: row.trader,
-    book: row.book,
-    counterparty: row.counterparty,
-    tradeTimestamp: row.tradeTimestamp,
-    status: row.status,
-    version: row.version,
-    updatedAt: row.updatedAt,
-  }
 }
 
 /** The result of a mutation: the new state plus the seq the event was written at. */
@@ -131,15 +113,7 @@ export class TradeRepository {
       .where(eq(tradeEvents.tradeId, tradeId))
       .orderBy(asc(tradeEvents.seq))
 
-    return rows.map((row) => ({
-      seq: row.seq,
-      tradeId: row.tradeId,
-      eventType: row.eventType,
-      before: row.before,
-      after: row.after,
-      actor: row.actor,
-      at: row.at,
-    }))
+    return rows.map(toTradeEvent)
   }
 
   async createTrade(input: CreateTradeInput, actor: string): Promise<MutationResult> {
@@ -156,7 +130,7 @@ export class TradeRepository {
           trader: input.trader,
           book: input.book,
           counterparty: input.counterparty,
-          tradeTimestamp: input.tradeTimestamp ?? new Date().toISOString(),
+          tradeTimestamp: new Date(input.tradeTimestamp ?? Date.now()),
         })
         .returning()
 
@@ -199,7 +173,7 @@ export class TradeRepository {
           price: input.price,
           counterparty: input.counterparty,
           version: current.version + 1,
-          updatedAt: new Date().toISOString(),
+          updatedAt: new Date(),
         })
         .where(eq(trades.tradeId, tradeId))
         .returning()
@@ -235,7 +209,7 @@ export class TradeRepository {
         .set({
           status: 'CANCELLED',
           version: current.version + 1,
-          updatedAt: new Date().toISOString(),
+          updatedAt: new Date(),
         })
         .where(eq(trades.tradeId, tradeId))
         .returning()

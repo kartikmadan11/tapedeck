@@ -1,5 +1,6 @@
 import type { DatabaseHandle } from '@tapedeck/database'
 import { tradeEvents } from '@tapedeck/database'
+import type { Trade } from '@tapedeck/shared'
 import { sql } from 'drizzle-orm'
 import type { FastifyInstance } from 'fastify'
 
@@ -25,7 +26,7 @@ export function newTradeBody(overrides: Record<string, unknown> = {}): Record<st
 export async function createTrade(
   app: FastifyInstance,
   overrides: Record<string, unknown> = {},
-): Promise<{ tradeId: string; version: number; price: string }> {
+): Promise<Trade> {
   const response = await app.inject({
     method: 'POST',
     url: '/api/trades',

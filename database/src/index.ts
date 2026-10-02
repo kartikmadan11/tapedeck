@@ -7,6 +7,7 @@ export {
   type Transaction,
 } from './client.js'
 export { runMigrations } from './migrate.js'
+export { toTrade, toTradeEvent } from './projection.js'
 export { BOOKS, COUNTERPARTIES, INSTRUMENTS, SEED_ACTOR, TRADERS } from './reference.js'
 export { Rng } from './rng.js'
 export {
