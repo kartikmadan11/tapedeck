@@ -5,14 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "start": "tsx src/server.ts"
+    "start": "node --import tsx src/server.ts"
   },
   "dependencies": {
     "@fastify/static": "10.1.5",
     "@fastify/websocket": "11.3.1",
     "@tapedeck/database": "*",
     "@tapedeck/shared": "*",
-    "fastify": "5.12.5"
+    "fastify": "5.12.5",
+    "tsx": "4.23.15"
   },
   "devDependencies": {
     "@types/ws": "8.18.1",

@@ -1,0 +1,40 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tapedeck}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tapedeck}
+      POSTGRES_DB: ${POSTGRES_DB:-tapedeck}
+    ports:
+      # Published on 5433 so the host dev loop and the Vitest test database can
+      # reach it without colliding with a reviewer's own Postgres on 5432.
+      - '5433:5432'
+    volumes:
+      - tapedeck-db:/var/lib/postgresql/data
+    healthcheck:
+      # Without this the api races the database on the first
+      # `docker compose up --build` and dies before it migrates.
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-tapedeck} -d ${POSTGRES_DB:-tapedeck}']
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 5s
+
+  api:
+    build:
+      context: .
+    # The api serves the built frontend from the same origin, so this one port is
+    # the whole application.
+    ports:
+      - '${PORT:-3000}:3000'
+    environment:
+      # In network the host is the service name on 5432, not the published 5433.
+      DATABASE_URL: postgres://${POSTGRES_USER:-tapedeck}:${POSTGRES_PASSWORD:-tapedeck}@db:5432/${POSTGRES_DB:-tapedeck}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  tapedeck-db:
