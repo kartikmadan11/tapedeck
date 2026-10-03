@@ -13,16 +13,26 @@ coverage/
 .env
 .env.*
 !.env.example
+*.local
+
+# briefs, exports, anything printed
+*.pdf
+
+# raw transcript extract, source material for docs/prompt-log.md
+docs/prompt-log-raw.md
 
 # tooling caches
 .vite/
 .turbo/
 
 # editor and OS
-.vscode/
+.vscode/*
+!.vscode/extensions.json
 .idea/
 .DS_Store
 
 # logs
 *.log
 npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
