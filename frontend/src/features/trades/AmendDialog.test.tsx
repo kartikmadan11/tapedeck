@@ -78,10 +78,11 @@ describe('AmendDialog', () => {
 
     const [url, init] = amendCall() ?? ['', {}]
     expect(url).toBe('/api/trades/TRD-100001')
+    // toEqual and not toMatchObject: the absence of counterparty is the
+    // assertion, since a stray key here would be a 400 from the strictObject.
     expect(JSON.parse(String(init.body))).toEqual({
       quantity: 5_000,
       price: '72.465000',
-      counterparty: 'GSIL',
       // The version the dialog opened with, not one guessed from the row.
       version: 1,
     })
@@ -95,6 +96,16 @@ describe('AmendDialog', () => {
     expect(screen.getByLabelText('Quantity')).toBeInTheDocument()
     expect(screen.queryByLabelText('Symbol')).toBeNull()
     expect(screen.queryByLabelText('Side')).toBeNull()
+  })
+
+  it('shows the counterparty without offering a field for it', () => {
+    renderDialog()
+
+    // Visible, because the user needs to know who the trade is with before
+    // changing its terms. Not a control, because changing it is a cancel and a
+    // rebooking rather than an amendment.
+    expect(screen.getByText('GSIL')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Counterparty')).toBeNull()
   })
 
   it('reports a 409 as someone else having changed the trade, naming both versions', async () => {

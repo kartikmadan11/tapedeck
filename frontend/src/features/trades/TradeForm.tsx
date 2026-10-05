@@ -1,10 +1,15 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import type { CreateTradeInput } from '@tapedeck/shared'
-import { createTradeInput } from '@tapedeck/shared'
+import { COUNTERPARTIES, createTradeInput } from '@tapedeck/shared'
 import type { ReactElement, ReactNode } from 'react'
+import { useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import type { z } from 'zod'
 import { ErrorNotice } from '../../components/ErrorNotice.js'
+import { DEFAULT_TRADER } from '../../lib/identity.js'
+import { ACTION, ACTION_HELD, CONTROL, MICRO_LABEL } from '../../lib/ui.js'
+import type { Guard, LastBooking } from './guards.js'
+import { CONFIRM_LABEL, guardFor, newTicketId, signatureOf } from './guards.js'
 import { useCreateTrade } from './useCreateTrade.js'
 
 /**
@@ -23,12 +28,21 @@ const DEFAULTS: FormValues = {
   side: 'BUY',
   quantity: 1_000,
   price: '72.500000',
-  trader: 'k.madan',
+  trader: DEFAULT_TRADER,
   book: 'EQ-LDN-1',
-  counterparty: 'GSIL',
+  // The first name on the list rather than a literal, so the default cannot be
+  // a value the picklist does not offer.
+  counterparty: COUNTERPARTIES[0],
 }
 
-export function TradeForm(): ReactElement {
+/**
+ * `trader` has no input of its own. It is the window's identity, so typing it
+ * here as well would be a second source of truth that could disagree with the
+ * actor stamped on the event.
+ */
+type Props = { trader: string }
+
+export function TradeForm({ trader }: Props): ReactElement {
   const create = useCreateTrade()
 
   const form = useForm<FormValues, unknown, CreateTradeInput>({
@@ -40,20 +54,67 @@ export function TradeForm(): ReactElement {
 
   const { errors } = form.formState
 
+  /**
+   * One idempotency key per ticket, re-minted once a booking succeeds.
+   *
+   * A failed attempt keeps its key, so retrying it cannot double-book even if
+   * the first request committed and only the response was lost. A success
+   * replaces it, so a deliberate second clip is a second trade rather than a
+   * silent replay of the first, and working an order in slices still works.
+   *
+   * A ref, not state: nothing renders from it, and a re-render per booking is a
+   * re-render of the form over the tape.
+   */
+  const ticketId = useRef(newTicketId())
+  const lastBooked = useRef<LastBooking | null>(null)
+  const [guard, setGuard] = useState<Guard | null>(null)
+
   const onSubmit = (values: CreateTradeInput): void => {
-    create.mutate(values, {
-      onSuccess: () => {
-        // Keep the counterparty and book, clear nothing else: booking a run of
-        // trades on the same book is the common case.
-        form.reset({ ...values })
+    const raised = guardFor(values, lastBooked.current)
+
+    // A guard already showing for this exact ticket has been read, so this press
+    // is the confirmation it asked for. Comparing signatures rather than trusting
+    // that the guard was cleared is what makes that safe: if the ticket changed
+    // since the guard went up, this is a first press of something else.
+    if (raised !== null && raised.signature !== guard?.signature) {
+      setGuard(raised)
+      return
+    }
+
+    setGuard(null)
+    create.mutate(
+      { ...values, trader, clientTradeId: ticketId.current },
+      {
+        onSuccess: (booked) => {
+          lastBooked.current = {
+            signature: signatureOf(values),
+            tradeId: booked.tradeId,
+            at: Date.now(),
+          }
+          ticketId.current = newTicketId()
+          // Keep the counterparty and book, clear nothing else: booking a run of
+          // trades on the same book is the common case.
+          form.reset({ ...values })
+        },
       },
-    })
+    )
   }
 
   return (
     <form
-      className="rounded border border-tape-line bg-tape-panel p-2"
+      className="rounded-sm border border-tape-line bg-tape-panel p-3"
       onSubmit={form.handleSubmit(onSubmit)}
+      /**
+       * Drops a held press the moment the ticket is edited, so the button cannot
+       * sit there asking to confirm something that is no longer on screen. This
+       * is about the label only, since onSubmit re-derives the guard anyway, and
+       * the condition keeps it from setting state on every keystroke.
+       */
+      onChange={() => {
+        if (guard !== null) {
+          setGuard(null)
+        }
+      }}
       noValidate
     >
       <div className="flex flex-wrap items-end gap-2">
@@ -62,7 +123,7 @@ export function TradeForm(): ReactElement {
         </Field>
 
         <Field name="side" label="Side" error={errors.side?.message} width="w-24">
-          <select id="side" className={INPUT} {...form.register('side')}>
+          <select id="side" className={`${INPUT} cursor-pointer`} {...form.register('side')}>
             <option value="BUY">BUY</option>
             <option value="SELL">SELL</option>
           </select>
@@ -86,39 +147,60 @@ export function TradeForm(): ReactElement {
           />
         </Field>
 
-        <Field name="trader" label="Trader" error={errors.trader?.message} width="w-32">
-          <input id="trader" className={INPUT} {...form.register('trader')} />
-        </Field>
-
         <Field name="book" label="Book" error={errors.book?.message} width="w-32">
           <input id="book" className={INPUT} {...form.register('book')} />
         </Field>
 
+        {/* A picklist, not a text box. A counterparty is resolved from a
+            counterparty master at booking, so there is nothing to type: `UBSf`
+            passes every length check, then fails enrichment and drops the trade
+            into a repair queue. */}
         <Field
           name="counterparty"
           label="Counterparty"
           error={errors.counterparty?.message}
-          width="w-32"
+          width="w-40"
         >
-          <input id="counterparty" className={INPUT} {...form.register('counterparty')} />
+          <select
+            id="counterparty"
+            className={`${INPUT} cursor-pointer`}
+            {...form.register('counterparty')}
+          >
+            {COUNTERPARTIES.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
         </Field>
 
+        {/* One button, three labels. A separate confirm button would have to
+            appear from nowhere and would move the one the hand is already on. */}
         <button
           type="submit"
-          className="rounded border border-tape-accent px-3 py-1 font-semibold text-tape-accent hover:bg-tape-accent/15 disabled:cursor-not-allowed disabled:opacity-40"
+          className={guard === null ? ACTION : ACTION_HELD}
           disabled={create.isPending}
         >
-          {create.isPending ? 'Booking' : 'Book trade'}
+          {create.isPending ? 'Booking' : guard === null ? 'Book trade' : CONFIRM_LABEL[guard.kind]}
         </button>
       </div>
+
+      {/* role="alert", so the reason is announced rather than only seen: the
+          button's label changing is not something a screen reader reports. */}
+      {guard === null ? null : (
+        <p className="mt-2 text-[11px] text-tape-warn" role="alert">
+          {guard.message}
+        </p>
+      )}
 
       {create.error ? <ErrorNotice error={create.error} className="mt-2" /> : null}
     </form>
   )
 }
 
-const INPUT =
-  'w-full rounded border border-tape-line bg-tape-bg px-2 py-1 focus:border-tape-accent focus:outline-none'
+/** Darker than the panel it sits on, the inverse of the filter bar's controls,
+ *  which sit on the canvas and so are lighter than it. */
+const INPUT = `${CONTROL} w-full bg-tape-bg`
 
 type FieldProps = {
   name: string
@@ -132,11 +214,11 @@ type FieldProps = {
 function Field({ name, label, error, width, children }: FieldProps): ReactElement {
   return (
     <div className={`${width} block`}>
-      <label htmlFor={name} className="mb-0.5 block text-tape-muted">
+      <label htmlFor={name} className={`mb-1 block ${MICRO_LABEL}`}>
         {label}
       </label>
       {children}
-      {error ? <span className="mt-0.5 block text-tape-sell">{error}</span> : null}
+      {error ? <span className="mt-1 block text-[10px] text-tape-sell">{error}</span> : null}
     </div>
   )
 }

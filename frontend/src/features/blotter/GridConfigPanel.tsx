@@ -1,0 +1,265 @@
+import type { Column, Table } from '@tanstack/react-table'
+import type { Trade } from '@tapedeck/shared'
+import type { ReactElement, ReactNode } from 'react'
+import { CHIP, CONTROL, MICRO_LABEL } from '../../lib/ui.js'
+import { groupedVisibility } from './columns.js'
+
+type Props = {
+  table: Table<Trade>
+  open: boolean
+  /** Referenced by the toggle button's aria-controls, so it is passed in. */
+  id: string
+}
+
+/** Darker than the panel it sits on, per the note in lib/ui.ts. */
+const PANEL_CONTROL = `${CONTROL} w-full bg-tape-bg`
+
+/**
+ * Every grid instance owns one of these rather than there being a single shared
+ * one, because two panes are configured independently and one panel could only
+ * ever describe one of them.
+ *
+ * It holds no state. Every control reads and writes the table's own state, so
+ * the panel cannot drift from the grid it describes: a header click shows up in
+ * Order By because both are looking at `sorting`.
+ */
+export function GridConfigPanel({ table, open, id }: Props): ReactElement {
+  const { grouping, sorting } = table.getState()
+  const groupBy = grouping[0]
+  const splitBy = grouping[1]
+  const order = sorting[0]
+
+  const groupable = table.getAllLeafColumns().filter((column) => column.getCanGroup())
+  const sortable = table.getAllLeafColumns().filter((column) => column.getCanSort())
+
+  /**
+   * What the grouping has done to the columns, read from the same function the
+   * grid lays over its own state, so the boxes below cannot disagree with the
+   * columns on screen.
+   */
+  const grouped = groupedVisibility(grouping)
+
+  return (
+    // The animator. It shrinks the grid rather than covering it, so columns a
+    // trader is reading do not disappear under an overlay.
+    //
+    // inert and aria-hidden when closed, because a zero-width panel still holds
+    // real form controls: without them the next Tab out of the grid lands in an
+    // invisible select.
+    <div
+      aria-hidden={!open}
+      className={`tape-slide shrink-0 overflow-hidden ${open ? 'w-72' : 'w-0'}`}
+      id={id}
+      inert={!open}
+    >
+      {/*
+       * A stated width, not a derived one. This is what makes animating the
+       * wrapper's width cheap: nothing in here relays out as the wrapper moves,
+       * because its own size never changes.
+       */}
+      <div className="tape-scroll ml-2 flex h-full w-70 flex-col gap-3 overflow-y-auto rounded-sm border border-tape-line bg-tape-panel p-2">
+        <Section title="Group by">
+          <select
+            aria-label="Group by"
+            className={`${PANEL_CONTROL} cursor-pointer`}
+            onChange={(event) => {
+              const next = event.target.value
+              // Clearing Group By clears Split By with it. A grouping of
+              // [undefined, 'book'] is not a view, and TanStack would read the
+              // second level as the first.
+              if (next === '') {
+                table.setGrouping([])
+                return
+              }
+              table.setGrouping(
+                splitBy === undefined || splitBy === next ? [next] : [next, splitBy],
+              )
+            }}
+            value={groupBy ?? ''}
+          >
+            <option value="">No grouping</option>
+            {groupable.map((column) => (
+              <option key={column.id} value={column.id}>
+                {headerText(column)}
+              </option>
+            ))}
+          </select>
+        </Section>
+
+        <Section title="Split by">
+          <select
+            aria-label="Split by"
+            className={`${PANEL_CONTROL} cursor-pointer`}
+            // Nothing to split until there is a level to split, and the choice
+            // already taken above is excluded below: grouping by symbol inside
+            // symbol is a level that can never divide.
+            disabled={groupBy === undefined}
+            onChange={(event) => {
+              if (groupBy === undefined) {
+                return
+              }
+              const next = event.target.value
+              table.setGrouping(next === '' ? [groupBy] : [groupBy, next])
+            }}
+            value={splitBy ?? ''}
+          >
+            <option value="">No split</option>
+            {groupable
+              .filter((column) => column.id !== groupBy)
+              .map((column) => (
+                <option key={column.id} value={column.id}>
+                  {headerText(column)}
+                </option>
+              ))}
+          </select>
+        </Section>
+
+        <Section title="Order by">
+          {/*
+           * The same state the column headers write, so the two cannot disagree
+           * about what the grid is sorted by. Headers stay clickable: that is
+           * the fast path and it already works.
+           */}
+          <div className="flex gap-2">
+            <select
+              aria-label="Order by"
+              className={`${PANEL_CONTROL} cursor-pointer`}
+              onChange={(event) => {
+                const next = event.target.value
+                // Carries the direction across a change of column, rather than
+                // snapping back to ascending and making the tape look reordered
+                // for a reason the trader did not ask for.
+                table.setSorting(next === '' ? [] : [{ id: next, desc: order?.desc ?? true }])
+              }}
+              value={order?.id ?? ''}
+            >
+              <option value="">Unsorted</option>
+              {sortable.map((column) => (
+                <option key={column.id} value={column.id}>
+                  {headerText(column)}
+                </option>
+              ))}
+            </select>
+
+            <button
+              className={`${CHIP} shrink-0`}
+              disabled={order === undefined}
+              onClick={() => {
+                if (order !== undefined) {
+                  table.setSorting([{ id: order.id, desc: !order.desc }])
+                }
+              }}
+              type="button"
+            >
+              {order?.desc === true ? 'Desc' : 'Asc'}
+            </button>
+          </div>
+        </Section>
+
+        <Section title="Where">
+          {/*
+           * Completes the top bar rather than copying it. Symbol, trader, book,
+           * side and status are already up there where a trader's hand is, so
+           * these are the questions that row cannot answer.
+           */}
+          {/* Filters whether or not the column itself is shown. */}
+          <Where column={table.getColumn('tradeId')} label="Trade id" placeholder="TRD-" />
+          <Where column={table.getColumn('counterparty')} label="Counterparty" placeholder="Name" />
+          <Where
+            column={table.getColumn('quantity')}
+            label="Minimum quantity"
+            placeholder="Shares"
+          />
+          <Where column={table.getColumn('notional')} label="Minimum notional" placeholder="0.00" />
+        </Section>
+
+        <Section title="Columns">
+          {/* Says why most of them are unavailable, rather than leaving a column
+            of greyed boxes to be worked out. */}
+          {groupBy === undefined ? null : (
+            <p className="text-tape-muted">Grouped, so only the columns a group nets are shown.</p>
+          )}
+
+          {table.getAllLeafColumns().map((column) => {
+            // Grouped by it, so hiding it would take the group label and the
+            // expander with it. Or the last one standing, which would leave a
+            // grid with no columns and no way back but this panel.
+            const locked =
+              column.getIsGrouped() ||
+              (column.getIsVisible() && table.getVisibleLeafColumns().length === 1)
+
+            // Nothing a group row could put in it, so the grouping has taken it
+            // off the grid. Offered as unavailable rather than left tickable:
+            // the grid reads this box through the grouping's own override, so a
+            // tick would be a control that does nothing.
+            const dropped = grouped[column.id] === false
+
+            // The box already says which way it is set, so the label does not
+            // also need to change colour to say it again.
+            return (
+              <label className="flex cursor-pointer items-center gap-2" key={column.id}>
+                <input
+                  checked={column.getIsVisible()}
+                  className="accent-tape-accent disabled:cursor-not-allowed"
+                  disabled={!column.getCanHide() || locked || dropped}
+                  onChange={column.getToggleVisibilityHandler()}
+                  type="checkbox"
+                />
+                {headerText(column)}
+              </label>
+            )
+          })}
+        </Section>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * The column's own header text. Every header in this grid is a plain string, so
+ * there is no element to render here and no second label to keep in step with
+ * the one above the column.
+ */
+function headerText(column: Column<Trade, unknown>): string {
+  return String(column.columnDef.header)
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }): ReactElement {
+  return (
+    <section className="flex flex-col gap-1.5">
+      <h3 className={MICRO_LABEL}>{title}</h3>
+      {children}
+    </section>
+  )
+}
+
+type WhereProps = {
+  column: Column<Trade, unknown> | undefined
+  label: string
+  placeholder: string
+}
+
+/**
+ * One filter box. The column is looked up by id, so it is typed as possibly
+ * absent: an id that stops existing should quietly drop its control rather than
+ * take the blotter down with it.
+ */
+function Where({ column, label, placeholder }: WhereProps): ReactElement | null {
+  if (column === undefined) {
+    return null
+  }
+
+  return (
+    <input
+      aria-label={label}
+      className={PANEL_CONTROL}
+      // undefined, not '': an empty string is a filter that matches everything
+      // and would leave the column listed in columnFilters forever.
+      onChange={(event) =>
+        column.setFilterValue(event.target.value === '' ? undefined : event.target.value)
+      }
+      placeholder={placeholder}
+      value={(column.getFilterValue() as string) ?? ''}
+    />
+  )
+}

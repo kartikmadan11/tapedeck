@@ -6,6 +6,7 @@ import { ErrorNotice } from '../../components/ErrorNotice.js'
 import { fetchTradeEvents } from '../../lib/api.js'
 import { formatDateTime } from '../../lib/format.js'
 import { queryKeys } from '../../lib/queryClient.js'
+import { CHIP, MICRO_LABEL } from '../../lib/ui.js'
 
 type Props = { tradeId: string; onClose: () => void }
 
@@ -30,14 +31,10 @@ export function HistoryDrawer({ tradeId, onClose }: Props): ReactElement {
   }, [onClose])
 
   return (
-    <div className="fixed inset-y-0 right-0 z-40 flex w-[32rem] max-w-full flex-col border-l border-tape-line bg-tape-panel shadow-2xl">
-      <header className="flex items-baseline justify-between border-b border-tape-line px-3 py-2">
-        <h2 className="font-semibold">History of {tradeId}</h2>
-        <button
-          type="button"
-          className="rounded border border-tape-line px-2 py-0.5 hover:border-tape-text"
-          onClick={onClose}
-        >
+    <div className="fixed inset-y-0 right-0 z-40 flex w-[32rem] max-w-full flex-col border-l border-tape-line bg-tape-panel shadow-[-24px_0_64px_-12px_rgb(0_0_0/0.9)]">
+      <header className="flex shrink-0 items-center justify-between border-b border-tape-line px-3 py-2">
+        <h2 className="text-sm font-semibold">History of {tradeId}</h2>
+        <button type="button" className={CHIP} onClick={onClose}>
           Close
         </button>
       </header>
@@ -53,7 +50,7 @@ export function HistoryDrawer({ tradeId, onClose }: Props): ReactElement {
         </ol>
       </div>
 
-      <footer className="border-t border-tape-line px-3 py-2 text-tape-muted">
+      <footer className="shrink-0 border-t border-tape-line px-3 py-2 text-[10px] leading-relaxed text-tape-muted">
         One row per mutation, so a trade's version is also its number of events. The same sequence
         numbers order the live stream.
       </footer>
@@ -65,14 +62,18 @@ function EventCard({ event }: { event: TradeEvent }): ReactElement {
   const changes = event.before === null ? [] : diff(event.before, event.after)
 
   return (
-    <li className="rounded border border-tape-line p-2">
-      <div className="flex items-baseline justify-between">
+    <li className="rounded-sm border border-tape-line bg-tape-bg p-2">
+      <div className="flex items-baseline justify-between gap-2">
         <span
-          className={`font-semibold ${event.eventType === 'CANCELLED' ? 'text-tape-sell' : ''}`}
+          className={`font-semibold tracking-[0.1em] ${
+            event.eventType === 'CANCELLED' ? 'text-tape-sell' : ''
+          }`}
         >
           {event.eventType}
         </span>
-        <span className="text-tape-muted">
+        {/* Not MICRO_LABEL: this line carries an actor's name, and uppercasing
+            someone's name is a different claim from styling a column label. */}
+        <span className="text-[10px] text-tape-muted">
           seq {event.seq} · {formatDateTime(event.at)} · {event.actor}
         </span>
       </div>
@@ -85,8 +86,10 @@ function EventCard({ event }: { event: TradeEvent }): ReactElement {
       ) : (
         <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3">
           {changes.map((change) => (
-            <div key={change.field} className="col-span-2 flex gap-2">
-              <dt className="text-tape-muted">{change.field}</dt>
+            // items-baseline because the 10px label and the 13px values sit on
+            // one line and would otherwise top-align against each other.
+            <div key={change.field} className="col-span-2 flex items-baseline gap-2">
+              <dt className={MICRO_LABEL}>{change.field}</dt>
               <dd>
                 <span className="text-tape-muted line-through">{change.before}</span>
                 <span className="mx-1">→</span>

@@ -7,6 +7,7 @@ import { useForm } from 'react-hook-form'
 import type { z } from 'zod'
 import { ErrorNotice } from '../../components/ErrorNotice.js'
 import { ApiRequestError } from '../../lib/api.js'
+import { ACTION, CHIP, CONTROL, MICRO_LABEL } from '../../lib/ui.js'
 import { useAmendTrade } from './useAmendTrade.js'
 
 /**
@@ -35,7 +36,6 @@ export function AmendDialog({ trade, onClose }: Props): ReactElement {
     defaultValues: {
       quantity: trade.quantity,
       price: trade.price,
-      counterparty: trade.counterparty,
     },
   })
 
@@ -57,7 +57,6 @@ export function AmendDialog({ trade, onClose }: Props): ReactElement {
     form.reset({
       quantity: trade.quantity,
       price: trade.price,
-      counterparty: trade.counterparty,
     })
     amend.reset()
   }
@@ -73,24 +72,31 @@ export function AmendDialog({ trade, onClose }: Props): ReactElement {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-tape-bg/80 p-4">
+      {/*
+       * A cast shadow rather than a blur. backdrop-filter would establish a
+       * containing block, and the scrim above is already fixed with no
+       * transformed ancestor, which is what keeps it covering the viewport.
+       */}
       <form
-        className="w-full max-w-md rounded border border-tape-line bg-tape-panel p-3"
+        className="w-full max-w-md rounded-sm border border-tape-line bg-tape-panel p-4 shadow-[0_24px_64px_-12px_rgb(0_0_0/0.9)]"
         onSubmit={form.handleSubmit(onSubmit)}
         noValidate
       >
-        <header className="mb-2 flex items-baseline justify-between">
-          <h2 className="font-semibold">
+        <header className="mb-3 flex items-baseline justify-between">
+          <h2 className="text-sm font-semibold">
             Amend {trade.tradeId}
             <span className="ml-2 text-tape-muted">
               {trade.side} {trade.symbol}
             </span>
           </h2>
-          <span className="text-tape-muted">editing version {editingVersion}</span>
+          <span className={MICRO_LABEL}>editing version {editingVersion}</span>
         </header>
 
         <div className="grid grid-cols-3 gap-2">
+          {/* The label span is a sibling of the input, so the uppercase and the
+              10px do not inherit into the field the user types in. */}
           <label className="block">
-            <span className="mb-0.5 block text-tape-muted">Quantity</span>
+            <span className={`mb-1 block ${MICRO_LABEL}`}>Quantity</span>
             <input
               className={`${INPUT} text-right tabular-nums`}
               inputMode="numeric"
@@ -100,7 +106,7 @@ export function AmendDialog({ trade, onClose }: Props): ReactElement {
           </label>
 
           <label className="block">
-            <span className="mb-0.5 block text-tape-muted">Price</span>
+            <span className={`mb-1 block ${MICRO_LABEL}`}>Price</span>
             <input
               className={`${INPUT} text-right tabular-nums`}
               inputMode="decimal"
@@ -109,39 +115,39 @@ export function AmendDialog({ trade, onClose }: Props): ReactElement {
             {errors.price ? <Hint>{errors.price.message}</Hint> : null}
           </label>
 
-          <label className="block">
-            <span className="mb-0.5 block text-tape-muted">Counterparty</span>
-            <input className={INPUT} {...form.register('counterparty')} />
-            {errors.counterparty ? <Hint>{errors.counterparty.message}</Hint> : null}
-          </label>
+          {/* Shown, not offered. Who a trade is with is fixed at booking, so this
+              is context for the two fields that are editable rather than a third
+              one. Rendered rather than omitted so its absence reads as a decision,
+              and a div rather than a label because there is no control to name. */}
+          <div>
+            <span className={`mb-1 block ${MICRO_LABEL}`}>Counterparty</span>
+            <p className="h-7 truncate leading-7">{trade.counterparty}</p>
+            <span className="mt-1 block text-[10px] text-tape-muted">
+              Cancel and rebook to change
+            </span>
+          </div>
         </div>
 
         {amend.error ? <ErrorNotice error={amend.error} className="mt-2" /> : null}
 
         <footer className="mt-3 flex items-center gap-2">
           {conflicted ? (
+            // An outline, not a fill. The accent fill is reserved for the
+            // primary action, and this is the escape hatch beside it.
             <button
               type="button"
-              className="rounded border border-tape-accent px-2 py-1 text-tape-accent hover:bg-tape-accent/15"
+              className="h-7 cursor-pointer rounded-xs border border-tape-accent px-2 text-tape-accent transition-colors duration-100 hover:bg-tape-accent/15"
               onClick={adoptCurrent}
             >
               Load version {trade.version} ({formatQuantityHint(trade)})
             </button>
           ) : null}
 
-          <button
-            type="submit"
-            className="ml-auto rounded border border-tape-accent px-3 py-1 font-semibold text-tape-accent hover:bg-tape-accent/15 disabled:cursor-not-allowed disabled:opacity-40"
-            disabled={amend.isPending}
-          >
+          <button type="submit" className={`ml-auto ${ACTION}`} disabled={amend.isPending}>
             {amend.isPending ? 'Saving' : 'Save amendment'}
           </button>
 
-          <button
-            type="button"
-            className="rounded border border-tape-line px-3 py-1 hover:border-tape-text"
-            onClick={onClose}
-          >
+          <button type="button" className={CHIP} onClick={onClose}>
             Close
           </button>
         </footer>
@@ -150,11 +156,11 @@ export function AmendDialog({ trade, onClose }: Props): ReactElement {
   )
 }
 
-const INPUT =
-  'w-full rounded border border-tape-line bg-tape-bg px-2 py-1 focus:border-tape-accent focus:outline-none'
+/** Darker than the dialog panel it sits on, as in the booking form. */
+const INPUT = `${CONTROL} w-full bg-tape-bg`
 
 function Hint({ children }: { children: string | undefined }): ReactElement {
-  return <span className="mt-0.5 block text-tape-sell">{children}</span>
+  return <span className="mt-1 block text-[10px] text-tape-sell">{children}</span>
 }
 
 /** The current values, so adopting the newer version is an informed choice. */

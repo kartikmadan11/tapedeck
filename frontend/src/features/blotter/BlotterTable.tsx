@@ -1,122 +1,737 @@
-import type { ColumnFiltersState, SortingState } from '@tanstack/react-table'
+import type {
+  Cell,
+  ColumnFiltersState,
+  ExpandedState,
+  GroupingState,
+  Row,
+  SortingState,
+  Table,
+  Updater,
+  VisibilityState,
+} from '@tanstack/react-table'
 import {
   flexRender,
   getCoreRowModel,
+  getExpandedRowModel,
   getFilteredRowModel,
+  getGroupedRowModel,
   getSortedRowModel,
   useReactTable,
 } from '@tanstack/react-table'
-import type { Trade } from '@tapedeck/shared'
-import type { ReactElement } from 'react'
-import { useMemo, useState } from 'react'
-import type { RowActions } from './columns.js'
-import { createColumns } from './columns.js'
+import { useVirtualizer } from '@tanstack/react-virtual'
+import type { DecimalString, Trade } from '@tapedeck/shared'
+import { BLOTTER_LIMIT, toMinorUnits } from '@tapedeck/shared'
+import type { KeyboardEvent, ReactElement, ReactNode } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { CHIP, CONTROL, MICRO_LABEL } from '../../lib/ui.js'
+import type { PaneConfig } from '../workspace/paneConfig.js'
+import { DEFAULT_VIEW } from '../workspace/paneConfig.js'
+import { createColumns, DEFAULT_COLUMN, GroupToggle, groupedVisibility } from './columns.js'
+import { GridConfigPanel } from './GridConfigPanel.js'
+import { barScale, MagnitudeScale } from './magnitude.js'
+import type { RowActions } from './SelectionBar.js'
+import { canWrite, SelectionBar } from './SelectionBar.js'
 import { useRowFlash } from './useRowFlash.js'
 
 type Props = {
   trades: Trade[]
   pendingIds: ReadonlySet<string>
   actions: RowActions
+
+  /**
+   * Names the pane. A workspace holds more than one of these, and two grids with
+   * the same accessible name are two grids a screen reader cannot tell apart.
+   */
+  label?: string | undefined
+
+  /**
+   * The view this pane opens on. Initial, as the name says: once it is mounted
+   * the pane owns its own state, which is what keeps a keystroke in one pane's
+   * filter box from re-rendering the other.
+   */
+  initialConfig?: PaneConfig | undefined
+
+  /**
+   * Reports the view back out whenever it changes, so a workspace can share a
+   * link to what is on screen without holding the state that produced it.
+   *
+   * Must be stable for the pane's life. It is a dependency of the effect that
+   * calls it, so a fresh function on every render would report on every render,
+   * which with a feed arriving every two seconds is a lot of nothing.
+   */
+  onConfigChange?: ((config: PaneConfig) => void) | undefined
+
+  /**
+   * Opens another pane on the view this one currently holds. Omitted when there
+   * is no workspace to add it to, which is also what hides the button.
+   */
+  onDuplicate?: ((config: PaneConfig) => void) | undefined
+
+  /**
+   * Omitted on the first pane, which is permanent. Absence is the whole
+   * mechanism: there is no flag to get wrong and no way to render a Close button
+   * that would empty the workspace.
+   */
+  onClose?: (() => void) | undefined
+
+  /**
+   * The handle this pane is moved by, rendered at the head of its filter bar.
+   *
+   * A node rather than a callback, because what it takes to move a pane is the
+   * arranging component's business and the grid's only contribution is a place
+   * to put it. Omitted when there is nothing to arrange, which is also what
+   * keeps a single blotter free of a control that could not do anything.
+   */
+  grip?: ReactNode | undefined
+
+  /**
+   * The pane's name, shown on the bar beside the handle and edited there.
+   *
+   * A node for the same reason the handle is one: a name belongs to the pane as
+   * the workspace arranges it, not to the grid inside, and the grid's whole
+   * contribution is the row it sits on. `label` is the same name as a string,
+   * which is what the grid needs for its own accessible name.
+   */
+  nameplate?: ReactNode | undefined
 }
 
-/** What the server orders by, so the first paint does not reshuffle. */
-const DEFAULT_SORT: SortingState = [{ id: 'tradeTimestamp', desc: true }]
+/**
+ * Sticks the leftmost visible column, so which row you are on survives
+ * scrolling. Positional, not a named column: left-0 is right for exactly one
+ * column, and which one is leftmost now changes.
+ *
+ * The right border is drawn by the cell, which is why the table is
+ * border-separate: in collapsed mode the table paints it and it scrolls away.
+ */
+const PINNED = 'sticky left-0 z-10 border-r border-tape-line'
 
-export function BlotterTable({ trades, pendingIds, actions }: Props): ReactElement {
-  const [sorting, setSorting] = useState<SortingState>(DEFAULT_SORT)
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+/**
+ * A row's height in pixels, which is `h-8` on the tr below. Tied to that class
+ * the same way FLASH_MS is tied to the CSS animation in useRowFlash.ts: the
+ * virtualiser is told this rather than measuring, so the two have to be changed
+ * together or the tape scrolls to the wrong place.
+ */
+const ROW_PX = 32
+
+export function BlotterTable({
+  trades,
+  pendingIds,
+  actions,
+  label = 'Trades',
+  initialConfig = DEFAULT_VIEW,
+  onConfigChange,
+  onDuplicate,
+  onClose,
+  grip,
+  nameplate,
+}: Props): ReactElement {
+  const [sorting, setSorting] = useState<SortingState>(initialConfig.sorting)
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(
+    initialConfig.columnFilters,
+  )
+
+  /**
+   * Group By is grouping[0] and Split By is grouping[1]. TanStack nests them and
+   * row.depth carries the level, so the second grouping needs no mechanism of its
+   * own.
+   *
+   * Groups start closed. Grouping is asked for to see the aggregate; opening
+   * everything by default would just be the flat tape again with rails in it.
+   */
+  const [grouping, setGrouping] = useState<GroupingState>(initialConfig.grouping)
+  const [expanded, setExpanded] = useState<ExpandedState>({})
+
+  /**
+   * The columns the trader chose, which is not the same thing as the columns on
+   * screen: while there is a grouping, the ones a group row cannot answer for
+   * are dropped over the top of this. Held separately rather than written into,
+   * so clearing the grouping gives back exactly what they had and a shared link
+   * carries their choice rather than the grouping's consequences.
+   */
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
+    initialConfig.columnVisibility,
+  )
+
+  const shownColumns = useMemo(
+    () => ({ ...columnVisibility, ...groupedVisibility(grouping) }),
+    [columnVisibility, grouping],
+  )
+
+  /**
+   * Resolved against the trader's own record, not against the one the table was
+   * given. TanStack hands an updater the state it is holding, so taken as given
+   * a single tick in the panel would bake every one of the grouping's drops into
+   * the trader's choice: they would survive the grouping being cleared, and a
+   * shared link would state eight hidden columns nobody hid.
+   */
+  const onVisibilityChange = useCallback((updater: Updater<VisibilityState>) => {
+    setColumnVisibility((own) => (typeof updater === 'function' ? updater(own) : updater))
+  }, [])
+
+  /**
+   * Which groups are open is deliberately not reported. It is a reading position
+   * rather than a view, so it is not in PaneConfig and so it cannot be shared.
+   */
+  useEffect(() => {
+    onConfigChange?.({ sorting, columnFilters, grouping, columnVisibility })
+  }, [onConfigChange, sorting, columnFilters, grouping, columnVisibility])
+
+  const [configOpen, setConfigOpen] = useState(false)
+  // Generated rather than a literal, because the panel is per grid and a second
+  // grid's toggle must not have its aria-controls pointing at this one's panel.
+  const configPanelId = useId()
+
   const flashing = useRowFlash(trades)
 
-  const columns = useMemo(() => createColumns(actions), [actions])
+  /**
+   * Held as an id rather than as a row, for the same reason the dialogs are: the
+   * selected trade is re-read from the data on every render, so a frame that
+   * amends or cancels it updates the bar instead of leaving a stale copy there.
+   * An id also survives a sort, a filter and a reorder, which an index would
+   * not.
+   */
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+
+  const columns = useMemo(() => createColumns(), [])
 
   const table = useReactTable({
     data: trades,
     columns,
-    state: { sorting, columnFilters },
+    defaultColumn: DEFAULT_COLUMN,
+    state: { sorting, columnFilters, grouping, expanded, columnVisibility: shownColumns },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
+    onGroupingChange: setGrouping,
+    onExpandedChange: setExpanded,
+    onColumnVisibilityChange: onVisibilityChange,
     // Without this a sort or a filter would renumber the rows and React would
     // reuse the wrong row for the wrong trade.
     getRowId: (row) => row.tradeId,
+    // Moves the columns being grouped on to the front, which is where the
+    // labels belong: Book grouped and left in place would put the label after
+    // the figures it heads. Safe only because of the drop above, which takes the
+    // pinned Trade column off a grouped grid: it was set to false while that
+    // column could still be displaced from position 0, taking the selection
+    // marker's first cell with it.
+    groupedColumnMode: 'reorder',
+    // Default is on, and the feed replaces the data every two seconds, so
+    // without this every open group would snap shut on each frame.
+    autoResetExpanded: false,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    meta: { pendingIds },
+    getGroupedRowModel: getGroupedRowModel(),
+    getExpandedRowModel: getExpandedRowModel(),
   })
 
   const rows = table.getRowModel().rows
+  const leaves = table.getFilteredRowModel().rows
+
+  /**
+   * What a full-width magnitude bar means. Taken over the filtered leaves, so
+   * the bars measure what is on screen: scaled against the whole book, a tape
+   * filtered down to small trades would show twelve bars all too short to read.
+   *
+   * useMemo on the row model's identity, not on a length, because the model is
+   * replaced when the data is and the largest trade can change without the count
+   * changing.
+   */
+  const notionalScale = useMemo(() => {
+    let max = 0n
+
+    for (const row of leaves) {
+      const value = toMinorUnits(row.getValue<DecimalString>('notional'))
+      if (value > max) {
+        max = value
+      }
+    }
+
+    return barScale(max)
+  }, [leaves])
+
+  /**
+   * The shortcuts are bound to the table, so focus has to be on it for them to
+   * fire, and a cell is not focusable. Clicking a row therefore moves focus to
+   * the table: without it a trader would have to click a row and then tab back
+   * before the keys did anything. preventScroll because the row is already in
+   * view and the browser would otherwise jump the grid to it.
+   */
+  const grid = useRef<HTMLTableElement>(null)
+
+  /**
+   * The element the rows scroll inside, which the virtualiser measures to decide
+   * how many of them to draw.
+   */
+  const scroller = useRef<HTMLDivElement>(null)
+
+  /**
+   * Draws the twenty-odd rows that fit rather than all five hundred.
+   *
+   * estimateSize is a constant and nothing is measured, because every row is
+   * exactly ROW_PX tall by construction: the height is on the tr and no cell
+   * carries vertical padding. A group row is the same height as a trade row, so
+   * grouping does not change this.
+   *
+   * No getItemKey. The virtualiser is keyed by position in the row model and
+   * React is keyed by trade id below, which is the pairing that lets a sort
+   * reorder the tape without reusing a row for the wrong trade.
+   */
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => scroller.current,
+    estimateSize: () => ROW_PX,
+    // Enough that an arrow-key walk off the bottom edge has somewhere to land,
+    // and the wheel does not reveal blank space on a fast flick.
+    overscan: 12,
+  })
+
+  const drawn = virtualizer.getVirtualItems()
+
+  /**
+   * The gaps above and below the drawn rows, held open by two empty tr elements.
+   *
+   * Spacer rows rather than absolutely positioned ones: a tr cannot be taken out
+   * of flow without destroying the table, which is where the row and cell
+   * semantics behind role=grid come from.
+   */
+  const above = drawn[0]?.start ?? 0
+  const below = virtualizer.getTotalSize() - (drawn.at(-1)?.end ?? 0)
+
+  /**
+   * Group rows are deliberately not selectable, and this is a correctness guard
+   * rather than tidiness. TanStack builds a group row from its first leaf
+   * trade's data, so a selected group header would hand the selection bar a real
+   * Trade and offer Amend and Cancel against an arbitrary row inside the group.
+   * Clicking a group row opens it instead.
+   */
+  const select = useCallback((row: Row<Trade>) => {
+    if (row.getIsGrouped()) {
+      row.toggleExpanded()
+      return
+    }
+
+    setSelectedId(row.id)
+    grid.current?.focus({ preventScroll: true })
+  }, [])
+
+  /**
+   * The selected trade and whether it may be written to, resolved from what is
+   * actually on screen. Both the buttons and the keys read these, so a hotkey
+   * cannot do what the matching disabled button refuses.
+   */
+  const selected = selectedId === null ? null : (rows.find((row) => row.id === selectedId) ?? null)
+  const selectedTrade = selected?.original ?? null
+  const writable =
+    selectedTrade !== null && canWrite(selectedTrade, pendingIds.has(selectedTrade.tradeId))
+
+  const onKeyDown = (event: KeyboardEvent<HTMLElement>): void => {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      // Otherwise the container scrolls as well as the selection moving.
+      event.preventDefault()
+
+      if (rows.length === 0) {
+        return
+      }
+
+      // Steps through the sorted, filtered and grouped order, which is the order
+      // on screen. Stepping through the unsorted data would make the selection
+      // appear to jump about at random.
+      const current = rows.findIndex((row) => row.id === selectedId)
+      const next = nextSelectable(rows, current, event.key === 'ArrowDown' ? 1 : -1)
+
+      if (next === -1) {
+        return
+      }
+
+      const id = rows[next]?.id
+
+      if (id !== undefined) {
+        setSelectedId(id)
+        // Through the virtualiser, not the DOM. A row outside the drawn window
+        // has no element, so looking one up by trade id would find nothing and
+        // scroll nowhere, silently, which is the whole failure mode of a
+        // keyboard-driven grid that virtualises its rows.
+        virtualizer.scrollToIndex(next, { align: 'auto' })
+      }
+      return
+    }
+
+    if (event.key === 'Escape') {
+      setSelectedId(null)
+      return
+    }
+
+    if (selectedTrade === null) {
+      return
+    }
+
+    const key = event.key.toLowerCase()
+
+    if (key === 'a' && writable) {
+      actions.onAmend(selectedTrade)
+    } else if (key === 'c' && writable) {
+      actions.onCancel(selectedTrade)
+    } else if (key === 'h') {
+      actions.onHistory(selectedTrade)
+    }
+  }
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col">
-      <FilterBar table={table} shown={rows.length} total={trades.length} />
+    // Wraps the whole grid rather than the table, so a pane is one subtree with
+    // one scale: the bars, the count label and the config panel are all reading
+    // the same filtered rows.
+    <MagnitudeScale minor={notionalScale}>
+      {/*
+       * min-w-0 is load-bearing. A flex item keeps min-width:auto, and every cell
+       * is whitespace-nowrap, so without it this section cannot shrink below the
+       * full width of all twelve columns and pushes the positions panel off
+       * screen. With it, the overflow-auto wrapper below scrolls the table.
+       */}
+      <section aria-label={label} className="flex min-h-0 min-w-0 flex-1 flex-col">
+        {/*
+         * The filtered leaf count, not rows.length: with grouping on, rows.length
+         * is the number of groups, and "3 of 500 trades" when three symbols are
+         * grouped would be a straight lie about what is held.
+         */}
+        <FilterBar
+          configOpen={configOpen}
+          configPanelId={configPanelId}
+          grip={grip}
+          nameplate={nameplate}
+          onClose={onClose}
+          // The pane's own view, handed over as it stands: a duplicate opens on
+          // what the trader was looking at when they pressed it, which is the
+          // only reading of the word that is any use.
+          onDuplicate={
+            onDuplicate === undefined
+              ? undefined
+              : () => onDuplicate({ sorting, columnFilters, grouping, columnVisibility })
+          }
+          onToggleConfig={() => setConfigOpen((open) => !open)}
+          shown={leaves.length}
+          table={table}
+          total={trades.length}
+        />
 
-      <div className="min-h-0 flex-1 overflow-auto rounded border border-tape-line">
-        <table className="w-full border-collapse text-left">
-          <thead className="sticky top-0 z-10 bg-tape-panel">
-            {table.getHeaderGroups().map((group) => (
-              <tr key={group.id}>
-                {group.headers.map((header) => (
-                  <th
-                    key={header.id}
-                    className={`whitespace-nowrap border-b border-tape-line px-2 py-1.5 font-semibold text-tape-muted ${
-                      header.column.columnDef.meta?.className ?? ''
-                    }`}
-                  >
-                    {header.column.getCanSort() ? (
-                      <button
-                        type="button"
-                        className="hover:text-tape-text"
-                        onClick={header.column.getToggleSortingHandler()}
-                      >
-                        {flexRender(header.column.columnDef.header, header.getContext())}
-                        <SortMarker direction={header.column.getIsSorted()} />
-                      </button>
-                    ) : (
-                      flexRender(header.column.columnDef.header, header.getContext())
-                    )}
-                  </th>
+        {/* The panel is a sibling of the grid, not an overlay on it, so opening it
+          shrinks the tape instead of covering the columns being read. */}
+        <div className="flex min-h-0 flex-1">
+          {/*
+           * pb leaves the horizontal scrollbar somewhere to sit that is not on top
+           * of the last row of the tape, and tape-scroll makes the bar visible:
+           * a pinned column only makes sense to someone who can see that the middle
+           * scrolls. focus-within rather than focus, because what takes focus is the
+           * table inside, and a ring drawn on that would scroll away with it.
+           */}
+          <div
+            ref={scroller}
+            className="tape-scroll min-w-0 flex-1 overflow-auto rounded-sm border border-tape-line pb-2.5 focus-within:border-tape-focus"
+          >
+            {/*
+             * border-separate, not border-collapse. In collapsed mode the table
+             * paints cell borders rather than the cell doing it, so the border on a
+             * sticky cell scrolls away and leaves the pinned columns unedged.
+             * Row borders are ignored in separate mode, so they move to the cells.
+             *
+             * table-fixed with the colgroup below is what virtualisation requires:
+             * widths come from the columns and no cell is ever measured, so the
+             * figures stay in line as rows scroll through. minWidth is the stated
+             * total, and w-full lets a wide screen share out the slack. The
+             * config panel's width animation is cheap for the same reason: what
+             * the browser redoes on each frame is a colgroup of twelve numbers,
+             * not a measurement of every cell on screen.
+             */}
+            <table
+              ref={grid}
+              style={{ minWidth: table.getTotalSize() }}
+              // grid rather than the default table role, because this one is
+              // operated: it owns a selection and the keys that move it.
+              //
+              // Binding those keys here rather than on the document is what keeps
+              // them from firing underneath an open dialog with no flag passed down
+              // to say so, and from reaching a trader typing BARC into the symbol
+              // filter.
+              //
+              // biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: table is the one element ARIA in HTML allows role=grid on, and it is the APG data-grid pattern. The rule's fix, replacing the table with a div, would cost the real row and cell semantics.
+              role="grid"
+              tabIndex={0}
+              aria-label={`${label}. Use the arrow keys to select a row.`}
+              // The whole tape plus the header band, not the handful of rows
+              // drawn. Without it a virtualised grid tells a screen reader it
+              // holds twenty rows, which is the count of what happens to be on
+              // screen rather than of what is there.
+              aria-rowcount={rows.length + 1}
+              onKeyDown={onKeyDown}
+              className="w-full table-fixed border-separate border-spacing-0 text-left focus:outline-none"
+            >
+              {/* Driven by the visible leaves, so hiding a column in the config
+                  panel takes its width with it rather than leaving the header,
+                  the body and the layout disagreeing about which column is
+                  which. */}
+              <colgroup>
+                {table.getVisibleLeafColumns().map((column) => (
+                  <col key={column.id} style={{ width: column.getSize() }} />
                 ))}
-              </tr>
-            ))}
-          </thead>
+              </colgroup>
 
-          <tbody>
-            {rows.map((row) => {
-              const cancelled = row.original.status === 'CANCELLED'
-              const pending = pendingIds.has(row.original.tradeId)
+              {/*
+               * Opaque, not tinted. A sticky header paints in the same stacking
+               * context as the rows moving beneath it, so any transparency lets row
+               * text slide through the smallest text in the application.
+               *
+               * z-20 against the pinned cell's z-10, so the header's own pinned
+               * corner wins over the body cells it crosses.
+               */}
+              <thead className="sticky top-0 z-20 bg-tape-panel">
+                {table.getHeaderGroups().map((group) => (
+                  // The band height lives here and the cells carry no vertical
+                  // padding, so there is one knob rather than two.
+                  <tr key={group.id} aria-rowindex={1} className="h-8">
+                    {group.headers.map((header, index) => {
+                      const meta = header.column.columnDef.meta
 
-              return (
-                <tr
-                  key={row.id}
-                  className={[
-                    'border-b border-tape-line/50 hover:bg-tape-panel/60',
-                    cancelled ? 'text-tape-muted line-through' : '',
-                    pending ? 'opacity-45' : '',
-                    flashing.has(row.original.tradeId) ? 'tape-flash' : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <td
-                      key={cell.id}
-                      className={`whitespace-nowrap px-2 py-1 ${cell.column.columnDef.meta?.className ?? ''}`}
+                      return (
+                        <th
+                          key={header.id}
+                          // A pinned header needs its own background: the thead's
+                          // scrolls sideways with the table, so it cannot be what
+                          // hides the columns passing underneath.
+                          // meta.className stays last: it is what right-aligns the
+                          // numeric headers over their columns.
+                          className={`whitespace-nowrap border-b border-tape-line bg-tape-panel px-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-tape-muted ${
+                            index === 0 ? PINNED : ''
+                          } ${meta?.className ?? ''}`}
+                        >
+                          {header.column.getCanSort() ? (
+                            <button
+                              type="button"
+                              className="cursor-pointer hover:text-tape-text"
+                              onClick={header.column.getToggleSortingHandler()}
+                            >
+                              {flexRender(header.column.columnDef.header, header.getContext())}
+                              <SortMarker direction={header.column.getIsSorted()} />
+                            </button>
+                          ) : (
+                            flexRender(header.column.columnDef.header, header.getContext())
+                          )}
+                        </th>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </thead>
+
+              <tbody>
+                <Spacer height={above} />
+
+                {drawn.map((item) => {
+                  const row = rows[item.index]
+
+                  if (row === undefined) {
+                    return null
+                  }
+
+                  // Read first, because a group row's original is its first leaf
+                  // trade: taken at face value it would show that trade's status
+                  // and pending state as if they were the group's.
+                  const grouped = row.getIsGrouped()
+                  const cancelled = !grouped && row.original.status === 'CANCELLED'
+                  const pending = !grouped && pendingIds.has(row.original.tradeId)
+                  const isSelected = !grouped && row.id === selectedId
+
+                  if (grouped) {
+                    return (
+                      <tr
+                        key={row.id}
+                        // Its place in the whole tape, which the virtualiser's
+                        // item index already is. Plus two: one for the header
+                        // band, and one because these are 1-based.
+                        aria-rowindex={item.index + 2}
+                        // No data-trade-id: the arrow keys look up a row to scroll
+                        // to by trade, and this is not one.
+                        aria-expanded={row.getIsExpanded()}
+                        // bg-tape-panel, the header's colour, so a group reads as a
+                        // rail across the tape rather than as a trade on it. No
+                        // flash and no pending fade for the same reason.
+                        className="h-8 cursor-pointer bg-tape-panel hover:bg-tape-raised"
+                        onClick={() => row.toggleExpanded()}
+                      >
+                        {row.getVisibleCells().map((cell, index) => (
+                          <BodyCell cell={cell} index={index} isSelected={false} key={cell.id} />
+                        ))}
+                      </tr>
+                    )
+                  }
+
+                  return (
+                    <tr
+                      key={row.id}
+                      aria-rowindex={item.index + 2}
+                      data-trade-id={row.id}
+                      // A row in a grid supports this, and it is the only thing that
+                      // tells a screen reader what the tint means.
+                      aria-selected={isSelected}
+                      className={[
+                        // One background, chosen, not two layered: two background
+                        // utilities in a class list resolve by Tailwind's output
+                        // order rather than by which was written last.
+                        //
+                        // Both are opaque because the pinned cell inherits this
+                        // colour and a translucent one would not hide the columns
+                        // sliding behind it. The flash still wins over either: a
+                        // CSS animation outranks any normal declaration whatever
+                        // the class order. No transition here, since one on
+                        // background-color would smear the flash past its 900ms.
+                        'h-8 cursor-pointer',
+                        isSelected ? 'bg-tape-selected' : 'bg-tape-bg hover:bg-tape-raised',
+                        cancelled ? 'text-tape-muted line-through' : '',
+                        pending ? 'opacity-45' : '',
+                        flashing.has(row.original.tradeId) ? 'tape-flash' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      onClick={() => select(row)}
+                      // Guarded, not just wired: a double click must not be a way
+                      // round the disabled Amend button on a cancelled row.
+                      onDoubleClick={() => {
+                        if (canWrite(row.original, pending)) {
+                          actions.onAmend(row.original)
+                        }
+                      }}
                     >
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </td>
-                  ))}
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+                      {row.getVisibleCells().map((cell, index) => (
+                        <BodyCell cell={cell} index={index} isSelected={isSelected} key={cell.id} />
+                      ))}
+                    </tr>
+                  )
+                })}
 
-        {rows.length === 0 ? (
-          <p className="px-2 py-4 text-tape-muted">No trades match these filters.</p>
-        ) : null}
-      </div>
-    </section>
+                <Spacer height={below} />
+              </tbody>
+            </table>
+
+            {rows.length === 0 ? (
+              <p className="px-2 py-6 text-center text-tape-muted">
+                No trades match these filters.
+              </p>
+            ) : null}
+          </div>
+
+          <GridConfigPanel id={configPanelId} open={configOpen} table={table} />
+        </div>
+
+        <SelectionBar
+          trade={selectedTrade}
+          pending={selectedTrade !== null && pendingIds.has(selectedTrade.tradeId)}
+          actions={actions}
+        />
+      </section>
+    </MagnitudeScale>
   )
+}
+
+/**
+ * The next trade row in the given direction, stepping over group rows. A group
+ * is not a trade, so the selection must not be able to land on one.
+ *
+ * -1 when there is nothing to move to, which leaves the selection where it is
+ * rather than wrapping: a blotter that wraps from the last row to the first makes
+ * a trader believe they are still looking at the row they just left.
+ */
+function nextSelectable(rows: Row<Trade>[], from: number, step: number): number {
+  // With nothing selected, either key starts at the top, rather than ArrowUp
+  // dropping to the bottom of a 500-row tape.
+  const direction = from === -1 ? 1 : step
+  let index = from === -1 ? 0 : from + step
+
+  while (index >= 0 && index < rows.length) {
+    if (rows[index]?.getIsGrouped() !== true) {
+      return index
+    }
+    index += direction
+  }
+
+  return -1
+}
+
+/**
+ * Holds the scroll extent open where rows are not drawn, above and below the
+ * window the virtualiser draws.
+ *
+ * A tr rather than an absolutely positioned element, because a tr cannot be
+ * taken out of flow without destroying the table, and the table is where the row
+ * and cell semantics behind role=grid come from.
+ *
+ * Presentational because an empty row is a layout device and not one of the
+ * grid's rows. What tells a screen reader where in five hundred it is are the
+ * grid's aria-rowcount and each real row's aria-rowindex.
+ */
+function Spacer({ height }: { height: number }): ReactElement | null {
+  if (height <= 0) {
+    return null
+  }
+
+  // biome-ignore lint/a11y/noInteractiveElementToNoninteractiveRole: presentation is the role ARIA in HTML allows on a layout tr, and the rule's fix, wrapping it in a div, is not something a tbody may contain.
+  return <tr role="presentation" style={{ height }} />
+}
+
+type BodyCellProps = {
+  cell: Cell<Trade, unknown>
+  index: number
+  isSelected: boolean
+}
+
+/**
+ * Shared by trade rows and group rows, so the pinned column, the selection
+ * marker and the numeric alignment are declared once instead of drifting apart
+ * between the two.
+ */
+function BodyCell({ cell, index, isSelected }: BodyCellProps): ReactElement {
+  const meta = cell.column.columnDef.meta
+  const leading = index === 0
+
+  return (
+    <td
+      // bg-inherit, not a fixed colour: it has to follow the row through hover,
+      // the selection, the flash and the pending fade, and inheritance tracks
+      // the animated value.
+      //
+      // The selection marker rides the first cell as an inset shadow. A border
+      // would push every cell in the row 2px out of line with the column above
+      // it.
+      className={`whitespace-nowrap border-b border-tape-line/60 px-1.5 ${
+        leading ? `bg-inherit ${PINNED}` : ''
+      } ${
+        leading && isSelected ? 'shadow-[inset_2px_0_0_0_var(--color-tape-accent)]' : ''
+      } ${meta?.className ?? ''}`}
+    >
+      {renderCell(cell)}
+    </td>
+  )
+}
+
+/**
+ * Which of a column's renderers a cell gets.
+ *
+ * A placeholder is the grouped column on a leaf row, and renders empty: the
+ * value is on the group row above it.
+ *
+ * The grouped cell is the group's label, rendered by the column's own renderer
+ * so a grouped Side still reads as its badge, with the expander wrapped round
+ * it so the label and the control are one thing.
+ */
+function renderCell(cell: Cell<Trade, unknown>): ReactNode {
+  if (cell.getIsPlaceholder()) {
+    return null
+  }
+
+  const column = cell.column.columnDef
+
+  if (cell.getIsGrouped()) {
+    return <GroupToggle row={cell.row}>{flexRender(column.cell, cell.getContext())}</GroupToggle>
+  }
+
+  return flexRender(cell.getIsAggregated() ? column.aggregatedCell : column.cell, cell.getContext())
 }
 
 function SortMarker({ direction }: { direction: false | 'asc' | 'desc' }): ReactElement | null {
@@ -127,17 +742,40 @@ function SortMarker({ direction }: { direction: false | 'asc' | 'desc' }): React
 }
 
 type FilterBarProps = {
-  table: ReturnType<typeof useReactTable<Trade>>
+  table: Table<Trade>
   shown: number
   total: number
+  configOpen: boolean
+  configPanelId: string
+  onToggleConfig: () => void
+  onDuplicate: (() => void) | undefined
+  onClose: (() => void) | undefined
+  grip: ReactNode | undefined
+  nameplate: ReactNode | undefined
 }
 
 /**
  * Filtering happens here rather than on the server, because the cache holds every
  * trade: a frame for a trade outside the current filter still belongs in the
  * cache, and clearing the filter must not need a round trip.
+ *
+ * Deliberately not where grouping, ordering or column visibility live. These five
+ * are the controls a trader reaches for constantly, and the rest are a setup a
+ * view is arranged with once: putting both in one row would make the frequent
+ * ones harder to find. The rest are in the panel this row's last button opens.
  */
-function FilterBar({ table, shown, total }: FilterBarProps): ReactElement {
+function FilterBar({
+  table,
+  shown,
+  total,
+  configOpen,
+  configPanelId,
+  onToggleConfig,
+  onDuplicate,
+  onClose,
+  grip,
+  nameplate,
+}: FilterBarProps): ReactElement {
   const value = (id: string): string => (table.getColumn(id)?.getFilterValue() as string) ?? ''
   const set = (id: string, next: string): void => {
     table.getColumn(id)?.setFilterValue(next === '' ? undefined : next)
@@ -145,10 +783,15 @@ function FilterBar({ table, shown, total }: FilterBarProps): ReactElement {
 
   return (
     <div className="mb-2 flex flex-wrap items-center gap-2">
+      {/* First, so the handle is in the same place on every pane and does not
+        move as the controls beside it wrap, with the name it moves next to it. */}
+      {grip}
+      {nameplate}
+
       <input
         aria-label="Filter by symbol"
         placeholder="Symbol"
-        className="w-24 rounded border border-tape-line bg-tape-panel px-2 py-1 placeholder:text-tape-muted focus:border-tape-accent focus:outline-none"
+        className={`${FILTER} w-24`}
         value={value('symbol')}
         onChange={(event) => set('symbol', event.target.value.toUpperCase())}
       />
@@ -156,7 +799,7 @@ function FilterBar({ table, shown, total }: FilterBarProps): ReactElement {
       <input
         aria-label="Filter by trader"
         placeholder="Trader"
-        className="w-32 rounded border border-tape-line bg-tape-panel px-2 py-1 placeholder:text-tape-muted focus:border-tape-accent focus:outline-none"
+        className={`${FILTER} w-32`}
         value={value('trader')}
         onChange={(event) => set('trader', event.target.value)}
       />
@@ -164,14 +807,14 @@ function FilterBar({ table, shown, total }: FilterBarProps): ReactElement {
       <input
         aria-label="Filter by book"
         placeholder="Book"
-        className="w-32 rounded border border-tape-line bg-tape-panel px-2 py-1 placeholder:text-tape-muted focus:border-tape-accent focus:outline-none"
+        className={`${FILTER} w-32`}
         value={value('book')}
         onChange={(event) => set('book', event.target.value)}
       />
 
       <select
         aria-label="Filter by side"
-        className="rounded border border-tape-line bg-tape-panel px-2 py-1 focus:border-tape-accent focus:outline-none"
+        className={`${FILTER} cursor-pointer`}
         value={value('side')}
         onChange={(event) => set('side', event.target.value)}
       >
@@ -182,7 +825,7 @@ function FilterBar({ table, shown, total }: FilterBarProps): ReactElement {
 
       <select
         aria-label="Filter by status"
-        className="rounded border border-tape-line bg-tape-panel px-2 py-1 focus:border-tape-accent focus:outline-none"
+        className={`${FILTER} cursor-pointer`}
         value={value('status')}
         onChange={(event) => set('status', event.target.value)}
       >
@@ -191,9 +834,57 @@ function FilterBar({ table, shown, total }: FilterBarProps): ReactElement {
         <option value="CANCELLED">CANCELLED</option>
       </select>
 
-      <span className="ml-auto text-tape-muted">
-        {shown === total ? `${total} trades` : `${shown} of ${total} trades`}
-      </span>
+      <span className={`ml-auto ${MICRO_LABEL}`}>{countLabel(shown, total)}</span>
+
+      <button
+        aria-controls={configPanelId}
+        aria-expanded={configOpen}
+        className={CHIP}
+        onClick={onToggleConfig}
+        type="button"
+      >
+        {configOpen ? 'Hide config' : 'Config'}
+      </button>
+
+      {/*
+       * The pane's own controls, on the pane's own bar. Not the grouping and
+       * ordering chrome this row deliberately does not carry: these two are about
+       * the window rather than about the view inside it, and a Duplicate button
+       * anywhere else could not say which view it was duplicating.
+       */}
+      {onDuplicate === undefined ? null : (
+        <button className={CHIP} onClick={onDuplicate} type="button">
+          Duplicate
+        </button>
+      )}
+
+      {onClose === undefined ? null : (
+        <button
+          className={`${CHIP} hover:border-tape-sell hover:text-tape-sell`}
+          onClick={onClose}
+          type="button"
+        >
+          Close
+        </button>
+      )}
     </div>
   )
 }
+
+/**
+ * The count held is the whole book only while the window is not full. At
+ * BLOTTER_LIMIT the blotter is showing the most recent 500 of a book that is
+ * larger, and a bare "500 trades" would claim otherwise.
+ *
+ * Positions are not qualified the same way: they are aggregated server-side over
+ * every active trade, so the panel can report exposure the visible rows do not
+ * add up to.
+ */
+function countLabel(shown: number, total: number): string {
+  const held = total >= BLOTTER_LIMIT ? `latest ${total}` : `${total}`
+  return shown === total ? `${held} trades` : `${shown} of ${held} trades`
+}
+
+/** Lighter than the canvas it sits on, so the filter row reads as chrome above
+ *  the grid rather than as part of it. */
+const FILTER = `${CONTROL} bg-tape-panel`
