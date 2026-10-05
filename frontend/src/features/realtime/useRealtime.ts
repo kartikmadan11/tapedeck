@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import type { BlotterState, ServerFrame } from '@tapedeck/shared'
+import type { BlotterState, ServerFrame, SimulationState } from '@tapedeck/shared'
 import { serverFrame } from '@tapedeck/shared'
 import { useEffect, useState } from 'react'
 import { websocketUrl } from '../../lib/api.js'
@@ -37,6 +37,17 @@ export function useRealtime(): { status: ConnectionStatus } {
     }
 
     const handle = (frame: ServerFrame): void => {
+      // Not blotter state, so it is routed out before the reducer rather than
+      // given a no-op branch there. Carries no cursor, so there is nothing to
+      // guard against staleness: the latest one wins, as with positions.
+      if (frame.type === 'simulation') {
+        queryClient.setQueryData<SimulationState>(queryKeys.simulation, {
+          running: frame.running,
+          intervalMs: frame.intervalMs,
+        })
+        return
+      }
+
       // Read before the write so the gap test sees the cursor the frame arrived
       // against, and so no side effect runs inside the cache updater.
       const before = queryClient.getQueryData<BlotterState>(queryKeys.blotter) ?? emptyBlotter

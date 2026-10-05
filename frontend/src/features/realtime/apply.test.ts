@@ -1,5 +1,5 @@
 import type { BlotterState, Position, ServerFrame, Trade } from '@tapedeck/shared'
-import { position, trade } from '@tapedeck/shared'
+import { BLOTTER_LIMIT, position, trade } from '@tapedeck/shared'
 import { describe, expect, it } from 'vitest'
 import {
   apply,
@@ -42,6 +42,26 @@ function aPosition(overrides: Record<string, unknown> = {}): Position {
 
 function stateOf(seq: number, trades: Trade[], positions: Position[] = []): BlotterState {
   return { seq, trades, positions }
+}
+
+const TAPE_EPOCH = Date.UTC(2026, 9, 2, 9, 0, 0)
+
+/**
+ * Trade `index` of a tape, counted back from the most recent, so index 0 is the
+ * newest and a larger index is older. One second apart, so no two trades tie and
+ * the ordering under test is the timestamp rather than the tiebreak.
+ */
+function aTapeTrade(index: number, overrides: Record<string, unknown> = {}): Trade {
+  return aTrade({
+    tradeId: `TRD-${900_000 - index}`,
+    tradeTimestamp: new Date(TAPE_EPOCH - index * 1_000).toISOString(),
+    ...overrides,
+  })
+}
+
+/** `count` trades newest first, which is the order the cache holds them in. */
+function aTape(count: number): Trade[] {
+  return Array.from({ length: count }, (_unused, index) => aTapeTrade(index))
 }
 
 const ids = (state: BlotterState): string[] => state.trades.map((t) => t.tradeId)
@@ -237,6 +257,79 @@ describe('apply: trade deltas', () => {
   })
 })
 
+/**
+ * The cache holds the window the server was asked for, not everything it has
+ * ever been sent. Untrimmed, a bounded first load drifts straight back to
+ * unbounded: the feed only ever adds rows, since a cancelled trade stays on the
+ * tape.
+ */
+describe('apply: the blotter window', () => {
+  it('trims a snapshot larger than the window to the most recent BLOTTER_LIMIT', () => {
+    const tape = aTape(BLOTTER_LIMIT + 40)
+
+    const next = apply(emptyBlotter, { type: 'snapshot', seq: 9, trades: tape, positions: [] })
+
+    expect(next.trades).toHaveLength(BLOTTER_LIMIT)
+    // Which end was cut is the whole assertion: trimming the other one would
+    // leave the blotter stuck in the past while the feed ran.
+    expect(next.trades[0]?.tradeId).toBe(aTapeTrade(0).tradeId)
+    expect(ids(next)).not.toContain(aTapeTrade(BLOTTER_LIMIT).tradeId)
+  })
+
+  it('holds a full window at BLOTTER_LIMIT as trades arrive, dropping the oldest', () => {
+    const held = stateOf(10, aTape(BLOTTER_LIMIT))
+
+    const next = apply(held, {
+      type: 'trade.created',
+      seq: 11,
+      trade: aTrade({ tradeId: 'TRD-999999', tradeTimestamp: '2026-10-02T10:00:00.000Z' }),
+    })
+
+    expect(next.trades).toHaveLength(BLOTTER_LIMIT)
+    expect(next.trades[0]?.tradeId).toBe('TRD-999999')
+    expect(ids(next)).not.toContain(aTapeTrade(BLOTTER_LIMIT - 1).tradeId)
+  })
+
+  it('drops a trade backdated past a full window, since it falls outside it', () => {
+    const held = stateOf(10, aTape(BLOTTER_LIMIT))
+
+    const next = apply(held, {
+      type: 'trade.created',
+      seq: 11,
+      trade: aTrade({ tradeId: 'TRD-200000', tradeTimestamp: '2026-10-01T08:00:00.000Z' }),
+    })
+
+    expect(next.trades).toHaveLength(BLOTTER_LIMIT)
+    expect(ids(next)).not.toContain('TRD-200000')
+    // The cursor still advances. The frame was applied, and the trade is absent
+    // because the window says so rather than because it was missed: leaving the
+    // cursor behind would make the next frame look like a gap and force a refetch.
+    expect(next.seq).toBe(11)
+  })
+
+  it('does not drop a row when a full window takes an amendment', () => {
+    const held = stateOf(10, aTape(BLOTTER_LIMIT))
+
+    const next = apply(held, {
+      type: 'trade.amended',
+      seq: 11,
+      trade: aTapeTrade(200, { quantity: 55, version: 2 }),
+    })
+
+    // A replacement is one row for one row, so trimming on this path would cost
+    // the oldest trade on every amendment.
+    expect(next.trades).toHaveLength(BLOTTER_LIMIT)
+    expect(next.trades[200]?.quantity).toBe(55)
+    expect(ids(next)).toContain(aTapeTrade(BLOTTER_LIMIT - 1).tradeId)
+  })
+
+  it('trims a trades response, so a refetch cannot grow the cache past the window', () => {
+    const next = applyTradesResponse(emptyBlotter, { seq: 12, trades: aTape(BLOTTER_LIMIT + 7) })
+
+    expect(next.trades).toHaveLength(BLOTTER_LIMIT)
+  })
+})
+
 describe('apply: positions', () => {
   it('replaces positions and leaves the cursor untouched', () => {
     const held = stateOf(7, [aTrade()], [aPosition()])
@@ -361,6 +454,16 @@ describe('REST writers', () => {
 
     const next = applyPositionsResponse(held, { seq: 4, positions: [aPosition()] })
 
+    expect(next).toBe(held)
+  })
+
+  it('leaves the blotter untouched for a simulation frame', () => {
+    const held = stateOf(3, [aTrade()], [aPosition()])
+
+    const next = apply(held, { type: 'simulation', running: true, intervalMs: 2_000 })
+
+    // Whether the generated feed is running is not blotter state. Returning the
+    // same object is the assertion: nothing is copied, and the cursor cannot move.
     expect(next).toBe(held)
   })
 })

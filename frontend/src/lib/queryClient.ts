@@ -15,6 +15,10 @@ import { ApiRequestError, fetchPositions, fetchTrades } from './api.js'
 export const queryKeys = {
   blotter: ['blotter'] as const,
   tradeEvents: (tradeId: string) => ['trade-events', tradeId] as const,
+  // Separate from the blotter: whether the feed is running is not trade state and
+  // shares nothing with the cursor, so folding it in would mean a toggle could
+  // invalidate rows.
+  simulation: ['simulation'] as const,
 }
 
 /**

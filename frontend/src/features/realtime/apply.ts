@@ -6,6 +6,7 @@ import type {
   TradeDeltaFrame,
   TradesResponse,
 } from '@tapedeck/shared'
+import { BLOTTER_LIMIT } from '@tapedeck/shared'
 
 export const emptyBlotter: BlotterState = { seq: 0, trades: [], positions: [] }
 
@@ -24,6 +25,23 @@ function byRecency(a: Trade, b: Trade): number {
 }
 
 /**
+ * The most recent BLOTTER_LIMIT trades, which is the window the server was asked
+ * for and so the window the cache holds.
+ *
+ * Trimming on the way in rather than at render time is the point. Without it the
+ * bounded first load drifts straight back to unbounded: the socket delivers a
+ * frame for every write, cancelled trades stay on the tape, and nothing ever
+ * leaves the array. An hour of the feed running is another 1,800 rows.
+ *
+ * Safe to cut from the end because the array is sorted newest first, so what
+ * falls off is the oldest trade held, which is exactly what the server would have
+ * dropped from the same window.
+ */
+function windowed(trades: Trade[]): Trade[] {
+  return trades.length > BLOTTER_LIMIT ? trades.slice(0, BLOTTER_LIMIT) : trades
+}
+
+/**
  * An amendment cannot change tradeTimestamp or tradeId, so a replacement keeps
  * its slot. A trade not held yet is inserted in order rather than appended,
  * because appending would leave the array unsorted until the next refetch.
@@ -39,7 +57,9 @@ function upsert(trades: Trade[], incoming: Trade): Trade[] {
   const at = trades.findIndex((trade) => byRecency(incoming, trade) < 0)
   const next = trades.slice()
   next.splice(at === -1 ? trades.length : at, 0, incoming)
-  return next
+  // Only the insert path can grow the array. A replacement is one for one, so
+  // trimming there would cut a row on an amendment of an already full window.
+  return windowed(next)
 }
 
 /**
@@ -58,7 +78,10 @@ export function apply(state: BlotterState, frame: ServerFrame): BlotterState {
       }
       return {
         seq: frame.seq,
-        trades: frame.trades.slice().sort(byRecency),
+        // Windowed as well as sorted, even though the handshake snapshot is
+        // already windowed server-side. The invariant then belongs to this
+        // function rather than to an agreement between two files.
+        trades: windowed(frame.trades.slice().sort(byRecency)),
         positions: frame.positions,
       }
 
@@ -80,6 +103,12 @@ export function apply(state: BlotterState, frame: ServerFrame): BlotterState {
       // and the latest one wins. It must not advance seq: doing so would make the
       // client discard trade frames it has not applied.
       return { ...state, positions: frame.positions }
+
+    case 'simulation':
+      // Whether the feed is running is not blotter state. It is routed to its own
+      // cache entry before this point; the case exists so the union stays
+      // exhaustive, and returning state unchanged keeps the cursor untouched.
+      return state
 
     default: {
       // Adding a frame type without deciding how it writes fails to compile here.
@@ -117,7 +146,7 @@ export function applyTradesResponse(state: BlotterState, response: TradesRespons
   }
   return {
     seq: response.seq,
-    trades: response.trades.slice().sort(byRecency),
+    trades: windowed(response.trades.slice().sort(byRecency)),
     positions: state.positions,
   }
 }
