@@ -31,6 +31,12 @@ services:
       # In network the host is the service name on 5432, not the published 5433.
       DATABASE_URL: postgres://${POSTGRES_USER:-tapedeck}:${POSTGRES_PASSWORD:-tapedeck}@db:5432/${POSTGRES_DB:-tapedeck}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Passed through so the defaults documented in .env.example are actually
+      # overridable from a .env file. Each default here matches the one in
+      # config.ts, so compose adds no behaviour of its own.
+      SIMULATION_ENABLED: ${SIMULATION_ENABLED:-true}
+      SIMULATION_INTERVAL_MS: ${SIMULATION_INTERVAL_MS:-2000}
+      SIMULATION_MAX_TRADES: ${SIMULATION_MAX_TRADES:-900}
     depends_on:
       db:
         condition: service_healthy

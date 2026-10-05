@@ -8,6 +8,7 @@ build/
 
 # test output
 coverage/
+.vitest/
 
 # local environment
 .env
