@@ -12,7 +12,7 @@ export function ErrorNotice({ error, className = '' }: Props): ReactElement {
   return (
     <div
       role="alert"
-      className={`rounded border border-tape-sell/60 bg-tape-sell/10 px-2 py-1.5 text-tape-sell ${className}`}
+      className={`rounded-sm border border-tape-sell/50 bg-tape-sell/10 px-2 py-1.5 text-tape-sell ${className}`}
     >
       {describe(error)}
     </div>

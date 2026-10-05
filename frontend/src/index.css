@@ -1,18 +1,51 @@
 @import "tailwindcss";
+/* Self-hosted: vite bundles this and emits the woff2 into dist/assets, so there
+   is no CDN request and the app still renders offline. Six subsets ship, but a
+   unicode-range match means only the latin one is ever fetched. */
+@import "@fontsource-variable/geist-mono";
 
 /* Tailwind 4 is CSS-first: this block is the config, and there is no
    tailwind.config.js, no postcss.config.js and no autoprefixer. */
 @theme {
-  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* One variable file covers 100-900, so font-semibold is a real weight rather
+     than a synthesised one that would widen glyphs and break column alignment. */
+  --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  --color-tape-bg: oklch(0.17 0.01 260);
-  --color-tape-panel: oklch(0.21 0.012 260);
-  --color-tape-line: oklch(0.29 0.014 260);
-  --color-tape-text: oklch(0.92 0.005 260);
-  --color-tape-muted: oklch(0.65 0.012 260);
-  --color-tape-buy: oklch(0.74 0.14 160);
-  --color-tape-sell: oklch(0.7 0.16 25);
-  --color-tape-accent: oklch(0.75 0.13 230);
+  --color-tape-bg: #09090b;
+  --color-tape-panel: #121215;
+  /* Hover and lifted surfaces. Light enough to read against the panel, which
+     panel/60 over this canvas was not. */
+  --color-tape-raised: #18181b;
+  --color-tape-line: #27272a;
+  --color-tape-text: #f4f4f5;
+  --color-tape-muted: #a1a1aa;
+  --color-tape-buy: #34d399;
+  --color-tape-sell: #fb7185;
+
+  /* Three accents, because the electric blue is a fill and not a foreground:
+     white on it clears 7.99:1, but the colour itself reads 2.49:1 against the
+     canvas and fails even the 3:1 threshold for non-text. */
+  --color-tape-accent: #818cf8;
+  --color-tape-accent-fill: #3b00ff;
+  --color-tape-focus: #6366f1;
+
+  /* Separate from the accent so retuning the palette cannot silently kill the
+     row flash, which is the only thing on screen that proves the feed is live. */
+  --color-tape-flash: #818cf8;
+
+  /* A booking held back for confirmation. Amber rather than tape-sell, because
+     the press is being questioned, not refused. Split for the same reason as the
+     accent: the foreground reads 11.2:1 on the panel, and white on the fill
+     reads 7.1:1, which neither colour would manage in the other's job. */
+  --color-tape-warn: #fbbf24;
+  --color-tape-warn-fill: #92400e;
+
+  /* The selected row. Opaque, and that is the whole reason it is a token rather
+     than accent/18: the pinned first column carries background-color:inherit,
+     so a translucent row background would let the scrolling columns show
+     through it. This is #818cf8 at 18% blended over the canvas, worked out
+     rather than eyeballed. Text holds 14.4:1 on it and muted holds 6.2:1. */
+  --color-tape-selected: #1f2136;
 }
 
 body {
@@ -21,16 +54,28 @@ body {
   color: var(--color-tape-text);
   font-family: var(--font-mono);
   font-size: 13px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
 }
 
+/* No font-feature-settings and no font-variant-numeric: this font ships only
+   ccmp, dnom, frac, locl, mark, mkmk and numr, so zero, ss01 and tnum would all
+   be no-ops. Its zero already carries an inner mark that distinguishes it from
+   O, and a monospace face is tabular by construction. */
+
 /* A new or changed row flashes once. The cheapest possible proof to someone
-   watching two windows that the blotter is genuinely live. */
+   watching two windows that the blotter is genuinely live.
+
+   Both stops are opaque, mixed against the canvas rather than against
+   transparent. Identical on screen, but the pinned first and last columns carry
+   background-color:inherit so that the flash reaches them, and inheriting a
+   translucent value would let the scrolling columns show through. */
 @keyframes tape-flash {
   from {
-    background-color: color-mix(in oklch, var(--color-tape-accent) 35%, transparent);
+    background-color: color-mix(in oklch, var(--color-tape-flash) 35%, var(--color-tape-bg));
   }
   to {
-    background-color: transparent;
+    background-color: var(--color-tape-bg);
   }
 }
 
@@ -38,8 +83,48 @@ body {
   animation: tape-flash 900ms ease-out;
 }
 
+/* One ring per delivered frame, restarted by remounting the dot on the cursor.
+   Reverts to the resting glow when it ends, since animation-fill-mode is none. */
+@keyframes tape-tick {
+  from {
+    box-shadow: 0 0 0 0 currentColor;
+  }
+  to {
+    box-shadow: 0 0 0 4px transparent;
+  }
+}
+
+.tape-tick {
+  animation: tape-tick 600ms ease-out;
+}
+
+/* The grid's configuration panel, which shrinks the grid rather than covering
+   it. Animating width is normally the wrong choice because every frame relays
+   out the content, and it is the right one here for one specific reason: the
+   panel's own contents carry a stated width and the table carries its own
+   column widths, so neither depends on this container. What moves is the clip
+   and the scroll extent. */
+.tape-slide {
+  transition: width 180ms ease-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .tape-flash {
+  .tape-flash,
+  .tape-tick {
     animation: none;
   }
+
+  .tape-slide {
+    transition: none;
+  }
+}
+
+/* The blotter is thirteen columns wide and the middle of it scrolls on a
+   laptop, so the scrollbar is an affordance rather than an artefact and has to
+   be visible. Naming a scrollbar-color also opts out of the macOS overlay
+   scrollbar, which paints on top of content: left alone it lands across the
+   last row of the tape. */
+.tape-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-tape-line) transparent;
 }

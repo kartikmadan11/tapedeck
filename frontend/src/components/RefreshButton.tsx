@@ -1,4 +1,5 @@
 import type { ReactElement } from 'react'
+import { CHIP } from '../lib/ui.js'
 
 type Props = { onRefresh: () => void; refreshing: boolean }
 
@@ -10,12 +11,7 @@ type Props = { onRefresh: () => void; refreshing: boolean }
  */
 export function RefreshButton({ onRefresh, refreshing }: Props): ReactElement {
   return (
-    <button
-      type="button"
-      className="rounded border border-tape-line px-2 py-0.5 hover:border-tape-accent hover:text-tape-accent disabled:cursor-not-allowed disabled:opacity-35"
-      onClick={onRefresh}
-      disabled={refreshing}
-    >
+    <button type="button" className={CHIP} onClick={onRefresh} disabled={refreshing}>
       {refreshing ? 'Refreshing' : 'Refresh'}
     </button>
   )
