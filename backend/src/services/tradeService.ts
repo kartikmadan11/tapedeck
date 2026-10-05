@@ -54,8 +54,25 @@ export class TradeService {
     return this.repository.listEvents(tradeId)
   }
 
-  async createTrade(input: CreateTradeInput, actor: string): Promise<Trade> {
-    return this.publish(await this.repository.createTrade(input, actor))
+  /**
+   * Reports whether anything was booked, so the route can answer 201 for a new
+   * trade and 200 for a replay.
+   *
+   * A replay publishes nothing. The trade was broadcast when it was first
+   * booked, so a second trade.created frame would flash a row every client
+   * already has, and the repository wrote no event for it, so there is no seq to
+   * put on the frame. Re-reading positions would be wasted too: a replay changed
+   * no row, so the panel cannot have moved.
+   */
+  async createTrade(
+    input: CreateTradeInput,
+    actor: string,
+  ): Promise<{ trade: Trade; replayed: boolean }> {
+    const outcome = await this.repository.createTrade(input, actor)
+    if (outcome.replayed) {
+      return { trade: outcome.trade, replayed: true }
+    }
+    return { trade: await this.publish(outcome.result), replayed: false }
   }
 
   async amendTrade(tradeId: string, input: AmendTradeInput, actor: string): Promise<Trade> {

@@ -1,4 +1,10 @@
-import { frameSequence, type Position, type ServerFrame, type Trade } from '@tapedeck/shared'
+import {
+  frameSequence,
+  type Position,
+  type ServerFrame,
+  type SimulationState,
+  type Trade,
+} from '@tapedeck/shared'
 import type { FastifyBaseLogger } from 'fastify'
 import type { WebSocket } from 'ws'
 import type { Bus } from '../bus.js'
@@ -26,10 +32,17 @@ export interface HubOptions {
   pingIntervalMs: number
   /** Reads trades, positions and the high-water seq in one consistent transaction. */
   readSnapshot: () => Promise<{ seq: number; trades: Trade[]; positions: Position[] }>
+  /**
+   * The generated feed's current state, read at handshake time so a connecting
+   * client is told whether it is running. Without this a client only ever learns
+   * the state from a toggle it happened to be connected for, so a reconnect after
+   * an API restart would leave it showing the wrong control indefinitely.
+   */
+  readSimulation: () => SimulationState
 }
 
 export function createHub(options: HubOptions): Hub {
-  const { bus, log, pingIntervalMs, readSnapshot } = options
+  const { bus, log, pingIntervalMs, readSnapshot, readSimulation } = options
   const clients = new Set<Client>()
 
   const unsubscribe = bus.subscribe((frame) => {
@@ -106,6 +119,25 @@ export function createHub(options: HubOptions): Hub {
       if (latestPositions) {
         socket.send(JSON.stringify(latestPositions))
       }
+
+      /**
+       * The feed state is part of the handshake, not a delta: reconnecting is the
+       * resync, so a client that reconnects after a restart must be told whether
+       * the feed is running rather than keeping whatever it last heard. Without
+       * this it would show the wrong control until a reload, and pressing it would
+       * be a no-op that publishes nothing, so it would never self-correct.
+       *
+       * A frame buffered during the read wins, since it is strictly newer than
+       * what the read observed. Exactly one frame either way: an unsequenced frame
+       * matches neither the replay filter nor the positions drain, and sending two
+       * would flicker the control on connect.
+       */
+      const toggledDuringRead = buffer.findLast((frame) => frame.type === 'simulation')
+      socket.send(
+        JSON.stringify(
+          toggledDuringRead ?? ({ type: 'simulation', ...readSimulation() } satisfies ServerFrame),
+        ),
+      )
     } finally {
       stopBuffering()
     }

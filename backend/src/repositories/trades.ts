@@ -43,6 +43,17 @@ export interface MutationResult {
   eventType: TradeEventType
 }
 
+/**
+ * A booking either happened or had already happened.
+ *
+ * A union rather than a MutationResult with a `replayed` flag, because a replay
+ * has no seq and no event: nothing was written, so there is no cursor to carry
+ * and a flag would need a seq invented to sit beside it.
+ */
+export type CreateResult =
+  | { replayed: false; result: MutationResult }
+  | { replayed: true; trade: Trade }
+
 export interface ConsistentSnapshot {
   seq: number
   trades: Trade[]
@@ -116,9 +127,31 @@ export class TradeRepository {
     return rows.map(toTradeEvent)
   }
 
-  async createTrade(input: CreateTradeInput, actor: string): Promise<MutationResult> {
+  /**
+   * Books a trade, or returns the one an earlier request with the same
+   * clientTradeId already booked.
+   *
+   * The check reads rather than relying on the unique index to raise: a
+   * constraint violation aborts the transaction, so answering the replay would
+   * need a second one, and the lock would have to be taken again to make that
+   * read consistent. Reading first is also the only way to return the earlier
+   * trade, which is what the caller asked for.
+   *
+   * Safe against a concurrent duplicate because the write lock is already held:
+   * one create runs at a time, so no insert can land between this read and the
+   * insert below. Without the lock this would be a textbook check-then-act race
+   * and the index would be doing the work alone.
+   */
+  async createTrade(input: CreateTradeInput, actor: string): Promise<CreateResult> {
     return this.db.transaction(async (tx) => {
       await acquireWriteLock(tx)
+
+      if (input.clientTradeId !== undefined) {
+        const existing = await findByClientTradeId(tx, input.clientTradeId)
+        if (existing) {
+          return { replayed: true, trade: existing }
+        }
+      }
 
       const [row] = await tx
         .insert(trades)
@@ -131,6 +164,9 @@ export class TradeRepository {
           book: input.book,
           counterparty: input.counterparty,
           tradeTimestamp: new Date(input.tradeTimestamp ?? Date.now()),
+          // ?? null rather than the bare value: the column is nullable and
+          // exactOptionalPropertyTypes means undefined is not assignable to it.
+          clientTradeId: input.clientTradeId ?? null,
         })
         .returning()
 
@@ -140,7 +176,7 @@ export class TradeRepository {
 
       const trade = toTrade(row)
       const seq = await appendEvent(tx, 'CREATED', null, trade, actor)
-      return { trade, seq, eventType: 'CREATED' }
+      return { replayed: false, result: { trade, seq, eventType: 'CREATED' } }
     })
   }
 
@@ -171,7 +207,6 @@ export class TradeRepository {
         .set({
           quantity: input.quantity,
           price: input.price,
-          counterparty: input.counterparty,
           version: current.version + 1,
           updatedAt: new Date(),
         })
@@ -225,6 +260,16 @@ export class TradeRepository {
   }
 }
 
+/** Null rather than a throw: no earlier booking is the ordinary case here. */
+async function findByClientTradeId(tx: Queryable, clientTradeId: string): Promise<Trade | null> {
+  const [row] = await tx
+    .select()
+    .from(trades)
+    .where(eq(trades.clientTradeId, clientTradeId))
+    .limit(1)
+  return row ? toTrade(row) : null
+}
+
 async function requireTrade(tx: Queryable, tradeId: string): Promise<Trade> {
   const [row] = await tx.select().from(trades).where(eq(trades.tradeId, tradeId)).limit(1)
   if (!row) {
@@ -275,12 +320,18 @@ function selectTrades(tx: Queryable, query: TradeQuery): Promise<Trade[]> {
     query.book ? eq(trades.book, query.book) : undefined,
   ].filter((filter): filter is NonNullable<typeof filter> => filter !== undefined)
 
-  return tx
+  const ordered = tx
     .select()
     .from(trades)
     .where(filters.length > 0 ? and(...filters) : undefined)
     .orderBy(desc(trades.tradeTimestamp), desc(trades.tradeId))
-    .then((rows) => rows.map(toTrade))
+
+  // trades_timestamp_idx is on (tradeTimestamp desc, tradeId desc), the same
+  // order this asks for, so the limit is a truncated index scan rather than a
+  // sort of the whole table that then throws most of the rows away.
+  return (query.limit === undefined ? ordered : ordered.limit(query.limit)).then((rows) =>
+    rows.map(toTrade),
+  )
 }
 
 /**

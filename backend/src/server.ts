@@ -29,3 +29,10 @@ try {
   app.log.error({ err: error }, 'failed to start')
   process.exit(1)
 }
+
+// Started after listen, and only here: buildApp() has no side effects, so this
+// is the one place that decides the feed runs. Starting before listen would have
+// it writing trades that no client could yet be connected to see.
+if (config.SIMULATION_ENABLED) {
+  app.simulator.start()
+}

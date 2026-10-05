@@ -1,6 +1,7 @@
 import fastifyStatic from '@fastify/static'
 import fastifyWebsocket from '@fastify/websocket'
-import { createDatabase, type Database, type DatabaseHandle } from '@tapedeck/database'
+import { createDatabase, type Database, type DatabaseHandle, Rng } from '@tapedeck/database'
+import { BLOTTER_LIMIT } from '@tapedeck/shared'
 import Fastify, { type FastifyInstance } from 'fastify'
 import { type Bus, createBus } from './bus.js'
 import type { Config } from './config.js'
@@ -8,8 +9,10 @@ import { registerErrorHandler } from './plugins/errorHandler.js'
 import { TradeRepository } from './repositories/trades.js'
 import { registerHealthRoutes } from './routes/health.js'
 import { registerPositionRoutes } from './routes/positions.js'
+import { registerSimulationRoutes } from './routes/simulation.js'
 import { registerTradeRoutes } from './routes/trades.js'
 import { TradeService } from './services/tradeService.js'
+import { createSimulator, type Simulator } from './simulation/simulator.js'
 import { createHub, type Hub } from './ws/hub.js'
 import { registerWebsocketRoute } from './ws/route.js'
 
@@ -19,6 +22,7 @@ declare module 'fastify' {
     bus: Bus
     hub: Hub
     tradeService: TradeService
+    simulator: Simulator
   }
 }
 
@@ -47,17 +51,56 @@ export async function buildApp(config: Config): Promise<BuiltApp> {
   const repository = new TradeRepository(database.db)
   const tradeService = new TradeService(repository, bus)
 
+  /**
+   * Created here but never started here: buildApp() stays free of side effects,
+   * so server.ts decides whether the feed runs and no test gets rows written
+   * underneath its assertions.
+   *
+   * Constructed before the hub because the handshake reports its state, and a
+   * forward reference closed over here would be a temporal dead zone waiting for
+   * the first client to attach.
+   *
+   * The write callbacks are wrappers, not bare method references. TradeService
+   * holds its repository on `this`, so passing `tradeService.createTrade`
+   * directly would unbind it and fail at runtime rather than at compile time.
+   */
+  const simulator = createSimulator({
+    intervalMs: config.SIMULATION_INTERVAL_MS,
+    maxTrades: config.SIMULATION_MAX_TRADES,
+    // Seeded from the clock, unlike the seed's fixed value: reproducibility
+    // matters for fixture data, but two restarts producing an identical feed
+    // would look like a recording.
+    rng: new Rng(Date.now()),
+    log: app.log,
+    bus,
+    // Unwindowed on purpose, and the one caller that is. The simulator compares
+    // what it reads against maxTrades to decide whether to book or to cancel, so
+    // a limit here would hide the trades above the cap and it would book forever.
+    listActive: () => tradeService.listTrades({ status: 'ACTIVE' }).then((result) => result.trades),
+    // The simulator sends no clientTradeId, so its bookings never replay and the
+    // flag is always false. Unwrapped here rather than widening the simulator's
+    // own contract to carry something it cannot produce.
+    create: (input, actor) => tradeService.createTrade(input, actor).then(({ trade }) => trade),
+    amend: (tradeId, input, actor) => tradeService.amendTrade(tradeId, input, actor),
+    cancel: (tradeId, input, actor) => tradeService.cancelTrade(tradeId, input, actor),
+  })
+
   const hub = createHub({
     bus,
     log: app.log,
     pingIntervalMs: config.WS_PING_INTERVAL_MS,
-    readSnapshot: () => repository.readSnapshot(),
+    // Windowed like the REST read: the handshake snapshot is what every client
+    // receives on connect and after a detected gap, so an unbounded one would
+    // put the whole book on the wire on every reconnect.
+    readSnapshot: () => repository.readSnapshot({ limit: BLOTTER_LIMIT }),
+    readSimulation: () => simulator.state,
   })
 
   app.decorate('db', database.db)
   app.decorate('bus', bus)
   app.decorate('hub', hub)
   app.decorate('tradeService', tradeService)
+  app.decorate('simulator', simulator)
 
   await app.register(fastifyWebsocket)
 
@@ -65,15 +108,18 @@ export async function buildApp(config: Config): Promise<BuiltApp> {
   registerHealthRoutes(app)
   registerTradeRoutes(app)
   registerPositionRoutes(app)
+  registerSimulationRoutes(app)
   registerWebsocketRoute(app)
 
   if (config.STATIC_DIR !== undefined) {
     await app.register(fastifyStatic, { root: config.STATIC_DIR, prefix: '/' })
   }
 
-  // Ordered: stop broadcasting before closing the pool, so no in-flight
-  // positions read outlives the connections it needs.
+  // Ordered: stop writing, then stop broadcasting, then close the pool, so
+  // neither a queued tick nor an in-flight positions read outlives the
+  // connections it needs.
   app.addHook('onClose', async () => {
+    simulator.stop()
     hub.close()
     await database.close()
   })

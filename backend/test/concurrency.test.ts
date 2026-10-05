@@ -1,10 +1,11 @@
 import type { DatabaseHandle } from '@tapedeck/database'
+import type { Trade } from '@tapedeck/shared'
 import { apiError } from '@tapedeck/shared'
 import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { buildTestApp } from './helpers/app.js'
 import { resetDatabase, setupTestDatabase } from './helpers/db.js'
-import { createTrade } from './helpers/fixtures.js'
+import { createTrade, newTradeBody } from './helpers/fixtures.js'
 
 let handle: DatabaseHandle
 let app: FastifyInstance
@@ -27,7 +28,7 @@ function amend(tradeId: string, version: number, overrides: Record<string, unkno
   return app.inject({
     method: 'PATCH',
     url: `/api/trades/${tradeId}`,
-    payload: { quantity: 5_000, price: '71.100000', counterparty: 'BARC', ...overrides, version },
+    payload: { quantity: 5_000, price: '71.100000', ...overrides, version },
   })
 }
 
@@ -43,10 +44,10 @@ describe('optimistic concurrency', () => {
   it('rejects a second amend at the same version with the current version in details', async () => {
     const created = await createTrade(app)
 
-    const first = await amend(created.tradeId, 1, { counterparty: 'BARC' })
+    const first = await amend(created.tradeId, 1, { quantity: 5_000 })
     expect(first.statusCode).toBe(200)
 
-    const second = await amend(created.tradeId, 1, { counterparty: 'NWBK' })
+    const second = await amend(created.tradeId, 1, { quantity: 9_000 })
 
     expect(second.statusCode).toBe(409)
     const error = apiError.parse(second.json())
@@ -61,7 +62,7 @@ describe('optimistic concurrency', () => {
 
     // The loser changed nothing.
     const after = await app.inject({ method: 'GET', url: `/api/trades/${created.tradeId}` })
-    expect(after.json()).toMatchObject({ version: 2, counterparty: 'BARC' })
+    expect(after.json()).toMatchObject({ version: 2, quantity: 5_000 })
   })
 
   it('lets exactly one of two simultaneous amends win', async () => {
@@ -70,8 +71,8 @@ describe('optimistic concurrency', () => {
     // Both in flight at once, so they contend for the advisory lock rather than
     // taking it in turn.
     const responses = await Promise.all([
-      amend(created.tradeId, 1, { counterparty: 'BARC' }),
-      amend(created.tradeId, 1, { counterparty: 'NWBK' }),
+      amend(created.tradeId, 1, { quantity: 5_000 }),
+      amend(created.tradeId, 1, { quantity: 9_000 }),
     ])
 
     const codes = responses.map((response) => response.statusCode).sort()
@@ -161,7 +162,7 @@ describe('the serialised write path', () => {
     // start comparing '10' < '9'.
     const created = await Promise.all(
       Array.from({ length: 12 }, (_, index) =>
-        createTrade(app, { symbol: 'VOD', counterparty: `CP-${index}` }),
+        createTrade(app, { symbol: 'VOD', quantity: 1_000 + index }),
       ),
     )
 
@@ -185,13 +186,45 @@ describe('the serialised write path', () => {
     expect([...seqs].sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
   })
 
+  /**
+   * The claim the write lock makes about the idempotency key. The repository
+   * reads for an earlier booking and then inserts, which is a check-then-act and
+   * would be a race on its own; it is safe only because one create runs at a
+   * time. Ten at once is the test of that, and it would also catch the insert
+   * being moved out from under the lock later.
+   */
+  it('books once when the same key arrives concurrently ten times', async () => {
+    const KEY = '5d4c3b2a-1098-4765-ba43-210fedcba987'
+
+    const responses = await Promise.all(
+      Array.from({ length: 10 }, () =>
+        app.inject({
+          method: 'POST',
+          url: '/api/trades',
+          payload: newTradeBody({ clientTradeId: KEY }),
+        }),
+      ),
+    )
+
+    const codes = responses.map((response) => response.statusCode).sort((a, b) => a - b)
+    expect(codes).toEqual([200, 200, 200, 200, 200, 200, 200, 200, 200, 201])
+
+    // Every reply names the same trade, so the nine that lost the race still
+    // answered the question the caller asked rather than an error.
+    const ids = new Set(responses.map((response) => (response.json() as Trade).tradeId))
+    expect(ids.size).toBe(1)
+
+    const listed = await app.inject({ method: 'GET', url: '/api/trades' })
+    expect((listed.json() as { trades: Trade[] }).trades).toHaveLength(1)
+  })
+
   it('keeps version equal to the event count under concurrent amends', async () => {
     const created = await createTrade(app)
 
     // Ten contenders, all at version 1: one wins, nine conflict.
     const responses = await Promise.all(
       Array.from({ length: 10 }, (_, index) =>
-        amend(created.tradeId, 1, { counterparty: `CP-${index}` }),
+        amend(created.tradeId, 1, { quantity: 1_000 + index }),
       ),
     )
     expect(responses.filter((response) => response.statusCode === 200)).toHaveLength(1)

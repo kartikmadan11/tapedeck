@@ -12,6 +12,25 @@ const configSchema = z.object({
   STATIC_DIR: z.string().optional(),
   /** Interval between websocket liveness pings. */
   WS_PING_INTERVAL_MS: z.coerce.number().int().positive().default(30_000),
+
+  /**
+   * The generated trade feed, on by default so a fresh checkout is live without
+   * anyone setting a variable.
+   *
+   * Not z.coerce.boolean(): that is `Boolean(string)`, so every non-empty value
+   * including "false" would parse as true and the off switch would not work.
+   */
+  SIMULATION_ENABLED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((value) => value === 'true'),
+  SIMULATION_INTERVAL_MS: z.coerce.number().int().positive().default(2_000),
+  /**
+   * The active-trade ceiling. The feed stops booking new trades here and only
+   * amends and cancels, which keeps a long demo inside the 100-to-1,000 range
+   * the specification asks for instead of growing without bound.
+   */
+  SIMULATION_MAX_TRADES: z.coerce.number().int().positive().default(900),
 })
 
 export type Config = z.infer<typeof configSchema>

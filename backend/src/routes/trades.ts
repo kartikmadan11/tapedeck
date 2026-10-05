@@ -1,5 +1,6 @@
 import {
   amendTradeInput,
+  BLOTTER_LIMIT,
   cancelTradeInput,
   createTradeInput,
   notFound,
@@ -27,10 +28,17 @@ export function registerTradeRoutes(app: FastifyInstance): void {
    * Returns `{ seq, trades }`, not a bare array, so the client can reject a
    * response older than what its socket already applied. A bare array makes
    * every refetch a potential lost update.
+   *
+   * Windowed to the most recent BLOTTER_LIMIT unless the caller names its own
+   * limit. Cancelled trades stay on the tape, so the unwindowed form grows for
+   * as long as the feed runs and would eventually put megabytes on the wire to
+   * render rows nobody scrolls to.
    */
   app.get('/api/trades', async (request) => {
     const query = tradeQuery.parse(request.query)
-    return app.tradeService.listTrades(query)
+    // ?? rather than a spread default: an optional key can arrive present and
+    // undefined, which a spread would use to overwrite the default with nothing.
+    return app.tradeService.listTrades({ ...query, limit: query.limit ?? BLOTTER_LIMIT })
   })
 
   app.get('/api/trades/:tradeId', async (request) => {
@@ -48,10 +56,16 @@ export function registerTradeRoutes(app: FastifyInstance): void {
     return { events: await app.tradeService.listEvents(tradeId) }
   })
 
+  /**
+   * 201 when a trade was booked, 200 when the body's clientTradeId had already
+   * booked one and this is a repeat. The body is the trade either way, so a
+   * client that ignores the status still gets what it asked for, and one that
+   * reads it can tell that its retry did not double-book.
+   */
   app.post('/api/trades', async (request, reply) => {
     const input = createTradeInput.parse(request.body)
-    const trade = await app.tradeService.createTrade(input, actorOf(request.headers))
-    return reply.status(201).send(trade)
+    const { trade, replayed } = await app.tradeService.createTrade(input, actorOf(request.headers))
+    return reply.status(replayed ? 200 : 201).send(trade)
   })
 
   /**
