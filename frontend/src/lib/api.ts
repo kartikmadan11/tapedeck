@@ -4,19 +4,22 @@ import type {
   CancelTradeInput,
   CreateTradeInput,
   PositionsResponse,
+  SimulationState,
   Trade,
   TradeEvent,
   TradesResponse,
 } from '@tapedeck/shared'
-import { apiError, positionsResponse, trade, tradeEvent, tradesResponse } from '@tapedeck/shared'
+import {
+  apiError,
+  BLOTTER_LIMIT,
+  positionsResponse,
+  simulationState,
+  trade,
+  tradeEvent,
+  tradesResponse,
+} from '@tapedeck/shared'
 import { z } from 'zod'
-
-/**
- * There is no authentication in this build, but the audit trail still records an
- * actor, so the browser names itself. Adding real auth replaces this constant
- * with a token claim and changes nothing else.
- */
-export const ACTOR = 'web-ui'
+import { readTrader } from './identity.js'
 
 /**
  * Carries the server's typed error payload rather than just a status, so a
@@ -55,7 +58,11 @@ async function request<T>(path: string, schema: z.ZodType<T>, init?: RequestInit
     ...init,
     headers: {
       accept: 'application/json',
-      'x-tapedeck-actor': ACTOR,
+      // There is no authentication here, so the actor is the window's declared
+      // identity: asserted by the caller and trusted by the server, which is the
+      // shape a gateway-authenticated deployment has anyway. Verifying it is a
+      // change to this line and a check on the server, not to the audit model.
+      'x-tapedeck-actor': readTrader(),
       ...(init?.body === undefined ? {} : { 'content-type': 'application/json' }),
       ...init?.headers,
     },
@@ -86,13 +93,20 @@ function safeJson(text: string): unknown {
 }
 
 /**
- * Deliberately unfiltered. The cache holds every trade and the table filters
- * what it renders, so an incoming frame never has to be tested against a
+ * Deliberately unfiltered but deliberately windowed.
+ *
+ * Unfiltered, because the cache holds every trade it is given and the table
+ * filters what it renders, so an incoming frame never has to be tested against a
  * server-side predicate to know whether it belongs in the cache. The filtered
  * form of this endpoint exists and is tested, it is just not what the UI reads.
+ *
+ * Windowed, because the book grows without bound: cancelled trades stay on the
+ * tape, so the feed only ever adds rows. The limit is sent rather than left to
+ * the server's default so that the window the cache trims itself to is the same
+ * window it asked for, stated in one place.
  */
 export function fetchTrades(): Promise<TradesResponse> {
-  return request('/api/trades', tradesResponse)
+  return request(`/api/trades?limit=${BLOTTER_LIMIT}`, tradesResponse)
 }
 
 export function fetchPositions(): Promise<PositionsResponse> {
@@ -121,6 +135,21 @@ export function cancelTrade(tradeId: string, input: CancelTradeInput): Promise<T
   return request(`/api/trades/${encodeURIComponent(tradeId)}/cancel`, trade, {
     method: 'POST',
     body: JSON.stringify(input),
+  })
+}
+
+export function fetchSimulation(): Promise<SimulationState> {
+  return request('/api/simulation', simulationState)
+}
+
+/**
+ * Only `running` is sent. The cadence is the server's, so the UI reports it
+ * rather than offering it.
+ */
+export function setSimulation(running: boolean): Promise<SimulationState> {
+  return request('/api/simulation', simulationState, {
+    method: 'POST',
+    body: JSON.stringify({ running }),
   })
 }
 
