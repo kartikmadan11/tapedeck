@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { simulationState } from './simulation.js'
 import { position, trade } from './trade.js'
 
 /**
@@ -53,12 +54,27 @@ export const positionsFrame = z.object({
   positions: z.array(position),
 })
 
+/**
+ * The generated feed starting or stopping. Unsequenced, for the same reason
+ * positions are: it is not something that happened to a trade, so it has no
+ * place in the event order and must not advance any client's cursor.
+ *
+ * Broadcast rather than kept per-window so two windows cannot disagree about
+ * whether the feed is running, which would undercut the premise that every
+ * client sees the same world.
+ */
+export const simulationFrame = z.object({
+  type: z.literal('simulation'),
+  ...simulationState.shape,
+})
+
 export const serverFrame = z.discriminatedUnion('type', [
   snapshotFrame,
   tradeCreatedFrame,
   tradeAmendedFrame,
   tradeCancelledFrame,
   positionsFrame,
+  simulationFrame,
 ])
 export type ServerFrame = z.infer<typeof serverFrame>
 
@@ -81,6 +97,7 @@ export function frameSequence(frame: ServerFrame): number | null {
     case 'trade.cancelled':
       return frame.seq
     case 'positions':
+    case 'simulation':
       return null
     default: {
       // Adding a frame without deciding its ordering fails to compile here.

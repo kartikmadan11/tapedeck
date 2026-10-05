@@ -1,14 +1,22 @@
 import { describe, expect, it } from 'vitest'
+import type { PricedLeg } from './money.js'
 import {
   compareDecimal,
   decimalString,
   formatDecimal,
   fromMinorUnits,
+  netNotional,
+  netQuantity,
   notional,
   priceString,
   toDecimal,
   toMinorUnits,
+  vwap,
 } from './money.js'
+
+function leg(side: 'BUY' | 'SELL', quantity: number, price: string): PricedLeg {
+  return { side, quantity, price: toDecimal(price) }
+}
 
 describe('decimal validation', () => {
   it.each(['0', '1', '1.5', '0.000001', '142.75', '999999999999.999999', '-12.5'])(
@@ -100,6 +108,68 @@ describe('notional is exact where float arithmetic is not', () => {
 
   it('is exact for a price with full precision', () => {
     expect(notional(1_000_000, toDecimal('0.000001'))).toBe('1.000000')
+  })
+})
+
+describe('aggregating a group of trades', () => {
+  it('nets quantity by side', () => {
+    expect(netQuantity([leg('BUY', 10_000, '72.465'), leg('SELL', 4_000, '73.1')])).toBe(6_000)
+    expect(netQuantity([])).toBe(0)
+  })
+
+  it('nets exposure signed, and stays exact at institutional size', () => {
+    expect(netNotional([leg('BUY', 5_000_000, '137.425'), leg('SELL', 2_000_000, '137.425')])).toBe(
+      '412275000.000000',
+    )
+  })
+
+  it('reports a net short as negative, matching the positions panel', () => {
+    expect(netNotional([leg('BUY', 1_000, '10'), leg('SELL', 3_000, '10')])).toBe('-20000.000000')
+  })
+
+  it('computes a VWAP the float path gets wrong', () => {
+    // The float answer is 0.15000000000000002.
+    expect((3 * 0.1 + 3 * 0.2) / 6).not.toBe(0.15)
+    expect(vwap([leg('BUY', 3, '0.1'), leg('BUY', 3, '0.2')])).toBe('0.150000')
+  })
+
+  it('still reports an average price for a book that is flat', () => {
+    const flat = [leg('BUY', 1_000, '10'), leg('SELL', 1_000, '20')]
+
+    // The whole reason the weights ignore side. Netting them would make the
+    // denominator zero and lose the fact that this book dealt at 15.
+    expect(netQuantity(flat)).toBe(0)
+    expect(vwap(flat)).toBe('15.000000')
+  })
+
+  it('lands between the prices that were dealt', () => {
+    const average = vwap([leg('BUY', 10_000, '72.465'), leg('SELL', 5_000, '73.1')])
+    if (average === null) {
+      throw new Error('expected an average price')
+    }
+
+    expect(average).toBe('72.676667')
+    expect(compareDecimal(average, toDecimal('72.465'))).toBeGreaterThan(0)
+    expect(compareDecimal(average, toDecimal('73.1'))).toBeLessThan(0)
+  })
+
+  // Typed rather than inline, because it.each over heterogeneous tuples widens
+  // every parameter to the union of the column types.
+  const rounding: [string, PricedLeg[], string][] = [
+    // Exactly half a minor unit, which truncation would round down to 0.000001.
+    ['half rounds up', [leg('BUY', 1, '0.000001'), leg('BUY', 1, '0.000002')], '0.000002'],
+    ['below half rounds down', [leg('BUY', 1, '0.000002'), leg('BUY', 2, '0.000001')], '0.000001'],
+    ['above half rounds up', [leg('BUY', 1, '0.000003'), leg('BUY', 2, '0.000001')], '0.000002'],
+  ]
+
+  it.each(rounding)('rounds the last place half up: %s', (_label, legs, expected) => {
+    expect(vwap(legs)).toBe(expected)
+  })
+
+  it('has no average price to report for an empty group', () => {
+    // null and not '0.000000': a zero average is a claim about where the book
+    // traded, and the cell renders a dash instead.
+    expect(vwap([])).toBeNull()
   })
 })
 

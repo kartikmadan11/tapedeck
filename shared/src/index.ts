@@ -1,4 +1,6 @@
+export * from './counterparties.js'
 export * from './errors.js'
 export * from './money.js'
+export * from './simulation.js'
 export * from './trade.js'
 export * from './ws.js'
