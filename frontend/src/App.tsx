@@ -2,75 +2,135 @@ import type { ReactElement } from 'react'
 import { useCallback, useMemo, useState } from 'react'
 import { ConnectionBadge } from './components/ConnectionBadge.js'
 import { ErrorNotice } from './components/ErrorNotice.js'
+import { PanelSeparator } from './components/PanelSeparator.js'
 import { RefreshButton } from './components/RefreshButton.js'
-import { BlotterTable } from './features/blotter/BlotterTable.js'
-import type { RowActions } from './features/blotter/columns.js'
+import type { RowActions } from './features/blotter/SelectionBar.js'
 import { HistoryDrawer } from './features/history/HistoryDrawer.js'
-import { PositionsPanel } from './features/positions/PositionsPanel.js'
+import { IdentityBadge } from './features/identity/IdentityBadge.js'
+import { useIdentity } from './features/identity/useIdentity.js'
+import {
+  PANEL_MAX_WIDTH,
+  PANEL_MIN_WIDTH,
+  PANEL_WIDTH,
+  PositionsPanel,
+} from './features/positions/PositionsPanel.js'
 import { useRealtime } from './features/realtime/useRealtime.js'
+import { SimulationToggle } from './features/simulation/SimulationToggle.js'
 import { AmendDialog } from './features/trades/AmendDialog.js'
+import { CancelDialog } from './features/trades/CancelDialog.js'
 import { TradeForm } from './features/trades/TradeForm.js'
-import { useCancelTrade } from './features/trades/useCancelTrade.js'
 import { useBlotter, usePendingTradeIds, useRefreshBlotter } from './features/trades/useTrades.js'
+import { Workspace } from './features/workspace/Workspace.js'
+import { MICRO_LABEL } from './lib/ui.js'
 
 export function App(): ReactElement {
   const { status } = useRealtime()
   const blotter = useBlotter()
   const pendingIds = usePendingTradeIds()
-  const cancel = useCancelTrade()
   const refresh = useRefreshBlotter()
+  const { trader } = useIdentity()
 
   const [amendingId, setAmendingId] = useState<string | null>(null)
+  const [cancellingId, setCancellingId] = useState<string | null>(null)
   const [historyId, setHistoryId] = useState<string | null>(null)
 
   const trades = blotter.data?.trades ?? []
 
   /**
-   * Held as an id, not as a row, so the dialog always renders the cache's current
+   * Held as ids, not as rows, so a dialog always renders the cache's current
    * version of the trade. Holding a copy would let it show stale values after
-   * someone else amended the same trade.
+   * someone else amended the same trade, and the cancel dialog would then
+   * confirm against a version that no longer exists.
    */
   const amending = useMemo(
     () => trades.find((trade) => trade.tradeId === amendingId) ?? null,
     [trades, amendingId],
   )
 
+  const cancelling = useMemo(
+    () => trades.find((trade) => trade.tradeId === cancellingId) ?? null,
+    [trades, cancellingId],
+  )
+
   const actions: RowActions = useMemo(
     () => ({
       onAmend: (trade) => setAmendingId(trade.tradeId),
       onHistory: (trade) => setHistoryId(trade.tradeId),
-      onCancel: (trade) => {
-        cancel.mutate({ tradeId: trade.tradeId, version: trade.version })
-      },
+      // Opens the confirmation rather than writing. The mutation lives in the
+      // dialog, which is also where its error belongs.
+      onCancel: (trade) => setCancellingId(trade.tradeId),
     }),
-    [cancel],
+    [],
   )
 
+  /**
+   * How much of the width the positions panel is holding. Here rather than in
+   * the panel, because the blotter beside it is the other half of the same
+   * boundary and takes whatever this leaves.
+   *
+   * Not persisted, which is a gap worth naming: a width someone set is gone on
+   * reload. It belongs with the pane arrangement in the shared link rather than
+   * in a second store of its own.
+   */
+  const [panelWidth, setPanelWidth] = useState(PANEL_WIDTH)
+
+  /**
+   * The nav's slot for the workspace's own controls, which the workspace fills
+   * through a portal.
+   *
+   * Held as the element rather than looked up by id, because a render is the
+   * wrong place to read the DOM and the node does not exist in the first one.
+   * The alternative to the slot is lifting the pane arrangement up here, which
+   * would put every rename, resize and rearrangement of a pane through this
+   * component and re-render the booking form and the positions panel with it.
+   */
+  const [nav, setNav] = useState<HTMLElement | null>(null)
+
   const closeAmend = useCallback(() => setAmendingId(null), [])
+  const closeCancel = useCallback(() => setCancellingId(null), [])
   const closeHistory = useCallback(() => setHistoryId(null), [])
 
   return (
-    <div className="flex h-screen flex-col gap-2 bg-tape-bg p-3 text-tape-text">
-      <header className="flex items-baseline gap-3">
-        <h1 className="text-lg font-semibold tracking-tight">tapedeck</h1>
-        <span className="text-tape-muted">equity trade blotter</span>
+    // A blotter owns the viewport: the panes scroll, the page does not. Both
+    // dialogs are position:fixed with no transformed ancestor, so clamping here
+    // cannot clip them.
+    <div className="flex h-screen flex-col gap-2 overflow-hidden bg-tape-bg p-3 text-tape-text">
+      <header className="flex items-baseline gap-3 border-b border-tape-line pb-2">
+        {/* Letterspacing rather than point size: the viewport belongs to the grid. */}
+        <h1 className="text-sm font-semibold uppercase tracking-[0.2em]">tapedeck</h1>
+        <span className={MICRO_LABEL}>equity trade blotter</span>
         <div className="ml-auto flex items-center gap-2">
+          {/* display:contents, so an empty slot is not a gap in the row: what
+            the workspace puts here is a flex item of this row rather than of a
+            wrapper that would still be laid out while holding nothing. */}
+          <div className="contents" ref={setNav} />
+          <IdentityBadge trader={trader} />
+          <SimulationToggle />
           <RefreshButton onRefresh={refresh} refreshing={blotter.isFetching} />
           <ConnectionBadge status={status} cursor={blotter.data?.seq ?? 0} />
         </div>
       </header>
 
-      <TradeForm />
+      <TradeForm trader={trader} />
 
       {blotter.error ? <ErrorNotice error={blotter.error} /> : null}
-      {cancel.error ? <ErrorNotice error={cancel.error} /> : null}
 
-      <div className="flex min-h-0 flex-1 gap-2">
-        <BlotterTable trades={trades} pendingIds={pendingIds} actions={actions} />
-        <PositionsPanel />
+      {/* No gap: the handle between them is the gap, so the boundary a pointer
+        aims at is the same line the eye reads as dividing the two. */}
+      <div className="flex min-h-0 flex-1">
+        <Workspace trades={trades} pendingIds={pendingIds} actions={actions} nav={nav} />
+        <PanelSeparator
+          label="Resize the positions panel"
+          max={PANEL_MAX_WIDTH}
+          min={PANEL_MIN_WIDTH}
+          onResize={setPanelWidth}
+          width={panelWidth}
+        />
+        <PositionsPanel width={panelWidth} />
       </div>
 
       {amending ? <AmendDialog trade={amending} onClose={closeAmend} /> : null}
+      {cancelling ? <CancelDialog trade={cancelling} onClose={closeCancel} /> : null}
       {historyId ? <HistoryDrawer tradeId={historyId} onClose={closeHistory} /> : null}
     </div>
   )
