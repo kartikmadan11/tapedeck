@@ -8,7 +8,7 @@ export {
 } from './client.js'
 export { runMigrations } from './migrate.js'
 export { toTrade, toTradeEvent } from './projection.js'
-export { BOOKS, COUNTERPARTIES, INSTRUMENTS, SEED_ACTOR, TRADERS } from './reference.js'
+export { BOOKS, INSTRUMENTS, SEED_ACTOR, TRADERS } from './reference.js'
 export { Rng } from './rng.js'
 export {
   eventTypeEnum,
@@ -23,3 +23,4 @@ export {
   trades,
 } from './schema.js'
 export { type SeedSummary, seed, seedIfEmpty } from './seed.js'
+export { ticketSize, walkPrice } from './ticket.js'

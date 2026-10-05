@@ -10,6 +10,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core'
 
 /**
@@ -56,6 +57,10 @@ export const trades = pgTable(
     book: text('book').notNull(),
     counterparty: text('counterparty').notNull(),
     tradeTimestamp: timestamp('trade_timestamp', WIRE_TIME).notNull(),
+    // The client's idempotency key for the booking, null for the seed, the
+    // simulator and any client that sends none. Nullable rather than defaulted:
+    // a server-generated key would be unique per request and dedupe nothing.
+    clientTradeId: text('client_trade_id'),
     status: statusEnum('status').notNull().default('ACTIVE'),
     version: integer('version').notNull().default(1),
     createdAt: timestamp('created_at', WIRE_TIME).notNull().defaultNow(),
@@ -69,6 +74,17 @@ export const trades = pgTable(
     // The blotter's default ordering. The id breaks ties so ordering is stable
     // for trades booked in the same millisecond.
     index('trades_timestamp_idx').on(t.tradeTimestamp.desc(), t.tradeId.desc()),
+    /**
+     * What actually makes a booking idempotent. The repository looks for a
+     * replay under the write lock, which covers every request that goes through
+     * it; this covers the rest, including the seed and anything that writes to
+     * the table directly, and it is the constraint a reviewer can check.
+     *
+     * Postgres treats nulls as distinct here, so the trades booked without a key
+     * do not collide with each other. That is the default and it is the
+     * behaviour wanted, which is why there is no NULLS NOT DISTINCT.
+     */
+    uniqueIndex('trades_client_trade_id_key').on(t.clientTradeId),
   ],
 )
 

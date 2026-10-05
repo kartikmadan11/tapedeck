@@ -44,18 +44,5 @@ export const BOOKS: readonly string[] = [
   'EQ-PROP-DELTA',
 ]
 
-export const COUNTERPARTIES: readonly string[] = [
-  'Barclays',
-  'HSBC',
-  'Goldman Sachs',
-  'Morgan Stanley',
-  'JP Morgan',
-  'UBS',
-  'Deutsche Bank',
-  'BNP Paribas',
-  'Jane Street',
-  'Citadel Securities',
-]
-
 /** Recorded on seeded events, so seeded history is distinguishable. */
 export const SEED_ACTOR = 'seed'
