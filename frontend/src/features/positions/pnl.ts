@@ -22,3 +22,11 @@ export function pnlMinor(position: Position): bigint | null {
 
   return BigInt(position.netQuantity) * reference - toMinorUnits(position.netNotional)
 }
+
+/** Zero is a position that happens to be flat, so it is not coloured as a gain,
+ *  and neither is a symbol with no reference to mark against. */
+export function pnlTone(minor: bigint | null): string {
+  if (minor === null || minor === 0n) return 'text-tape-muted'
+
+  return minor < 0n ? 'text-tape-sell' : 'text-tape-buy'
+}

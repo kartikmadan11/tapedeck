@@ -195,7 +195,10 @@ describe('App', () => {
     // VOD references 68.42, so 10,000 shares mark at 684,200 against 724,650 paid.
     expect(within(panel.getByRole('table')).getByText('-40,450.00')).toBeInTheDocument()
 
-    expect(panel.getAllByRole('term').map((label) => label.textContent)).toEqual([
+    // Named, so the figures carry their scope: the count is the book, not the tape.
+    const band = within(panel.getByRole('region', { name: 'Firm-wide totals' }))
+
+    expect(band.getAllByRole('term').map((label) => label.textContent)).toEqual([
       'Gross',
       'Net',
       'P&L vs ref',
@@ -203,7 +206,7 @@ describe('App', () => {
     ])
 
     // One symbol, so the book agrees with the row above it digit for digit.
-    expect(panel.getAllByRole('definition').map((figure) => figure.textContent)).toEqual([
+    expect(band.getAllByRole('definition').map((figure) => figure.textContent)).toEqual([
       '724,650.00',
       '724,650.00',
       '-40,450.00',

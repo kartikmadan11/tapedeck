@@ -151,7 +151,7 @@ npm run lint          # biome
 npm run lint:palette  # no raw colour in a .tsx
 ```
 
-620 tests across 25 files. The database-backed ones need a database, defaulting
+643 tests across 28 files. The database-backed ones need a database, defaulting
 to `postgres://tapedeck:tapedeck@localhost:5433/tapedeck_test` and overridable
 with `TEST_DATABASE_URL`:
 
