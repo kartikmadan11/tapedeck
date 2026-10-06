@@ -12,10 +12,18 @@
 export const CONTROL =
   'h-7 rounded-xs border border-tape-line px-2 text-tape-text placeholder:text-tape-muted focus:border-tape-focus focus:outline-none focus:ring-1 focus:ring-tape-focus'
 
+/** Everything about a chip except its colours, so the two states below cannot
+ *  drift in height or padding. */
+const CHIP_BASE =
+  'h-7 cursor-pointer rounded-xs border px-2 text-[10px] uppercase tracking-[0.14em] transition-colors duration-100 disabled:cursor-not-allowed disabled:opacity-35'
+
 /** Header and row controls. Tailwind's preflight sets cursor:default on button,
  *  so the pointer has to be asked for. */
-export const CHIP =
-  'h-7 cursor-pointer rounded-xs border border-tape-line px-2 text-[10px] uppercase tracking-[0.14em] text-tape-muted transition-colors duration-100 hover:border-tape-accent hover:text-tape-accent disabled:cursor-not-allowed disabled:opacity-35'
+export const CHIP = `${CHIP_BASE} border-tape-line text-tape-muted hover:border-tape-accent hover:text-tape-accent`
+
+/** The same chip while what it controls is showing. A separate class, not one
+ *  appended to CHIP: two border colours resolve by Tailwind's output order. */
+export const CHIP_ON = `${CHIP_BASE} border-tape-accent text-tape-accent`
 
 /** Secondary text. Hierarchy comes from size and tracking rather than a dimmer
  *  grey, because anything below tape-muted fails contrast at this size. */

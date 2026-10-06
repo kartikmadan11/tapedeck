@@ -2,7 +2,7 @@ import type { Column, Table } from '@tanstack/react-table'
 import type { Trade } from '@tapedeck/shared'
 import type { ReactElement, ReactNode } from 'react'
 import { CHIP, CONTROL, MICRO_LABEL } from '../../lib/ui.js'
-import { groupedVisibility } from './columns.js'
+import { groupedVisibility, orderedColumnIds } from './columns.js'
 import { SuggestionList } from './suggestions.js'
 
 type Props = {
@@ -21,6 +21,10 @@ type Props = {
 /** Darker than the panel it sits on, per the note in lib/ui.ts. */
 const PANEL_CONTROL = `${CONTROL} w-full bg-tape-bg`
 
+/** Tighter than CHIP: there are two of these on every one of twelve rows. */
+const NUDGE =
+  'shrink-0 cursor-pointer px-1 text-tape-muted hover:text-tape-accent disabled:cursor-not-allowed disabled:opacity-25'
+
 /**
  * One per grid instance, because two panes are configured independently.
  *
@@ -29,7 +33,7 @@ const PANEL_CONTROL = `${CONTROL} w-full bg-tape-bg`
  * Order By because both are looking at `sorting`.
  */
 export function GridConfigPanel({ table, open, id, counterparties, onHide }: Props): ReactElement {
-  const { grouping, sorting } = table.getState()
+  const { grouping, sorting, columnOrder } = table.getState()
   const groupBy = grouping[0]
   const splitBy = grouping[1]
   const order = sorting[0]
@@ -42,6 +46,25 @@ export function GridConfigPanel({ table, open, id, counterparties, onHide }: Pro
    * below cannot disagree with the columns on screen.
    */
   const grouped = groupedVisibility(grouping)
+
+  /**
+   * The trader's own order, not the table's: a grouping hoists its column to the
+   * front, and reading that back would bake the hoist in on the first nudge.
+   * Hidden columns stay listed, so turning one on puts it back where it was.
+   */
+  const ordered = orderedColumnIds(columnOrder)
+
+  const move = (from: number, by: number): void => {
+    const to = from + by
+    const id = ordered[from]
+    if (id === undefined || to < 0 || to >= ordered.length) {
+      return
+    }
+    const next = [...ordered]
+    next.splice(from, 1)
+    next.splice(to, 0, id)
+    table.setColumnOrder(next)
+  }
 
   return (
     // Shrinks the grid rather than covering it. inert and aria-hidden when
@@ -177,12 +200,20 @@ export function GridConfigPanel({ table, open, id, counterparties, onHide }: Pro
         </Section>
 
         <Section title="Columns">
+          {/* The list is the order, so the arrows need no second explanation. */}
+          <p className="text-tape-muted">Top to bottom is left to right.</p>
+
           {/* Says why most of them are unavailable. */}
           {groupBy === undefined ? null : (
             <p className="text-tape-muted">Grouped, so only the columns a group nets are shown.</p>
           )}
 
-          {table.getAllLeafColumns().map((column) => {
+          {ordered.map((id, index) => {
+            const column = table.getColumn(id)
+            if (column === undefined) {
+              return null
+            }
+
             // Grouped by it, so hiding it would take the group label and the
             // expander with it. Or the last one standing, which would leave a
             // grid with no columns and no way back but this panel.
@@ -193,19 +224,44 @@ export function GridConfigPanel({ table, open, id, counterparties, onHide }: Pro
             // Nothing a group row could put in it, so the grouping has taken it
             // off the grid. The grid reads this box through the grouping's own
             // override, so a tick would be a control that does nothing.
-            const dropped = grouped[column.id] === false
+            const dropped = grouped[id] === false
+            const name = headerText(column)
 
             return (
-              <label className="flex cursor-pointer items-center gap-2" key={column.id}>
-                <input
-                  checked={column.getIsVisible()}
-                  className="accent-tape-accent disabled:cursor-not-allowed"
-                  disabled={!column.getCanHide() || locked || dropped}
-                  onChange={column.getToggleVisibilityHandler()}
-                  type="checkbox"
-                />
-                {headerText(column)}
-              </label>
+              <div className="flex items-center gap-1" key={id}>
+                <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
+                  <input
+                    checked={column.getIsVisible()}
+                    className="accent-tape-accent disabled:cursor-not-allowed"
+                    disabled={!column.getCanHide() || locked || dropped}
+                    onChange={column.getToggleVisibilityHandler()}
+                    type="checkbox"
+                  />
+                  <span className="truncate">{name}</span>
+                </label>
+
+                {/* Buttons, not a drag: a nudge is operable from the keyboard
+                    and needs no pointer precision in a 280px panel. Outside the
+                    label, or pressing one would toggle the column. */}
+                <button
+                  aria-label={`Move ${name} up`}
+                  className={NUDGE}
+                  disabled={index === 0}
+                  onClick={() => move(index, -1)}
+                  type="button"
+                >
+                  ↑
+                </button>
+                <button
+                  aria-label={`Move ${name} down`}
+                  className={NUDGE}
+                  disabled={index === ordered.length - 1}
+                  onClick={() => move(index, 1)}
+                  type="button"
+                >
+                  ↓
+                </button>
+              </div>
             )
           })}
         </Section>

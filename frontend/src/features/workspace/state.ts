@@ -54,6 +54,10 @@ const view = z.object({
   /** Group By and Split By, and there is no third control to undo a third level. */
   grouping: z.array(columnId).max(2),
 
+  /** Empty is definition order. Checked against the column list because this one
+   *  is read as a position, so an unknown id would silently move the rest. */
+  columnOrder: z.array(columnId).max(COLUMN_IDS.length),
+
   /**
    * The one place a column id is not checked. Visibility is read per column as
    * columnVisibility[column.id] ?? true, so a key for a column that is not there
@@ -201,6 +205,11 @@ export function encodeWorkspace(root: Region, viewOf: (id: string) => PaneConfig
 
     for (const id of config.grouping) {
       params.append(key('group'), id)
+    }
+    // Written out in full or not at all. A partial order reads the columns it
+    // leaves out as last, so a prefix is not a shorthand for the rest.
+    for (const id of config.columnOrder) {
+      params.append(key('order'), id)
     }
     if (!opensOnOrder(config.sorting)) {
       const tokens = config.sorting.map((sort) => `${sort.desc ? '-' : ''}${sort.id}`)
@@ -396,6 +405,7 @@ export function decodeWorkspace(params: URLSearchParams): WorkspaceLink | null {
         .filter(([name]) => name.startsWith(where))
         .map(([name, value]) => ({ id: name.slice(where.length), value })),
       grouping: params.getAll(key('group')),
+      columnOrder: params.getAll(key('order')),
       columnVisibility: {
         // The default underneath, so a link names the columns it changes and a
         // pane that names none opens with the columns a pane opens with.
@@ -437,6 +447,7 @@ export function decodeWorkspace(params: URLSearchParams): WorkspaceLink | null {
       columnFilters: pane.columnFilters,
       grouping: pane.grouping,
       columnVisibility: pane.columnVisibility,
+      columnOrder: pane.columnOrder,
     })),
     arrangement,
     shares: parsed.data.panes.map((pane) => pane.share),

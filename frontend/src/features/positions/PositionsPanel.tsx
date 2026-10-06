@@ -13,7 +13,13 @@ export const PANEL_WIDTH = 288
 export const PANEL_MIN_WIDTH = 216
 export const PANEL_MAX_WIDTH = 560
 
-export function PositionsPanel({ width }: { width: number }): ReactElement {
+type Props = {
+  width: number
+  /** Referenced by the header toggle's aria-controls, so it is passed in. */
+  id: string
+}
+
+export function PositionsPanel({ width, id }: Props): ReactElement {
   const positions = usePositions()
 
   return (
@@ -22,6 +28,7 @@ export function PositionsPanel({ width }: { width: number }): ReactElement {
     // writes this same property directly while it is being dragged.
     <aside
       className="flex shrink-0 flex-col overflow-hidden rounded-sm border border-tape-line"
+      id={id}
       style={{ width }}
     >
       {/* h-8 matches the blotter's header band, so the two panels align. */}
@@ -69,10 +76,6 @@ export function PositionsPanel({ width }: { width: number }): ReactElement {
           <p className="px-2 py-6 text-center text-tape-muted">No active trades.</p>
         ) : null}
       </div>
-
-      <footer className="shrink-0 border-t border-tape-line px-2 py-1.5 text-[10px] leading-relaxed text-tape-muted">
-        Netted in Postgres over active trades only, so a cancelled trade leaves no exposure behind.
-      </footer>
     </aside>
   )
 }

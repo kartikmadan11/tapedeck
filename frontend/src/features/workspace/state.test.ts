@@ -23,13 +23,17 @@ const ARRANGED: PaneConfig[] = [
     sorting: [{ id: 'quantity', desc: false }],
     columnFilters: [{ id: 'symbol', value: 'VOD' }],
     grouping: ['symbol', 'book'],
-    columnVisibility: { book: false, tradeId: true },
+    columnVisibility: { book: false, tradeId: true, version: false },
+    // Partial on purpose: the format carries what it is given, and the table
+    // reads the columns left out as following in definition order.
+    columnOrder: ['status', 'symbol'],
   },
   {
     sorting: [{ id: 'symbol', desc: false }],
     columnFilters: [],
     grouping: [],
-    columnVisibility: { tradeId: false },
+    columnVisibility: { tradeId: false, version: false },
+    columnOrder: [],
   },
 ]
 
@@ -100,6 +104,7 @@ describe('encoding a workspace', () => {
     expect(query(ARRANGED)).toBe(
       'panes=2' +
         '&p1.group=symbol&p1.group=book' +
+        '&p1.order=status&p1.order=symbol' +
         '&p1.sort=quantity' +
         '&p1.where.symbol=VOD' +
         '&p1.show=tradeId&p1.hide=book' +
@@ -111,7 +116,9 @@ describe('encoding a workspace', () => {
     // What is worth sending is the difference from the default view, and here the
     // difference is the other way round.
     expect(query([DEFAULT_VIEW])).toBe('panes=1')
-    expect(query([{ ...PLAIN, columnVisibility: {} }])).toBe('panes=1&p1.show=tradeId')
+    expect(query([{ ...PLAIN, columnVisibility: {} }])).toBe(
+      'panes=1&p1.show=tradeId&p1.show=version',
+    )
   })
 
   it('states a pane with no order at all, since absence is the default order', () => {
@@ -281,7 +288,13 @@ describe('reading a link somebody typed', () => {
     expect(views('p1.hide=book&p1.show=tradeId')?.[0]?.columnVisibility).toEqual({
       book: false,
       tradeId: true,
+      version: false,
     })
+  })
+
+  it('reads a column order, and takes an absent one as the order a pane opens on', () => {
+    expect(views('p1.order=status&p1.order=side')?.[0]?.columnOrder).toEqual(['status', 'side'])
+    expect(views('p1.hide=book')?.[0]?.columnOrder).toEqual([])
   })
 
   it('hides a column off the default view rather than off nothing', () => {
@@ -290,6 +303,7 @@ describe('reading a link somebody typed', () => {
     expect(views('p1.hide=book')?.[0]?.columnVisibility).toEqual({
       book: false,
       tradeId: false,
+      version: false,
     })
   })
 
@@ -339,6 +353,7 @@ describe('decoding something that is not a workspace', () => {
     ['a column that does not exist', 'panes=1&p1.group=pnl'],
     ['a sort on a column that does not exist', 'panes=1&p1.sort=-pnl'],
     ['a filter on a column that does not exist', 'panes=1&p1.where.pnl=100'],
+    ['an order naming a column that does not exist', 'panes=1&p1.order=pnl'],
     ['a dash with no column after it', 'panes=1&p1.sort=-'],
     ['a third grouping level', 'p1.group=symbol&p1.group=book&p1.group=trader'],
     ['a filter value longer than the box could hold', `p1.where.trader=${'k'.repeat(65)}`],

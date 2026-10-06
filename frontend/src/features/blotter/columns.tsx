@@ -236,14 +236,6 @@ export function createColumns() {
       },
     }),
 
-    helper.accessor('tradeTimestamp', {
-      header: 'Time (UTC)',
-      size: 152,
-      // Millisecond precision, so every trade is its own group.
-      enableGrouping: false,
-      cell: (info) => formatDateTime(info.getValue()),
-    }),
-
     helper.accessor('trader', { header: 'Trader', size: 104 }),
     helper.accessor('book', { header: 'Book', size: 104 }),
     // Sized for Citadel Securities, the longest name the counterparty list holds.
@@ -276,7 +268,22 @@ export function createColumns() {
       // A sum of version numbers is not a number about anything.
       enableGrouping: false,
     }),
+
+    // Last, because the figures are what a trader scans and a timestamp is what
+    // they check once they have stopped on a row.
+    helper.accessor('tradeTimestamp', {
+      header: 'Time (UTC)',
+      size: 152,
+      // Millisecond precision, so every trade is its own group.
+      enableGrouping: false,
+      cell: (info) => formatDateTime(info.getValue()),
+    }),
   ]
+}
+
+/** The id the table gives a column: its accessor key, or its stated id. */
+function idOf(def: ReturnType<typeof createColumns>[number]): string {
+  return String('accessorKey' in def ? def.accessorKey : def.id)
 }
 
 /**
@@ -287,10 +294,21 @@ export function createColumns() {
 const NOTHING_TO_NET: VisibilityState = Object.fromEntries(
   createColumns()
     .filter((def) => def.aggregationFn === undefined)
-    // The id the table will give the column: its accessor key, or the stated id
-    // for the one column computed from a trade rather than read off it.
-    .map((def) => ['accessorKey' in def ? def.accessorKey : def.id, false]),
+    .map((def) => [idOf(def), false]),
 )
+
+/** Definition order, which is the order a pane opens on. */
+export const BASE_ORDER: readonly string[] = createColumns().map(idOf)
+
+/**
+ * The ids named, then the rest in definition order, which is how the table reads
+ * a partial order. Resolved here too because the reorder control writes a whole
+ * order back. Deduplicated: a hand-edited link can name a column twice.
+ */
+export function orderedColumnIds(columnOrder: readonly string[]): string[] {
+  const named = [...new Set(columnOrder)].filter((id) => BASE_ORDER.includes(id))
+  return [...named, ...BASE_ORDER.filter((id) => !named.includes(id))]
+}
 
 /**
  * What a grouped view shows, as an override to lay over the columns a trader

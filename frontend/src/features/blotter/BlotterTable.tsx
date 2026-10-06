@@ -1,6 +1,7 @@
 import type {
   Cell,
   ColumnFiltersState,
+  ColumnOrderState,
   ExpandedState,
   GroupingState,
   Row,
@@ -152,6 +153,10 @@ export function BlotterTable({
     initialConfig.columnVisibility,
   )
 
+  /** Empty means definition order. A grouping still hoists its own column to the
+   *  front on top of this, which is what keeps the group label leading. */
+  const [columnOrder, setColumnOrder] = useState<ColumnOrderState>(initialConfig.columnOrder)
+
   const shownColumns = useMemo(
     () => ({ ...columnVisibility, ...groupedVisibility(grouping) }),
     [columnVisibility, grouping],
@@ -172,8 +177,8 @@ export function BlotterTable({
    * rather than a view, so it is not in PaneConfig and so it cannot be shared.
    */
   useEffect(() => {
-    onConfigChange?.({ sorting, columnFilters, grouping, columnVisibility })
-  }, [onConfigChange, sorting, columnFilters, grouping, columnVisibility])
+    onConfigChange?.({ sorting, columnFilters, grouping, columnVisibility, columnOrder })
+  }, [onConfigChange, sorting, columnFilters, grouping, columnVisibility, columnOrder])
 
   const [configOpen, setConfigOpen] = useState(false)
   // Generated rather than a literal, because the panel is per grid and a second
@@ -185,13 +190,15 @@ export function BlotterTable({
 
   /**
    * Back to the view a pane opens on: no sort, no filters, no grouping, and the
-   * columns the default shows. Not back to the trades, the name or the size.
+   * columns the default shows in the order it shows them. Not back to the
+   * trades, the name or the size.
    */
   const reset = useCallback(() => {
     setSorting(DEFAULT_VIEW.sorting)
     setColumnFilters(DEFAULT_VIEW.columnFilters)
     setGrouping(DEFAULT_VIEW.grouping)
     setColumnVisibility(DEFAULT_VIEW.columnVisibility)
+    setColumnOrder(DEFAULT_VIEW.columnOrder)
     setExpanded({})
   }, [])
 
@@ -215,12 +222,20 @@ export function BlotterTable({
     data: trades,
     columns,
     defaultColumn: DEFAULT_COLUMN,
-    state: { sorting, columnFilters, grouping, expanded, columnVisibility: shownColumns },
+    state: {
+      sorting,
+      columnFilters,
+      grouping,
+      expanded,
+      columnVisibility: shownColumns,
+      columnOrder,
+    },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onGroupingChange: setGrouping,
     onExpandedChange: setExpanded,
     onColumnVisibilityChange: onVisibilityChange,
+    onColumnOrderChange: setColumnOrder,
     // Without this a sort or a filter would renumber the rows and React would
     // reuse the wrong row for the wrong trade.
     getRowId: (row) => row.tradeId,
@@ -433,7 +448,13 @@ export function BlotterTable({
                 label: 'Duplicate',
                 // The pane's own view, handed over as it stands.
                 onSelect: () =>
-                  onDuplicate?.({ sorting, columnFilters, grouping, columnVisibility }),
+                  onDuplicate?.({
+                    sorting,
+                    columnFilters,
+                    grouping,
+                    columnVisibility,
+                    columnOrder,
+                  }),
                 disabled: onDuplicate === undefined,
                 separated: true,
               },

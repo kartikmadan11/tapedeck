@@ -191,6 +191,25 @@ describe('App', () => {
     expect(within(panel).getByText('724,650.00')).toBeInTheDocument()
   })
 
+  it('hides the positions panel and the boundary beside it, and gives both back', async () => {
+    renderApp()
+    await findRow('TRD-100001')
+
+    const toggle = screen.getByRole('button', { name: 'Positions' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+
+    fireEvent.click(toggle)
+
+    // The handle goes with the panel. It resizes its own next sibling, so one
+    // left behind would be a boundary with nothing on the far side of it.
+    expect(screen.queryByRole('complementary')).toBeNull()
+    expect(screen.queryByRole('separator', { name: 'Resize the positions panel' })).toBeNull()
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+
+    fireEvent.click(toggle)
+    expect(within(screen.getByRole('complementary')).getByText('VOD')).toBeInTheDocument()
+  })
+
   it('connects to the same origin it was served from', () => {
     renderApp()
     expect(FakeSocket.live.url).toBe(`ws://${window.location.host}/ws`)

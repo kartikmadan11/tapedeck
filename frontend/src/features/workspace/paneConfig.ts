@@ -1,5 +1,6 @@
 import type {
   ColumnFiltersState,
+  ColumnOrderState,
   GroupingState,
   SortingState,
   VisibilityState,
@@ -18,6 +19,7 @@ export type PaneConfig = {
   columnFilters: ColumnFiltersState
   grouping: GroupingState
   columnVisibility: VisibilityState
+  columnOrder: ColumnOrderState
 }
 
 /** What the server orders by, so the first paint does not reshuffle. */
@@ -35,8 +37,13 @@ export const DEFAULT_VIEW: PaneConfig = {
   sorting: DEFAULT_SORT,
   columnFilters: [],
   grouping: [],
-  // Off by default. In the view, not on the column, so a link carries it.
-  columnVisibility: { tradeId: false },
+  // Both off by default: a trade id is a reference key and a version number is
+  // an audit detail, and neither is read while scanning the tape. In the view,
+  // not on the column, so a link carries them.
+  columnVisibility: { tradeId: false, version: false },
+  // Empty is the order the column definitions are in, which is the table's own
+  // reading of it. Listing them here would be a second order to keep in step.
+  columnOrder: [],
 }
 
 /**

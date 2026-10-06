@@ -3,6 +3,7 @@ import { trade as tradeSchema } from '@tapedeck/shared'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { PaneConfig } from '../workspace/paneConfig.js'
+import { DEFAULT_VIEW } from '../workspace/paneConfig.js'
 import { SHAREABLE_COLUMNS } from '../workspace/state.js'
 import { BlotterTable } from './BlotterTable.js'
 
@@ -91,7 +92,7 @@ function tradeRow(tradeId: string): HTMLElement {
 
 /**
  * Notional's place among the visible columns, with the Trade column off:
- * symbol, side, price, quantity, notional, time, trader, book, ...
+ * symbol, side, price, quantity, notional, trader, book, ...
  */
 const NOTIONAL = 4
 
@@ -105,19 +106,19 @@ function headers(): string[] {
   )
 }
 
-/** The grid as it opens, which is every column but the trade id. */
+/** The grid as it opens: every column but the trade id and the version, with
+ *  the timestamp last. */
 const UNGROUPED = [
   'Symbol',
   'Side',
   'Price',
   'Quantity',
   'Notional',
-  'Time (UTC)',
   'Trader',
   'Book',
   'Counterparty',
   'Status',
-  'Ver',
+  'Time (UTC)',
 ]
 
 /** What a group row can answer for, and so what grouping leaves on screen. */
@@ -177,7 +178,7 @@ describe('grouping and aggregation', () => {
     set('Group by', 'symbol')
 
     // A group of forty trades has no one counterparty and no one timestamp, so
-    // eight of the eleven would be an empty cell on every group row.
+    // seven of the ten would be an empty cell on every group row.
     expect(headers()).toEqual(['Symbol', ...NETTED])
   })
 
@@ -220,7 +221,7 @@ describe('grouping and aggregation', () => {
     // What goes in a shared link is the column the trader asked for, not the eight
     // the grouping took away: resolving the panel's updater against the state the
     // table was given would bake those eight in and outlive the grouping.
-    expect(reported.at(-1)?.columnVisibility).toEqual({ tradeId: true })
+    expect(reported.at(-1)?.columnVisibility).toEqual({ tradeId: true, version: false })
 
     set('Group by', '')
     expect(headers()[0]).toBe('Trade')
@@ -419,10 +420,10 @@ describe('virtualisation', () => {
     // Fixed layout takes the widths from here, so a colgroup that disagreed
     // with the body would shift every column after the hidden one.
     const widths = (): number => document.querySelectorAll('colgroup col').length
-    expect(widths()).toBe(11)
+    expect(widths()).toBe(10)
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'Book' }))
-    expect(widths()).toBe(10)
+    expect(widths()).toBe(9)
   })
 })
 
@@ -554,6 +555,7 @@ describe('the configuration panel', () => {
       columnVisibility: Object.fromEntries(
         SHAREABLE_COLUMNS.filter((id) => id !== 'symbol').map((id) => [id, false]),
       ),
+      columnOrder: [],
     })
     openConfig()
 
@@ -584,6 +586,84 @@ describe('the configuration panel', () => {
     expect(book).toBeDisabled()
     expect(book).not.toBeChecked()
     expect(screen.getByText(/only the columns a group nets/)).toBeInTheDocument()
+  })
+
+  it('moves a column along the grid', () => {
+    const { reported } = renderBlotter()
+    openConfig()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Move Status up' }))
+
+    // Up in the list is left on the grid, which is what the panel says it is.
+    expect(headers()).toEqual([
+      'Symbol',
+      'Side',
+      'Price',
+      'Quantity',
+      'Notional',
+      'Trader',
+      'Book',
+      'Status',
+      'Counterparty',
+      'Time (UTC)',
+    ])
+    // Written out in full, not as the one pair that moved: a partial order reads
+    // the columns it leaves out as last.
+    expect(reported.at(-1)?.columnOrder).toEqual([
+      'tradeId',
+      'symbol',
+      'side',
+      'price',
+      'quantity',
+      'notional',
+      'trader',
+      'book',
+      'status',
+      'counterparty',
+      'version',
+      'tradeTimestamp',
+    ])
+  })
+
+  it('will not move a column off either end', () => {
+    renderBlotter()
+    openConfig()
+
+    expect(screen.getByRole('button', { name: 'Move Trade up' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Move Time (UTC) down' })).toBeDisabled()
+  })
+
+  it('keeps a hidden column in the order, so turning it on puts it back', () => {
+    renderBlotter()
+    openConfig()
+
+    // Ver is off by default and still listed, so it can be placed before it is
+    // ever seen.
+    fireEvent.click(screen.getByRole('button', { name: 'Move Ver up' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Ver' }))
+
+    expect(headers().slice(-3)).toEqual(['Ver', 'Status', 'Time (UTC)'])
+  })
+
+  it('opens on the order a link gives it', () => {
+    renderBlotter(BOOK, {
+      ...DEFAULT_VIEW,
+      columnOrder: ['status', 'symbol'],
+    })
+
+    // Named first, then the rest in definition order, which is how the table
+    // reads a partial order.
+    expect(headers().slice(0, 3)).toEqual(['Status', 'Symbol', 'Side'])
+  })
+
+  it('leaves a grouping to lead with its own column whatever the order says', () => {
+    renderBlotter(BOOK, { ...DEFAULT_VIEW, columnOrder: ['notional', 'price'] })
+    openConfig()
+    set('Group by', 'symbol')
+
+    // The group label and the expander ride the grouped column, so it has to be
+    // the first one on the row.
+    expect(headers()).toEqual(['Symbol', 'Notional', 'Price', 'Quantity'])
   })
 
   it('filters on a floor the top bar does not offer', () => {

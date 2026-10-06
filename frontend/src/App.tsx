@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useId, useMemo, useState } from 'react'
 import { ErrorNotice } from './components/ErrorNotice.js'
 import { PanelSeparator } from './components/PanelSeparator.js'
 import { RefreshButton } from './components/RefreshButton.js'
@@ -20,7 +20,7 @@ import { CancelDialog } from './features/trades/CancelDialog.js'
 import { TradeForm } from './features/trades/TradeForm.js'
 import { useBlotter, usePendingTradeIds, useRefreshBlotter } from './features/trades/useTrades.js'
 import { Workspace } from './features/workspace/Workspace.js'
-import { CHIP } from './lib/ui.js'
+import { CHIP, CHIP_ON } from './lib/ui.js'
 
 /**
  * Optional, so the existing tests can render the blotter on its own without
@@ -74,6 +74,11 @@ export function App({ onSignOut }: Props = {}): ReactElement {
    */
   const [panelWidth, setPanelWidth] = useState(PANEL_WIDTH)
 
+  /** On by default: net exposure is the reason to keep a blotter open, so hiding
+   *  it is the deliberate act. Not persisted, so a reload gives it back. */
+  const [positionsOpen, setPositionsOpen] = useState(true)
+  const positionsId = useId()
+
   const closeAmend = useCallback(() => setAmendingId(null), [])
   const closeCancel = useCallback(() => setCancellingId(null), [])
   const closeHistory = useCallback(() => setHistoryId(null), [])
@@ -86,6 +91,18 @@ export function App({ onSignOut }: Props = {}): ReactElement {
       <header className="flex items-baseline gap-3 border-b border-tape-line pb-2">
         <h1 className="text-sm font-semibold uppercase tracking-[0.2em]">tapedeck</h1>
         <div className="ml-auto flex items-center gap-2">
+          {/* A disclosure, so the label names the thing and the accent border
+            says it is showing. aria-controls only while the panel is mounted:
+            it has to name an element that is there. */}
+          <button
+            aria-controls={positionsOpen ? positionsId : undefined}
+            aria-expanded={positionsOpen}
+            className={positionsOpen ? CHIP_ON : CHIP}
+            onClick={() => setPositionsOpen((open) => !open)}
+            type="button"
+          >
+            Positions
+          </button>
           <SimulationToggle />
           <RefreshButton onRefresh={refresh} refreshing={blotter.isFetching} />
           <IdentityBadge trader={trader} />
@@ -105,14 +122,20 @@ export function App({ onSignOut }: Props = {}): ReactElement {
         aims at is the line that divides the two. */}
       <div className="flex min-h-0 flex-1">
         <Workspace trades={trades} pendingIds={pendingIds} actions={actions} />
-        <PanelSeparator
-          label="Resize the positions panel"
-          max={PANEL_MAX_WIDTH}
-          min={PANEL_MIN_WIDTH}
-          onResize={setPanelWidth}
-          width={panelWidth}
-        />
-        <PositionsPanel width={panelWidth} />
+        {/* The handle goes with the panel: it resizes its own next sibling, so
+          one left behind would drag whatever took the panel's place. */}
+        {positionsOpen ? (
+          <>
+            <PanelSeparator
+              label="Resize the positions panel"
+              max={PANEL_MAX_WIDTH}
+              min={PANEL_MIN_WIDTH}
+              onResize={setPanelWidth}
+              width={panelWidth}
+            />
+            <PositionsPanel id={positionsId} width={panelWidth} />
+          </>
+        ) : null}
       </div>
 
       {amending ? <AmendDialog trade={amending} onClose={closeAmend} /> : null}
