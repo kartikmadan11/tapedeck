@@ -37,6 +37,15 @@ const DEFAULTS: FormValues = {
   counterparty: COUNTERPARTIES[0],
 }
 
+/**
+ * The boxes someone types into, for the retraction below. A picklist is not one
+ * of them: it cannot hold a value its own list does not offer.
+ */
+const TYPED = ['symbol', 'quantity', 'price'] as const
+
+const isTyped = (name: string): name is (typeof TYPED)[number] =>
+  TYPED.some((field) => field === name)
+
 /** The three picklists, built once off the same const tuples the schema
  *  validates against, so a list cannot offer what a booking would reject. */
 const SIDES: SelectOption[] = [
@@ -64,6 +73,12 @@ export function TradeForm({ trader }: Props): ReactElement {
     // trade and the client cannot drift from it.
     resolver: zodResolver(createTradeInput),
     defaultValues: DEFAULTS,
+    // A complaint is made on a press and retracted on an edit, rather than
+    // re-made on every keystroke. The default, onChange, is what kept `not a
+    // ticker on the instrument master` under a box someone had just emptied: an
+    // empty box fails the master too, and revalidating put the message straight
+    // back after the edit cleared it.
+    reValidateMode: 'onSubmit',
   })
 
   const { errors } = form.formState
@@ -119,14 +134,26 @@ export function TradeForm({ trader }: Props): ReactElement {
       className="rounded-sm border border-tape-line bg-tape-panel p-3"
       onSubmit={form.handleSubmit(onSubmit)}
       /**
-       * Drops a held press the moment the ticket is edited, so the button cannot
-       * sit there asking to confirm something that is no longer on screen. This
-       * is about the label only, since onSubmit re-derives the guard anyway, and
-       * the condition keeps it from setting state on every keystroke.
+       * An edit retracts what the form was saying about the ticket: the held
+       * press, so the button cannot sit there asking to confirm something that is
+       * no longer on screen, and the complaint on the box being edited. onSubmit
+       * makes both again, so this is about what is on screen between presses.
        */
-      onChange={() => {
+      onChange={(event) => {
         if (guard !== null) {
           setGuard(null)
+        }
+
+        // Read before it is cleared, for the same reason the guard is: form
+        // state is emitted to everything subscribed to it, and an unconditional
+        // clear would emit on every keystroke.
+        const box = event.target
+        if (
+          box instanceof HTMLInputElement &&
+          isTyped(box.name) &&
+          errors[box.name] !== undefined
+        ) {
+          form.clearErrors(box.name)
         }
       }}
       noValidate

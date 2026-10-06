@@ -447,6 +447,11 @@ describe('booking guards', () => {
     return screen.getByLabelText('Quantity', { selector: '#quantity' })
   }
 
+  /** The ticket's box, for the same reason the quantity helper exists. */
+  function symbol(): HTMLElement {
+    return screen.getByLabelText('Symbol', { selector: '#symbol' })
+  }
+
   async function ready(): Promise<void> {
     renderApp()
     await findRow('TRD-100001')
@@ -499,6 +504,32 @@ describe('booking guards', () => {
 
     expect(await screen.findByRole('button', { name: 'Book trade' })).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('takes the complaint off a box that is being edited, and makes it again on the press', async () => {
+    const MASTER = 'not a ticker on the instrument master'
+    await ready()
+
+    fireEvent.change(symbol(), { target: { value: 'NOPE' } })
+    book()
+    expect(await screen.findByText(MASTER)).toBeInTheDocument()
+
+    // The defect: an empty box fails the instrument master too, so revalidating
+    // on the keystroke put the message back under a box with nothing in it.
+    fireEvent.change(symbol(), { target: { value: '' } })
+
+    // Settled rather than momentarily gone. The validation is async, so a poll
+    // would pass on the gap between the edit clearing the message and the
+    // revalidation putting it back, which is the defect itself.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(screen.queryByText(MASTER)).toBeNull()
+
+    // Retracted, not withdrawn: the press still refuses the empty ticket.
+    book()
+    expect(await screen.findByText(MASTER)).toBeInTheDocument()
+    expect(bookings()).toEqual([])
   })
 
   it('sends an idempotency key, minted fresh for each booking', async () => {
