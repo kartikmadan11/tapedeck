@@ -5,6 +5,9 @@ import {
   type CreateTradeInput,
   cancelTradeInput,
   createTradeInput,
+  fillStatus,
+  fillTradeInput,
+  isWorking,
   tradeQuery,
 } from './trade.js'
 
@@ -135,5 +138,44 @@ describe('cancelling a trade', () => {
   it('carries only the concurrency token', () => {
     expect(cancelTradeInput.parse({ version: 3 })).toEqual({ version: 3 })
     expect(cancelTradeInput.safeParse({ version: 3, status: 'CANCELLED' }).success).toBe(false)
+  })
+})
+
+describe('filling a trade', () => {
+  it('reads the status off the cumulative quantity', () => {
+    expect(fillStatus(0, 10_000)).toBe('NEW')
+    expect(fillStatus(4_000, 10_000)).toBe('PARTIALLY_FILLED')
+    expect(fillStatus(10_000, 10_000)).toBe('FILLED')
+  })
+
+  /**
+   * An amendment can cut the booked quantity below what has already executed,
+   * and the row that results is filled rather than over-filled.
+   */
+  it('reads a fill above the booked quantity as filled, not as a fourth state', () => {
+    expect(fillStatus(12_000, 10_000)).toBe('FILLED')
+  })
+
+  it('treats the two live states as working and the rest as done', () => {
+    expect(isWorking({ status: 'NEW' })).toBe(true)
+    expect(isWorking({ status: 'PARTIALLY_FILLED' })).toBe(true)
+    expect(isWorking({ status: 'FILLED' })).toBe(false)
+    expect(isWorking({ status: 'CANCELLED' })).toBe(false)
+  })
+
+  it('carries the cumulative quantity and the concurrency token, and no status', () => {
+    expect(fillTradeInput.parse({ filledQuantity: 4_000, version: 1 })).toEqual({
+      filledQuantity: 4_000,
+      version: 1,
+    })
+    // The status follows from the number beside it, so accepting one here would
+    // be accepting a second opinion about the same fact.
+    expect(
+      fillTradeInput.safeParse({ filledQuantity: 4_000, version: 1, status: 'FILLED' }).success,
+    ).toBe(false)
+  })
+
+  it('refuses a report of nothing, since an execution always carries quantity', () => {
+    expect(fillTradeInput.safeParse({ filledQuantity: 0, version: 1 }).success).toBe(false)
   })
 })

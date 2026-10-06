@@ -12,7 +12,6 @@ export { BOOKS, INSTRUMENTS, SEED_ACTOR, TRADERS } from './reference.js'
 export { Rng } from './rng.js'
 export {
   eventTypeEnum,
-  positionsQuery,
   sideEnum,
   statusEnum,
   type TradeEventInsert,
@@ -23,4 +22,4 @@ export {
   trades,
 } from './schema.js'
 export { type SeedSummary, seed, seedIfEmpty } from './seed.js'
-export { ticketSize, walkPrice } from './ticket.js'
+export { partialFill, ticketSize, walkPrice } from './ticket.js'

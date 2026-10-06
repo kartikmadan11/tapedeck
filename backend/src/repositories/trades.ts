@@ -3,6 +3,9 @@ import { toTrade, toTradeEvent, tradeEvents, trades } from '@tapedeck/database'
 import {
   type AmendTradeInput,
   type CreateTradeInput,
+  type FillTradeInput,
+  fillStatus,
+  invalidFill,
   invalidState,
   notFound,
   type Position,
@@ -184,11 +187,22 @@ export class TradeRepository {
         throw versionConflict(tradeId, input.version, current.version)
       }
 
+      /**
+       * An amendment moves the booked quantity, so the fill has to be read
+       * against the new one. Amending above what has executed re-opens the
+       * remainder; amending below it is a correction to an over-recorded
+       * execution and clamps the fill down with it, because a status and a fill
+       * that disagree is a row the database refuses.
+       */
+      const filledQuantity = Math.min(current.filledQuantity, input.quantity)
+
       const [row] = await tx
         .update(trades)
         .set({
           quantity: input.quantity,
           price: input.price,
+          filledQuantity,
+          status: fillStatus(filledQuantity, input.quantity),
           version: current.version + 1,
           updatedAt: new Date(),
         })
@@ -202,6 +216,62 @@ export class TradeRepository {
       const trade = toTrade(row)
       const seq = await appendEvent(tx, 'AMENDED', current, trade, actor)
       return { trade, seq, eventType: 'AMENDED' }
+    })
+  }
+
+  /**
+   * Applies an execution report. The cumulative quantity has to advance and
+   * cannot pass what was booked, so a report that arrives twice is refused
+   * rather than filling twice, and an overfill is refused rather than clamped:
+   * a venue reporting more than was booked is a reconciliation break, not
+   * something to round off quietly.
+   *
+   * Status is derived here, never taken from the caller.
+   */
+  async fillTrade(tradeId: string, input: FillTradeInput, actor: string): Promise<MutationResult> {
+    return this.db.transaction(async (tx) => {
+      await acquireWriteLock(tx)
+
+      const current = await requireTrade(tx, tradeId)
+      if (current.status === 'CANCELLED') {
+        throw invalidState(tradeId, current.status)
+      }
+      if (current.version !== input.version) {
+        throw versionConflict(tradeId, input.version, current.version)
+      }
+      if (input.filledQuantity <= current.filledQuantity) {
+        throw invalidFill(
+          tradeId,
+          current.status,
+          `${input.filledQuantity} does not advance the ${current.filledQuantity} already filled`,
+        )
+      }
+      if (input.filledQuantity > current.quantity) {
+        throw invalidFill(
+          tradeId,
+          current.status,
+          `${input.filledQuantity} is more than the ${current.quantity} booked`,
+        )
+      }
+
+      const [row] = await tx
+        .update(trades)
+        .set({
+          filledQuantity: input.filledQuantity,
+          status: fillStatus(input.filledQuantity, current.quantity),
+          version: current.version + 1,
+          updatedAt: new Date(),
+        })
+        .where(eq(trades.tradeId, tradeId))
+        .returning()
+
+      if (!row) {
+        throw new Error('update returned no row despite holding the write lock')
+      }
+
+      const trade = toTrade(row)
+      const seq = await appendEvent(tx, 'FILLED', current, trade, actor)
+      return { trade, seq, eventType: 'FILLED' }
     })
   }
 
@@ -317,6 +387,10 @@ function selectTrades(tx: Queryable, query: TradeQuery): Promise<Trade[]> {
  * Aggregated in numeric by Postgres, never summed on the client: two clients
  * adding floats in a different order can disagree in the last place. Cancelled
  * trades are excluded, not netted out.
+ *
+ * Booked quantity, not filled: this is the exposure the desk has committed to,
+ * which is the figure a trader is asked about and the one a pre-trade limit is
+ * checked against. Executed exposure is a second figure, argued in DECISIONS.
  */
 async function selectPositions(tx: Queryable): Promise<Position[]> {
   const result = await tx.execute<{
@@ -336,7 +410,7 @@ async function selectPositions(tx: Queryable): Promise<Position[]> {
         as net_notional,
       count(*)::int as trade_count
     from ${trades}
-    where status = 'ACTIVE'
+    where status <> 'CANCELLED'
     group by symbol
     order by symbol
   `)

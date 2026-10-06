@@ -49,7 +49,7 @@ export async function createTrade(
  * Timestamps descend by the minute from the base, so a windowed read has a
  * definite right answer.
  */
-export async function fillTrades(handle: DatabaseHandle, count: number): Promise<void> {
+export async function insertTrades(handle: DatabaseHandle, count: number): Promise<void> {
   const base = Date.UTC(2026, 9, 2, 9, 0, 0)
   await handle.db.insert(trades).values(
     Array.from({ length: count }, (_unused, index) => ({

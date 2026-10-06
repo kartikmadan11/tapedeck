@@ -84,11 +84,16 @@ export async function buildApp(config: Config): Promise<BuiltApp> {
     bus,
     // Unwindowed on purpose: the simulator compares what it reads against
     // maxTrades, so a limit here would hide trades above the cap and it would
-    // book forever.
-    listActive: () => tradeService.listTrades({ status: 'ACTIVE' }).then((result) => result.trades),
+    // book forever. Cancellations are dropped here rather than in the query,
+    // which takes one status and cannot ask for everything but one.
+    listOpen: () =>
+      tradeService
+        .listTrades({})
+        .then((result) => result.trades.filter((trade) => trade.status !== 'CANCELLED')),
     // The simulator sends no clientTradeId, so its bookings never replay.
     create: (input, actor) => tradeService.createTrade(input, actor).then(({ trade }) => trade),
     amend: (tradeId, input, actor) => tradeService.amendTrade(tradeId, input, actor),
+    fill: (tradeId, input, actor) => tradeService.fillTrade(tradeId, input, actor),
     cancel: (tradeId, input, actor) => tradeService.cancelTrade(tradeId, input, actor),
   })
 

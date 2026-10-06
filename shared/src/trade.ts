@@ -11,9 +11,39 @@ import { decimalString, priceString } from './money.js'
 export const side = z.enum(['BUY', 'SELL'])
 export type Side = z.infer<typeof side>
 
-/** Binary, as specified. An amendment bumps `version` and appends an event. */
-export const tradeStatus = z.enum(['ACTIVE', 'CANCELLED'])
+/**
+ * FIX OrdStatus, narrowed to the four states this blotter produces. The
+ * specification asked for a binary ACTIVE or CANCELLED, and ACTIVE stood for
+ * nothing more than "not cancelled": it said a trade existed, not whether any of
+ * it had traded. A blotter is read to find the exposure that is working, so the
+ * three live states are the ones a trader acts on.
+ *
+ * The first three are derived from `filledQuantity`, never set by hand, and a
+ * database check refuses a row where they disagree. Cancellation is a separate
+ * fact and so is the one status a fill cannot produce.
+ */
+export const tradeStatus = z.enum(['NEW', 'PARTIALLY_FILLED', 'FILLED', 'CANCELLED'])
 export type TradeStatus = z.infer<typeof tradeStatus>
+
+/** The states a fill can put a trade in, which is every one but cancellation. */
+export type WorkingStatus = Exclude<TradeStatus, 'CANCELLED'>
+
+/**
+ * The status a cumulative fill implies. The single definition, shared by the
+ * write path, the seed and the check constraint, so no caller can invent a
+ * fourth reading of a half-filled order.
+ */
+export function fillStatus(filledQuantity: number, quantity: number): WorkingStatus {
+  if (filledQuantity <= 0) {
+    return 'NEW'
+  }
+  return filledQuantity >= quantity ? 'FILLED' : 'PARTIALLY_FILLED'
+}
+
+/** Still working, so a fill can still arrive against it. */
+export function isWorking(trade: Pick<Trade, 'status'>): boolean {
+  return trade.status === 'NEW' || trade.status === 'PARTIALLY_FILLED'
+}
 
 export const tradeId = z
   .string()
@@ -76,6 +106,12 @@ export const trade = z.object({
   symbol,
   side,
   quantity,
+  /**
+   * CumQty: how much of the booked quantity has traded. Zero up to the booked
+   * quantity, and `status` is read off it. Carried rather than derived on the
+   * client because the remainder still to fill is the figure a trader works.
+   */
+  filledQuantity: z.number().int().nonnegative(),
   price: priceString,
   trader: party,
   /**
@@ -167,7 +203,22 @@ export const cancelTradeInput = z.strictObject({
 })
 export type CancelTradeInput = z.infer<typeof cancelTradeInput>
 
-export const tradeEventType = z.enum(['CREATED', 'AMENDED', 'CANCELLED'])
+/**
+ * An execution report: the cumulative quantity filled, not the size of this
+ * fill. Cumulative because that is what the row holds, so a report that arrives
+ * twice asks for a state the trade is already in rather than filling twice.
+ *
+ * `status` is absent on purpose. It follows from this number, so accepting it
+ * would be accepting a second opinion about the same fact.
+ */
+export const fillTradeInput = z.strictObject({
+  filledQuantity: quantity,
+  version: z.number().int().positive(),
+})
+export type FillTradeInput = z.infer<typeof fillTradeInput>
+
+/** FILLED is a fill arriving, which may leave the trade partially filled. */
+export const tradeEventType = z.enum(['CREATED', 'AMENDED', 'FILLED', 'CANCELLED'])
 export type TradeEventType = z.infer<typeof tradeEventType>
 
 /**

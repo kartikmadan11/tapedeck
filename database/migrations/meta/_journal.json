@@ -22,6 +22,13 @@
       "when": 1791228477402,
       "tag": "0002_client_trade_id",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791294790313,
+      "tag": "0003_fill_lifecycle",
+      "breakpoints": true
     }
   ]
 }

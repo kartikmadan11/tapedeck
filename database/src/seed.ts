@@ -1,13 +1,13 @@
 import { fileURLToPath } from 'node:url'
 import type { Side } from '@tapedeck/shared'
-import { COUNTERPARTIES } from '@tapedeck/shared'
+import { COUNTERPARTIES, fillStatus } from '@tapedeck/shared'
 import { sql } from 'drizzle-orm'
 import { createDatabase, type DatabaseHandle } from './client.js'
 import { toTrade } from './projection.js'
 import { BOOKS, INSTRUMENTS, SEED_ACTOR, TRADERS } from './reference.js'
 import { Rng } from './rng.js'
 import { tradeEvents, trades } from './schema.js'
-import { ticketSize, walkPrice } from './ticket.js'
+import { partialFill, ticketSize, walkPrice } from './ticket.js'
 
 // Deterministic, so the blotter matches the counts quoted in the README.
 // Changing SEED invalidates those counts.
@@ -24,12 +24,28 @@ const TRADE_COUNT = 400
 const AMEND_RATE = 0.18
 const CANCEL_RATE = 0.075
 
+/**
+ * How the book stands when the blotter opens: mostly executed, with a slice
+ * still working. Without the working slice the three live statuses would all
+ * read FILLED on a fresh database and the column would look like the binary one
+ * it replaced.
+ */
+const UNFILLED_RATE = 0.08
+const PARTIAL_RATE = 0.14
+
 /** Trades are spread back over this many hours from the seed moment. */
 const WINDOW_HOURS = 9
 
 export interface SeedSummary {
   trades: number
   amended: number
+  /**
+   * How many were filled in full, and how many only in part. Counts of what the
+   * seed did, as amended and cancelled are, so a trade filled and then struck
+   * is counted here and in cancelled both.
+   */
+  filled: number
+  partiallyFilled: number
   cancelled: number
   events: number
 }
@@ -45,6 +61,8 @@ export async function seed(handle: DatabaseHandle): Promise<SeedSummary> {
   const now = new Date('2026-10-02T16:30:00.000Z')
 
   let amended = 0
+  let filled = 0
+  let partiallyFilled = 0
   let cancelled = 0
   let events = 0
 
@@ -118,8 +136,56 @@ export async function seed(handle: DatabaseHandle): Promise<SeedSummary> {
         amended += 1
       }
 
-      // Struck from the blotter but never deleted. Applied after any amendment,
-      // so a cancelled trade can carry a three-event history.
+      // Executed, after any amendment, so a fill is never left above the
+      // quantity an amendment moved. One fill event per trade: a live feed
+      // produces the multi-fill histories.
+      const working = rng.next()
+      if (working >= UNFILLED_RATE) {
+        const before = toTrade(current)
+        const whole = working >= UNFILLED_RATE + PARTIAL_RATE
+        const cumulative = whole
+          ? current.quantity
+          : partialFill(current.quantity, instrument.lotSize, rng)
+        const filledAt = new Date(current.updatedAt.getTime() + rng.int(1, 15) * 60_000)
+
+        const [next] = await tx
+          .update(trades)
+          .set({
+            filledQuantity: cumulative,
+            // Derived, never chosen: the database refuses a status that
+            // disagrees with the fill it describes.
+            status: fillStatus(cumulative, current.quantity),
+            version: current.version + 1,
+            updatedAt: filledAt,
+          })
+          .where(sql`${trades.tradeId} = ${current.tradeId}`)
+          .returning()
+
+        if (!next) {
+          throw new Error('fill returned no row')
+        }
+        current = next
+
+        await tx.insert(tradeEvents).values({
+          tradeId: current.tradeId,
+          eventType: 'FILLED',
+          before,
+          after: toTrade(current),
+          // The venue reports the execution, not a trader.
+          actor: SEED_ACTOR,
+          at: filledAt,
+        })
+        events += 1
+        if (current.status === 'FILLED') {
+          filled += 1
+        } else {
+          partiallyFilled += 1
+        }
+      }
+
+      // Struck from the blotter but never deleted. Applied after any amendment
+      // or fill, so a cancelled trade can carry a four-event history and keeps
+      // the record of whatever had executed.
       if (rng.chance(CANCEL_RATE)) {
         const before = toTrade(current)
         const cancelledAt = new Date(current.updatedAt.getTime() + rng.int(1, 30) * 60_000)
@@ -153,7 +219,7 @@ export async function seed(handle: DatabaseHandle): Promise<SeedSummary> {
     }
   })
 
-  return { trades: TRADE_COUNT, amended, cancelled, events }
+  return { trades: TRADE_COUNT, amended, filled, partiallyFilled, cancelled, events }
 }
 
 /** Seeds only when the table is empty, since `docker compose up` gets run more than once. */
@@ -180,6 +246,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     } else {
       console.error(
         `seeded ${summary.trades} trades: ${summary.amended} amended, ` +
+          `${summary.filled} filled, ${summary.partiallyFilled} part filled, ` +
           `${summary.cancelled} cancelled, ${summary.events} events`,
       )
     }

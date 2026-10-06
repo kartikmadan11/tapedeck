@@ -34,6 +34,12 @@ export const tradeAmendedFrame = sequenced.extend({
   trade,
 })
 
+/** A fill arrived. Carries the whole trade, so a client needs no fill history. */
+export const tradeFilledFrame = sequenced.extend({
+  type: z.literal('trade.filled'),
+  trade,
+})
+
 export const tradeCancelledFrame = sequenced.extend({
   type: z.literal('trade.cancelled'),
   trade,
@@ -64,6 +70,7 @@ export const serverFrame = z.discriminatedUnion('type', [
   snapshotFrame,
   tradeCreatedFrame,
   tradeAmendedFrame,
+  tradeFilledFrame,
   tradeCancelledFrame,
   positionsFrame,
   simulationFrame,
@@ -73,10 +80,10 @@ export type ServerFrame = z.infer<typeof serverFrame>
 /** The frames that participate in the event order. */
 export type SequencedFrame = Extract<ServerFrame, { seq: number }>
 
-/** The three incremental frames. */
+/** The incremental frames, each one carrying the whole trade it changed. */
 export type TradeDeltaFrame = Extract<
   ServerFrame,
-  { type: 'trade.created' | 'trade.amended' | 'trade.cancelled' }
+  { type: 'trade.created' | 'trade.amended' | 'trade.filled' | 'trade.cancelled' }
 >
 
 /** Returns null for derived frames, which must not advance the cursor. */
@@ -86,6 +93,7 @@ export function frameSequence(frame: ServerFrame): number | null {
       return frame.seq
     case 'trade.created':
     case 'trade.amended':
+    case 'trade.filled':
     case 'trade.cancelled':
       return frame.seq
     case 'positions':

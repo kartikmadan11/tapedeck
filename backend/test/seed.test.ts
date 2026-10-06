@@ -27,8 +27,21 @@ afterAll(async () => {
 
 describe('the seeded dataset', () => {
   it('is deterministic, so the README can quote its counts', () => {
-    expect(summary).toEqual({ trades: 400, amended: 69, cancelled: 25, events: 494 })
-    expect(summary.events).toBe(summary.trades + summary.amended + summary.cancelled)
+    expect(summary).toEqual({
+      trades: 400,
+      amended: 70,
+      filled: 321,
+      partiallyFilled: 45,
+      cancelled: 27,
+      events: 863,
+    })
+    expect(summary.events).toBe(
+      summary.trades +
+        summary.amended +
+        summary.filled +
+        summary.partiallyFilled +
+        summary.cancelled,
+    )
   })
 
   it('gives every trade a version equal to its event count', async () => {
@@ -79,7 +92,7 @@ describe('the seeded dataset', () => {
 
     // Gap-free only because every write took the advisory lock: a bigserial on
     // its own leaves holes wherever a transaction rolled back.
-    expect(row).toMatchObject({ rows: 494, lowest: 1, highest: 494 })
+    expect(row).toMatchObject({ rows: 863, lowest: 1, highest: 863 })
   })
 
   it('issues contiguous readable ids from TRD-100001', async () => {
@@ -132,7 +145,7 @@ describe('the seeded dataset over the API', () => {
     const response = await app.inject({ method: 'GET', url: '/api/trades' })
     const body = response.json()
 
-    expect(body.seq).toBe(494)
+    expect(body.seq).toBe(863)
     expect(body.trades).toHaveLength(400)
     // Parsed, not spot-checked: one bad row fails here.
     for (const row of body.trades) {
@@ -150,11 +163,11 @@ describe('the seeded dataset over the API', () => {
     }
   })
 
-  it('counts only active trades in positions', async () => {
-    const [active] = await handle.db
+  it('counts every trade that was not cancelled in positions', async () => {
+    const [open] = await handle.db
       .select({ count: sql<number>`count(*)::int` })
       .from(trades)
-      .where(sql`status = 'ACTIVE'`)
+      .where(sql`status <> 'CANCELLED'`)
 
     const response = await app.inject({ method: 'GET', url: '/api/positions' })
     const { positions } = response.json()
@@ -163,6 +176,6 @@ describe('the seeded dataset over the API', () => {
       0,
     )
 
-    expect(counted).toBe(active?.count)
+    expect(counted).toBe(open?.count)
   })
 })

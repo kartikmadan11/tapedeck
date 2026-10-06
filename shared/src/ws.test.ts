@@ -8,12 +8,13 @@ const aTrade: Trade = {
   symbol: 'VOD',
   side: 'BUY',
   quantity: 10_000,
+  filledQuantity: 0,
   price: toDecimal('142.750000'),
   trader: 'a.patel',
   book: 'EQ-LDN-01',
   counterparty: 'Barclays',
   tradeTimestamp: '2026-10-02T09:15:00.000Z',
-  status: 'ACTIVE',
+  status: 'NEW',
   version: 1,
   updatedAt: '2026-10-02T09:15:00.000Z',
 }
@@ -32,7 +33,12 @@ describe('frame parsing', () => {
     { type: 'snapshot', seq: 42, trades: [aTrade], positions: [aPosition] },
     { type: 'trade.created', seq: 43, trade: aTrade },
     { type: 'trade.amended', seq: 44, trade: { ...aTrade, version: 2 } },
-    { type: 'trade.cancelled', seq: 45, trade: { ...aTrade, status: 'CANCELLED', version: 3 } },
+    {
+      type: 'trade.filled',
+      seq: 45,
+      trade: { ...aTrade, filledQuantity: 4_000, status: 'PARTIALLY_FILLED', version: 3 },
+    },
+    { type: 'trade.cancelled', seq: 46, trade: { ...aTrade, status: 'CANCELLED', version: 4 } },
     { type: 'positions', positions: [aPosition] },
   ])('round trips a $type frame through JSON', (frame) => {
     expect(serverFrame.parse(JSON.parse(JSON.stringify(frame)))).toEqual(frame)
@@ -59,7 +65,8 @@ describe('the cursor contract', () => {
     expect(frameSequence({ type: 'snapshot', seq: 42, trades: [], positions: [] })).toBe(42)
     expect(frameSequence({ type: 'trade.created', seq: 43, trade: aTrade })).toBe(43)
     expect(frameSequence({ type: 'trade.amended', seq: 44, trade: aTrade })).toBe(44)
-    expect(frameSequence({ type: 'trade.cancelled', seq: 45, trade: aTrade })).toBe(45)
+    expect(frameSequence({ type: 'trade.filled', seq: 45, trade: aTrade })).toBe(45)
+    expect(frameSequence({ type: 'trade.cancelled', seq: 46, trade: aTrade })).toBe(46)
   })
 
   // Derived state carries no ordering, so one mutation never emits two frames
@@ -77,14 +84,15 @@ describe('the cursor contract', () => {
     expect(parsed).not.toHaveProperty('seq')
   })
 
-  it('narrows the sequenced frames to exactly the four ordered kinds', () => {
+  it('narrows the sequenced frames to exactly the five ordered kinds', () => {
     const kinds: SequencedFrame['type'][] = [
       'snapshot',
       'trade.created',
       'trade.amended',
+      'trade.filled',
       'trade.cancelled',
     ]
-    expect(kinds).toHaveLength(4)
+    expect(kinds).toHaveLength(5)
 
     // @ts-expect-error a positions frame is not a SequencedFrame, so cursor
     // advancing code cannot reach it

@@ -2,6 +2,7 @@ import type { Trade } from '@tapedeck/shared'
 import { sql } from 'drizzle-orm'
 import {
   bigserial,
+  check,
   index,
   integer,
   jsonb,
@@ -24,8 +25,13 @@ import {
 const WIRE_TIME = { withTimezone: true, precision: 3, mode: 'date' } as const
 
 export const sideEnum = pgEnum('trade_side', ['BUY', 'SELL'])
-export const statusEnum = pgEnum('trade_status', ['ACTIVE', 'CANCELLED'])
-export const eventTypeEnum = pgEnum('trade_event_type', ['CREATED', 'AMENDED', 'CANCELLED'])
+export const statusEnum = pgEnum('trade_status', ['NEW', 'PARTIALLY_FILLED', 'FILLED', 'CANCELLED'])
+export const eventTypeEnum = pgEnum('trade_event_type', [
+  'CREATED',
+  'AMENDED',
+  'FILLED',
+  'CANCELLED',
+])
 
 /**
  * Current state, one row per trade.
@@ -60,7 +66,10 @@ export const trades = pgTable(
     // Nullable rather than defaulted: a server-generated key would be unique per
     // request and dedupe nothing.
     clientTradeId: text('client_trade_id'),
-    status: statusEnum('status').notNull().default('ACTIVE'),
+    // CumQty. A booking is an order, so it starts at nothing filled and the
+    // executions arrive afterwards.
+    filledQuantity: integer('filled_quantity').notNull().default(0),
+    status: statusEnum('status').notNull().default('NEW'),
     version: integer('version').notNull().default(1),
     createdAt: timestamp('created_at', WIRE_TIME).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', WIRE_TIME).notNull().defaultNow(),
@@ -82,6 +91,26 @@ export const trades = pgTable(
      * is why there is no NULLS NOT DISTINCT.
      */
     uniqueIndex('trades_client_trade_id_key').on(t.clientTradeId),
+    /**
+     * The three live statuses are a reading of filled_quantity, so this is what
+     * stops them being set independently: a row claiming FILLED on a quantity
+     * half filled cannot be written by any path, including a hand-run UPDATE.
+     *
+     * Cancellation is a separate fact, so a cancelled trade keeps whatever had
+     * filled before it was struck. Nothing is asserted about its fill.
+     */
+    check(
+      'trades_status_matches_fill',
+      sql`
+        filled_quantity between 0 and quantity
+        and case status
+          when 'NEW' then filled_quantity = 0
+          when 'PARTIALLY_FILLED' then filled_quantity > 0 and filled_quantity < quantity
+          when 'FILLED' then filled_quantity = quantity
+          else true
+        end
+      `,
+    ),
   ],
 )
 
@@ -115,27 +144,6 @@ export const tradeEvents = pgTable(
   },
   (t) => [index('trade_events_trade_idx').on(t.tradeId, t.seq)],
 )
-
-/**
- * Net exposure per symbol, aggregated in numeric so every client agrees: two
- * clients summing floats in different orders can disagree in the last place.
- *
- * Cancelled trades are excluded, not netted out.
- */
-export const positionsQuery = sql`
-  select
-    symbol,
-    sum(case when side = 'BUY' then quantity else -quantity end)::int as net_quantity,
-    sum(case when side = 'BUY' then quantity else 0 end)::int as bought_quantity,
-    sum(case when side = 'SELL' then quantity else 0 end)::int as sold_quantity,
-    sum(case when side = 'BUY' then quantity * price else -quantity * price end)::numeric(18, 6)
-      as net_notional,
-    count(*)::int as trade_count
-  from trades
-  where status = 'ACTIVE'
-  group by symbol
-  order by symbol
-`
 
 export type TradeRow = typeof trades.$inferSelect
 export type TradeInsert = typeof trades.$inferInsert

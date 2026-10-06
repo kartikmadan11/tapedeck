@@ -19,6 +19,7 @@ const COLUMN_IDS = [
   'symbol',
   'side',
   'quantity',
+  'filledQuantity',
   'price',
   'notional',
   'trader',

@@ -2,9 +2,11 @@ import type {
   AmendTradeInput,
   CancelTradeInput,
   CreateTradeInput,
+  FillTradeInput,
   Position,
   ServerFrame,
   Trade,
+  TradeDeltaFrame,
   TradeEvent,
   TradeEventType,
   TradeQuery,
@@ -12,9 +14,10 @@ import type {
 import type { Bus } from '../bus.js'
 import type { ConsistentSnapshot, MutationResult, TradeRepository } from '../repositories/trades.js'
 
-const FRAME_TYPE: Record<TradeEventType, 'trade.created' | 'trade.amended' | 'trade.cancelled'> = {
+const FRAME_TYPE: Record<TradeEventType, TradeDeltaFrame['type']> = {
   CREATED: 'trade.created',
   AMENDED: 'trade.amended',
+  FILLED: 'trade.filled',
   CANCELLED: 'trade.cancelled',
 }
 
@@ -71,6 +74,10 @@ export class TradeService {
 
   async amendTrade(tradeId: string, input: AmendTradeInput, actor: string): Promise<Trade> {
     return this.publish(await this.repository.amendTrade(tradeId, input, actor))
+  }
+
+  async fillTrade(tradeId: string, input: FillTradeInput, actor: string): Promise<Trade> {
+    return this.publish(await this.repository.fillTrade(tradeId, input, actor))
   }
 
   async cancelTrade(tradeId: string, input: CancelTradeInput, actor: string): Promise<Trade> {

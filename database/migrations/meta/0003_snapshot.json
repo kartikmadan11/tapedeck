@@ -1,0 +1,337 @@
+{
+  "id": "8a2679e9-edf9-4677-aaab-3265cfd931d7",
+  "prevId": "2f5dfe1b-49ae-4809-ad06-263f2143e4cd",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.trade_events": {
+      "name": "trade_events",
+      "schema": "",
+      "columns": {
+        "seq": {
+          "name": "seq",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "trade_id": {
+          "name": "trade_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "trade_event_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "before": {
+          "name": "before",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "after": {
+          "name": "after",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor": {
+          "name": "actor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "at": {
+          "name": "at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "trade_events_trade_idx": {
+          "name": "trade_events_trade_idx",
+          "columns": [
+            {
+              "expression": "trade_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "seq",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "trade_events_trade_id_trades_trade_id_fk": {
+          "name": "trade_events_trade_id_trades_trade_id_fk",
+          "tableFrom": "trade_events",
+          "tableTo": "trades",
+          "columnsFrom": ["trade_id"],
+          "columnsTo": ["trade_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.trades": {
+      "name": "trades",
+      "schema": "",
+      "columns": {
+        "trade_id": {
+          "name": "trade_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "'TRD-' || lpad(nextval('trade_id_seq')::text, 6, '0')"
+        },
+        "symbol": {
+          "name": "symbol",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "side": {
+          "name": "side",
+          "type": "trade_side",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "quantity": {
+          "name": "quantity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "price": {
+          "name": "price",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "trader": {
+          "name": "trader",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "book": {
+          "name": "book",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "counterparty": {
+          "name": "counterparty",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "trade_timestamp": {
+          "name": "trade_timestamp",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "client_trade_id": {
+          "name": "client_trade_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "filled_quantity": {
+          "name": "filled_quantity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "status": {
+          "name": "status",
+          "type": "trade_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'NEW'"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "trades_symbol_idx": {
+          "name": "trades_symbol_idx",
+          "columns": [
+            {
+              "expression": "symbol",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trades_status_idx": {
+          "name": "trades_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trades_trader_idx": {
+          "name": "trades_trader_idx",
+          "columns": [
+            {
+              "expression": "trader",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trades_book_idx": {
+          "name": "trades_book_idx",
+          "columns": [
+            {
+              "expression": "book",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trades_timestamp_idx": {
+          "name": "trades_timestamp_idx",
+          "columns": [
+            {
+              "expression": "trade_timestamp",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            },
+            {
+              "expression": "trade_id",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trades_client_trade_id_key": {
+          "name": "trades_client_trade_id_key",
+          "columns": [
+            {
+              "expression": "client_trade_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "trades_status_matches_fill": {
+          "name": "trades_status_matches_fill",
+          "value": "\n        filled_quantity between 0 and quantity\n        and case status\n          when 'NEW' then filled_quantity = 0\n          when 'PARTIALLY_FILLED' then filled_quantity > 0 and filled_quantity < quantity\n          when 'FILLED' then filled_quantity = quantity\n          else true\n        end\n      "
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.trade_event_type": {
+      "name": "trade_event_type",
+      "schema": "public",
+      "values": ["CREATED", "AMENDED", "FILLED", "CANCELLED"]
+    },
+    "public.trade_side": {
+      "name": "trade_side",
+      "schema": "public",
+      "values": ["BUY", "SELL"]
+    },
+    "public.trade_status": {
+      "name": "trade_status",
+      "schema": "public",
+      "values": ["NEW", "PARTIALLY_FILLED", "FILLED", "CANCELLED"]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

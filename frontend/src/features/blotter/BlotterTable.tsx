@@ -878,7 +878,9 @@ function FilterBar({
         onChange={(event) => set('status', event.target.value)}
       >
         <option value="">Any status</option>
-        <option value="ACTIVE">ACTIVE</option>
+        <option value="NEW">NEW</option>
+        <option value="PARTIALLY_FILLED">PARTIALLY_FILLED</option>
+        <option value="FILLED">FILLED</option>
         <option value="CANCELLED">CANCELLED</option>
       </select>
     </div>

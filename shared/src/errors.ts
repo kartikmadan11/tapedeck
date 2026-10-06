@@ -143,3 +143,21 @@ export function invalidState(id: string, status: z.infer<typeof tradeStatus>): D
     details: { tradeId: id, status },
   })
 }
+
+/**
+ * A fill the trade's own quantities refuse: one that does not advance the
+ * cumulative total, or one that goes past what was booked. The same code as
+ * invalidState, because it is the same kind of refusal, but the reason is the
+ * fill rather than the status and the message has to say which.
+ */
+export function invalidFill(
+  id: string,
+  status: z.infer<typeof tradeStatus>,
+  reason: string,
+): DomainError {
+  return new DomainError({
+    code: 'INVALID_STATE',
+    message: `Trade ${id} cannot be filled: ${reason}`,
+    details: { tradeId: id, status },
+  })
+}

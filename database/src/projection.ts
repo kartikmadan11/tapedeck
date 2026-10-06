@@ -14,6 +14,7 @@ export function toTrade(row: TradeRow): Trade {
     symbol: row.symbol,
     side: row.side,
     quantity: row.quantity,
+    filledQuantity: row.filledQuantity,
     price: row.price as Trade['price'],
     trader: row.trader,
     book: row.book,

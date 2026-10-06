@@ -5,7 +5,7 @@ import type { FastifyInstance } from 'fastify'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { buildTestApp } from './helpers/app.js'
 import { resetDatabase, setupTestDatabase } from './helpers/db.js'
-import { createTrade, fillTrades, maxSeq, newTradeBody } from './helpers/fixtures.js'
+import { createTrade, insertTrades, maxSeq, newTradeBody } from './helpers/fixtures.js'
 
 let handle: DatabaseHandle
 let app: FastifyInstance
@@ -24,6 +24,15 @@ beforeEach(async () => {
   await resetDatabase(handle)
 })
 
+/** An execution report, which carries the cumulative total rather than a size. */
+function fill(tradeId: string, filledQuantity: number, version: number) {
+  return app.inject({
+    method: 'POST',
+    url: `/api/trades/${tradeId}/fills`,
+    payload: { filledQuantity, version },
+  })
+}
+
 describe('POST /api/trades', () => {
   it('books a trade with a readable id, version 1 and the price unchanged', async () => {
     const response = await app.inject({
@@ -36,7 +45,9 @@ describe('POST /api/trades', () => {
     expect(response.json()).toMatchObject({
       tradeId: 'TRD-100001',
       symbol: 'VOD',
-      status: 'ACTIVE',
+      // A booking is an order: nothing has executed yet.
+      status: 'NEW',
+      filledQuantity: 0,
       version: 1,
       // Not 72.465: the string the client sent is the string the client gets.
       price: '72.465000',
@@ -298,7 +309,7 @@ describe('GET /api/trades', () => {
   })
 
   it('windows to the blotter limit when the caller names none', async () => {
-    await fillTrades(handle, BLOTTER_LIMIT + 25)
+    await insertTrades(handle, BLOTTER_LIMIT + 25)
 
     const response = await app.inject({ method: 'GET', url: '/api/trades' })
 
@@ -358,7 +369,7 @@ describe('PATCH /api/trades/:tradeId', () => {
       // Asserted, not assumed: an amendment must not be able to move this.
       counterparty: created.counterparty,
       version: 2,
-      status: 'ACTIVE',
+      status: 'NEW',
     })
   })
 
@@ -428,6 +439,154 @@ describe('PATCH /api/trades/:tradeId', () => {
   })
 })
 
+describe('POST /api/trades/:tradeId/fills', () => {
+  it('reports a partial execution and leaves the trade working', async () => {
+    const created = await createTrade(app, { quantity: 10_000 })
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/trades/${created.tradeId}/fills`,
+      payload: { filledQuantity: 4_000, version: 1 },
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toMatchObject({
+      filledQuantity: 4_000,
+      status: 'PARTIALLY_FILLED',
+      version: 2,
+    })
+  })
+
+  it('completes the trade when the report reaches the booked quantity', async () => {
+    const created = await createTrade(app, { quantity: 10_000 })
+    await fill(created.tradeId, 4_000, 1)
+
+    const response = await fill(created.tradeId, 10_000, 2)
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toMatchObject({ filledQuantity: 10_000, status: 'FILLED', version: 3 })
+  })
+
+  /**
+   * The payload is the cumulative total, so a report delivered twice asks for a
+   * state the trade is already in. Refused rather than applied, because
+   * applying it would count the same execution against the position twice.
+   */
+  it('refuses a report that does not advance the total', async () => {
+    const created = await createTrade(app, { quantity: 10_000 })
+    await fill(created.tradeId, 4_000, 1)
+
+    const response = await fill(created.tradeId, 4_000, 2)
+
+    expect(response.statusCode).toBe(409)
+    expect(response.json()).toMatchObject({ code: 'INVALID_STATE' })
+  })
+
+  // Not clamped to the booked quantity: a venue reporting more than was booked
+  // is a reconciliation break, and silently rounding it off loses the break.
+  it('refuses an overfill', async () => {
+    const created = await createTrade(app, { quantity: 10_000 })
+
+    const response = await fill(created.tradeId, 12_000, 1)
+
+    expect(response.statusCode).toBe(409)
+  })
+
+  it('refuses a fill on a cancelled trade', async () => {
+    const created = await createTrade(app, { quantity: 10_000 })
+    await app.inject({
+      method: 'POST',
+      url: `/api/trades/${created.tradeId}/cancel`,
+      payload: { version: 1 },
+    })
+
+    const response = await fill(created.tradeId, 4_000, 2)
+
+    expect(response.statusCode).toBe(409)
+  })
+
+  it('refuses a stale version, so two reports cannot race', async () => {
+    const created = await createTrade(app, { quantity: 10_000 })
+    await fill(created.tradeId, 4_000, 1)
+
+    const response = await fill(created.tradeId, 8_000, 1)
+
+    expect(response.statusCode).toBe(409)
+    expect(response.json()).toMatchObject({ code: 'VERSION_CONFLICT' })
+  })
+
+  it('does not accept a status in the body', async () => {
+    const created = await createTrade(app, { quantity: 10_000 })
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/trades/${created.tradeId}/fills`,
+      payload: { filledQuantity: 4_000, version: 1, status: 'FILLED' },
+    })
+
+    expect(response.statusCode).toBe(400)
+  })
+
+  it('writes one FILLED event per report', async () => {
+    const created = await createTrade(app, { quantity: 10_000 })
+    await fill(created.tradeId, 4_000, 1)
+    await fill(created.tradeId, 10_000, 2)
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/trades/${created.tradeId}/events`,
+    })
+    const { events } = response.json()
+
+    expect(events.map((event: { eventType: string }) => event.eventType)).toEqual([
+      'CREATED',
+      'FILLED',
+      'FILLED',
+    ])
+  })
+
+  /**
+   * Amending below what has executed is a correction to an over-recorded
+   * execution, so the fill comes down with the booking rather than leaving a
+   * row whose status and fill disagree.
+   */
+  it('clamps the recorded fill when an amendment cuts the quantity under it', async () => {
+    const created = await createTrade(app, { quantity: 10_000 })
+    await fill(created.tradeId, 10_000, 1)
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/api/trades/${created.tradeId}`,
+      payload: { quantity: 6_000, price: '72.465000', version: 2 },
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toMatchObject({
+      quantity: 6_000,
+      filledQuantity: 6_000,
+      status: 'FILLED',
+    })
+  })
+
+  /** Amending upward re-opens the remainder, so the trade is working again. */
+  it('re-opens a filled trade when an amendment raises the quantity', async () => {
+    const created = await createTrade(app, { quantity: 10_000 })
+    await fill(created.tradeId, 10_000, 1)
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/api/trades/${created.tradeId}`,
+      payload: { quantity: 14_000, price: '72.465000', version: 2 },
+    })
+
+    expect(response.json()).toMatchObject({
+      quantity: 14_000,
+      filledQuantity: 10_000,
+      status: 'PARTIALLY_FILLED',
+    })
+  })
+})
+
 describe('POST /api/trades/:tradeId/cancel', () => {
   it('cancels an active trade and bumps the version', async () => {
     const created = await createTrade(app)
@@ -448,7 +607,7 @@ describe('POST /api/trades/:tradeId/cancel', () => {
     const response = await app.inject({
       method: 'POST',
       url: `/api/trades/${created.tradeId}/cancel`,
-      payload: { version: 1, status: 'ACTIVE' },
+      payload: { version: 1, status: 'FILLED' },
     })
 
     expect(response.statusCode).toBe(400)

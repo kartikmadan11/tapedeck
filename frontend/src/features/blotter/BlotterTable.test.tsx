@@ -13,12 +13,13 @@ function aTrade(overrides: Record<string, unknown> = {}): Trade {
     symbol: 'VOD',
     side: 'BUY',
     quantity: 10_000,
+    filledQuantity: 0,
     price: '72.465000',
     trader: 'k.madan',
     book: 'EQ-LDN-01',
     counterparty: 'GSIL',
     tradeTimestamp: '2026-10-02T09:15:00.000Z',
-    status: 'ACTIVE',
+    status: 'NEW',
     version: 1,
     updatedAt: '2026-10-02T09:15:00.000Z',
     ...overrides,
@@ -29,19 +30,23 @@ function aTrade(overrides: Record<string, unknown> = {}): Trade {
  * One book, deliberately arranged so the netting is checkable by hand:
  *
  *   net quantity   10,000 - 4,000               =      6,000
+ *   net filled      6,000 - 4,000               =      2,000
  *   net notional   724,650.00 - 292,400.00      = 432,250.00
  *   vwap           1,017,050 / 14,000           =    72.6464
  *
- * The cancelled leg is 5,000 at 70, which is large enough that including it
- * would move all three figures.
+ * The buy is half executed and the sell is done, so the filled net is a figure
+ * of its own rather than a copy of the booked one. The cancelled leg is 5,000 at
+ * 70, which is large enough that including it would move all four.
  */
 const BOOK = [
-  aTrade(),
+  aTrade({ filledQuantity: 6_000, status: 'PARTIALLY_FILLED' }),
   aTrade({
     tradeId: 'TRD-100002',
     side: 'SELL',
     quantity: 4_000,
+    filledQuantity: 4_000,
     price: '73.100000',
+    status: 'FILLED',
     tradeTimestamp: '2026-10-02T09:16:00.000Z',
   }),
   aTrade({
@@ -92,9 +97,9 @@ function tradeRow(tradeId: string): HTMLElement {
 
 /**
  * Notional's place among the visible columns, with the Trade column off:
- * symbol, side, price, quantity, notional, trader, book, ...
+ * symbol, side, price, quantity, filled, notional, trader, book, ...
  */
-const NOTIONAL = 4
+const NOTIONAL = 5
 
 /**
  * Every column heading on screen. The sort marker is a child of the heading it
@@ -113,6 +118,7 @@ const UNGROUPED = [
   'Side',
   'Price',
   'Quantity',
+  'Filled',
   'Notional',
   'Trader',
   'Book',
@@ -122,7 +128,7 @@ const UNGROUPED = [
 ]
 
 /** What a group row can answer for, and so what grouping leaves on screen. */
-const NETTED = ['Price', 'Quantity', 'Notional']
+const NETTED = ['Price', 'Quantity', 'Filled', 'Notional']
 
 /** The pane itself, which is what carries its own menu. */
 const paneRegion = (): HTMLElement => screen.getByRole('region', { name: 'Trades' })
@@ -178,7 +184,7 @@ describe('grouping and aggregation', () => {
     set('Group by', 'symbol')
 
     // A group of forty trades has no one counterparty and no one timestamp, so
-    // seven of the ten would be an empty cell on every group row.
+    // seven of the eleven would be an empty cell on every group row.
     expect(headers()).toEqual(['Symbol', ...NETTED])
   })
 
@@ -194,6 +200,7 @@ describe('grouping and aggregation', () => {
       '▸VOD(2)',
       '72.6464',
       '6,000',
+      '2,000',
       '432,250.00',
     ])
   })
@@ -325,6 +332,7 @@ describe('grouping and aggregation', () => {
       '▸EQ-LDN-01(2)',
       '72.6464',
       '6,000',
+      '2,000',
       '432,250.00',
     ])
   })
@@ -420,10 +428,10 @@ describe('virtualisation', () => {
     // Fixed layout takes the widths from here, so a colgroup that disagreed
     // with the body would shift every column after the hidden one.
     const widths = (): number => document.querySelectorAll('colgroup col').length
-    expect(widths()).toBe(10)
+    expect(widths()).toBe(11)
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'Book' }))
-    expect(widths()).toBe(9)
+    expect(widths()).toBe(10)
   })
 })
 
@@ -600,6 +608,7 @@ describe('the configuration panel', () => {
       'Side',
       'Price',
       'Quantity',
+      'Filled',
       'Notional',
       'Trader',
       'Book',
@@ -615,6 +624,7 @@ describe('the configuration panel', () => {
       'side',
       'price',
       'quantity',
+      'filledQuantity',
       'notional',
       'trader',
       'book',
@@ -663,7 +673,7 @@ describe('the configuration panel', () => {
 
     // The group label and the expander ride the grouped column, so it has to be
     // the first one on the row.
-    expect(headers()).toEqual(['Symbol', 'Notional', 'Price', 'Quantity'])
+    expect(headers()).toEqual(['Symbol', 'Notional', 'Price', 'Quantity', 'Filled'])
   })
 
   it('filters on a floor the top bar does not offer', () => {

@@ -7,17 +7,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createQueryClient } from '../../lib/queryClient.js'
 import { AmendDialog } from './AmendDialog.js'
 
-const ACTIVE: Trade = tradeSchema.parse({
+const WORKING: Trade = tradeSchema.parse({
   tradeId: 'TRD-100001',
   symbol: 'VOD',
   side: 'BUY',
   quantity: 10_000,
+  filledQuantity: 0,
   price: '72.465000',
   trader: 'k.madan',
   book: 'EQ-LDN-01',
   counterparty: 'GSIL',
   tradeTimestamp: '2026-10-02T09:15:00.000Z',
-  status: 'ACTIVE',
+  status: 'NEW',
   version: 1,
   updatedAt: '2026-10-02T09:15:00.000Z',
 })
@@ -28,7 +29,7 @@ function renderDialog(onClose = vi.fn()): { onClose: ReturnType<typeof vi.fn> } 
   const client = createQueryClient()
   const tree = (
     <QueryClientProvider client={client}>
-      <AmendDialog trade={ACTIVE} onClose={onClose} />
+      <AmendDialog trade={WORKING} onClose={onClose} />
     </QueryClientProvider>
   ) as ReactElement
 
@@ -65,7 +66,7 @@ describe('AmendDialog', () => {
         return Promise.resolve(emptyBlotterResponses())
       }
       return Promise.resolve(
-        new Response(JSON.stringify({ ...ACTIVE, quantity: 5_000, version: 2 }), { status: 200 }),
+        new Response(JSON.stringify({ ...WORKING, quantity: 5_000, version: 2 }), { status: 200 }),
       )
     })
 

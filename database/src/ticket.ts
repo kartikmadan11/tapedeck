@@ -26,3 +26,13 @@ export function ticketSize(lotSize: number, rng: Rng): number {
   const lots = rng.int(1, 8)
   return lotSize * lots
 }
+
+/**
+ * How much of a ticket one execution fills, in whole lots, since that is how
+ * fills arrive. Stops short of the ticket where there are lots to stop short at,
+ * so the caller gets a partial fill; a one-lot ticket fills in a single go.
+ */
+export function partialFill(quantity: number, lotSize: number, rng: Rng): number {
+  const lots = Math.floor(quantity / lotSize)
+  return lots > 1 ? lotSize * rng.int(1, lots - 1) : quantity
+}

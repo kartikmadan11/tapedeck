@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import type { Trade, TradeEvent } from '@tapedeck/shared'
+import type { Trade, TradeEvent, TradeEventType } from '@tapedeck/shared'
 import type { ReactElement } from 'react'
 import { useEffect } from 'react'
 import { ErrorNotice } from '../../components/ErrorNotice.js'
@@ -64,11 +64,7 @@ function EventCard({ event }: { event: TradeEvent }): ReactElement {
   return (
     <li className="rounded-sm border border-tape-line bg-tape-bg p-2">
       <div className="flex items-baseline justify-between gap-2">
-        <span
-          className={`font-semibold tracking-[0.1em] ${
-            event.eventType === 'CANCELLED' ? 'text-tape-sell' : ''
-          }`}
-        >
+        <span className={`font-semibold tracking-[0.1em] ${EVENT_COLOUR[event.eventType] ?? ''}`}>
           {event.eventType}
         </span>
         {/* Not MICRO_LABEL: this line carries an actor's name, which is not
@@ -103,8 +99,24 @@ function EventCard({ event }: { event: TradeEvent }): ReactElement {
   )
 }
 
-/** The fields an amendment or a cancellation can move. */
-const TRACKED = ['quantity', 'price', 'counterparty', 'status', 'version'] as const
+/**
+ * The events that are not the ordinary course. The same colours the status
+ * column uses, so a struck trade reads the same in both places.
+ */
+const EVENT_COLOUR: Partial<Record<TradeEventType, string>> = {
+  FILLED: 'text-tape-buy',
+  CANCELLED: 'text-tape-sell',
+}
+
+/** The fields a mutation can move. */
+const TRACKED = [
+  'quantity',
+  'filledQuantity',
+  'price',
+  'counterparty',
+  'status',
+  'version',
+] as const
 
 type Change = { field: string; before: string; after: string }
 

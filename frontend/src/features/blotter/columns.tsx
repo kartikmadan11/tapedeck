@@ -1,6 +1,6 @@
 import type { ColumnDef, Row, RowData, VisibilityState } from '@tanstack/react-table'
 import { createColumnHelper } from '@tanstack/react-table'
-import type { DecimalString, Trade } from '@tapedeck/shared'
+import type { DecimalString, Trade, TradeStatus } from '@tapedeck/shared'
 import {
   compareDecimal,
   decimalString,
@@ -59,7 +59,7 @@ const NUMERIC = 'text-right tabular-nums'
  * widths from the colgroup and never measures a cell.
  *
  * The numbers are the widest value each column holds, in Geist Mono at 13px,
- * plus the cell's own px-1.5, and total 1,340px.
+ * plus the cell's own px-1.5, and total 1,500px.
  */
 
 /**
@@ -82,6 +82,17 @@ export const DEFAULT_COLUMN: Partial<ColumnDef<Trade>> = {
  */
 function activeLegs(leafRows: Row<Trade>[]): Trade[] {
   return leafRows.filter((row) => row.original.status !== 'CANCELLED').map((row) => row.original)
+}
+
+/**
+ * Status by what it asks of a trader. The two working states are the ones left
+ * to chase, so they carry a colour; done is green and struck is red.
+ */
+const STATUS_COLOUR: Record<TradeStatus, string> = {
+  NEW: 'text-tape-accent',
+  PARTIALLY_FILLED: 'text-tape-warn',
+  FILLED: 'text-tape-buy',
+  CANCELLED: 'text-tape-sell',
 }
 
 /** Matches the positions panel: a net short reads in the sell colour. */
@@ -213,6 +224,31 @@ export function createColumns() {
       },
     }),
 
+    helper.accessor('filledQuantity', {
+      header: 'Filled',
+      size: 120,
+      meta: { className: NUMERIC },
+      // Every value repeats a quantity, so grouping by it would group by nothing.
+      enableGrouping: false,
+      // Muted at zero: nothing has executed, and the figure to read is the
+      // booked quantity beside it.
+      cell: (info) => {
+        const value = info.getValue()
+        return value === 0 ? <span className="text-tape-muted">0</span> : formatQuantity(value)
+      },
+      /**
+       * Net executed quantity: the same netting the Quantity column does, over
+       * what traded rather than over what was booked. The two columns read
+       * together are the group's remaining exposure.
+       */
+      aggregationFn: (_columnId, leafRows) =>
+        netQuantity(activeLegs(leafRows).map((leg) => ({ ...leg, quantity: leg.filledQuantity }))),
+      aggregatedCell: (info) => {
+        const net = info.getValue<number>()
+        return netFigure(formatQuantity(net), net < 0)
+      },
+    }),
+
     // Computed in bigint minor units, so the column agrees with the positions
     // panel to the last place rather than approximately.
     helper.accessor((row) => notional(row.quantity, row.price), {
@@ -242,23 +278,18 @@ export function createColumns() {
     helper.accessor('counterparty', { header: 'Counterparty', size: 160 }),
 
     helper.accessor('status', {
+      // Wide enough for PARTIALLY_FILLED spelled out. The FIX name is what a
+      // trader and an upstream system both call it, so it is not abbreviated.
       header: 'Status',
-      size: 120,
+      size: 160,
       // The dot is an element and the label a bare text node, so the queries
       // that look up a row by its status still read exactly one word.
-      cell: (info) => {
-        const cancelled = info.getValue() === 'CANCELLED'
-        return (
-          <span
-            className={`inline-flex items-center gap-1.5 ${
-              cancelled ? 'text-tape-sell' : 'text-tape-muted'
-            }`}
-          >
-            <span aria-hidden="true" className="size-1.5 rounded-full bg-current" />
-            {cancelled ? 'CANCELLED' : 'ACTIVE'}
-          </span>
-        )
-      },
+      cell: (info) => (
+        <span className={`inline-flex items-center gap-1.5 ${STATUS_COLOUR[info.getValue()]}`}>
+          <span aria-hidden="true" className="size-1.5 rounded-full bg-current" />
+          {info.getValue()}
+        </span>
+      ),
     }),
 
     helper.accessor('version', {

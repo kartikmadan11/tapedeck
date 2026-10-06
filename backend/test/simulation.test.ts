@@ -4,6 +4,8 @@ import {
   type CancelTradeInput,
   type CreateTradeInput,
   createTradeInput,
+  type FillTradeInput,
+  fillTradeInput,
   type ServerFrame,
   type Trade,
   versionConflict,
@@ -22,12 +24,13 @@ function aTrade(overrides: Partial<Trade> = {}): Trade {
     symbol: 'VOD',
     side: 'BUY',
     quantity: 10_000,
+    filledQuantity: 0,
     price: '72.465000' as Trade['price'],
     trader: 'k.madan',
     book: 'EQ-LDN-01',
     counterparty: 'HSBC',
     tradeTimestamp: '2026-10-03T09:15:00.000Z',
-    status: 'ACTIVE',
+    status: 'NEW',
     version: 1,
     updatedAt: '2026-10-03T09:15:00.000Z',
     ...overrides,
@@ -43,16 +46,20 @@ function fakeLog(): FastifyBaseLogger {
 type Writes = {
   create: ReturnType<typeof vi.fn>
   amend: ReturnType<typeof vi.fn>
+  fill: ReturnType<typeof vi.fn>
   cancel: ReturnType<typeof vi.fn>
 }
 
 function buildSimulator(
-  active: Trade[],
+  open: Trade[],
   overrides: { seed?: number; maxTrades?: number; create?: () => Promise<Trade> } = {},
 ) {
   const writes: Writes = {
     create: vi.fn(overrides.create ?? (() => Promise.resolve(aTrade()))),
     amend: vi.fn(() => Promise.resolve(aTrade({ version: 2 }))),
+    fill: vi.fn(() =>
+      Promise.resolve(aTrade({ filledQuantity: 10_000, status: 'FILLED', version: 2 })),
+    ),
     cancel: vi.fn(() => Promise.resolve(aTrade({ status: 'CANCELLED', version: 2 }))),
   }
   const bus = createBus()
@@ -65,9 +72,10 @@ function buildSimulator(
     rng: new Rng(overrides.seed ?? 1),
     log: fakeLog(),
     bus,
-    listActive: () => Promise.resolve(active),
+    listOpen: () => Promise.resolve(open),
     create: writes.create as unknown as (i: CreateTradeInput, a: string) => Promise<Trade>,
     amend: writes.amend as unknown as (t: string, i: AmendTradeInput, a: string) => Promise<Trade>,
+    fill: writes.fill as unknown as (t: string, i: FillTradeInput, a: string) => Promise<Trade>,
     cancel: writes.cancel as unknown as (
       t: string,
       i: CancelTradeInput,
@@ -79,7 +87,7 @@ function buildSimulator(
 }
 
 describe('nextAction', () => {
-  it('books when there is nothing to amend or cancel', () => {
+  it('books when there is nothing on the tape to work', () => {
     const action = nextAction([], 900, new Rng(7))
     expect(action.kind).toBe('create')
   })
@@ -96,25 +104,25 @@ describe('nextAction', () => {
     }
   })
 
-  it('stops booking at the cap and only amends or cancels', () => {
-    const active = [aTrade({ tradeId: 'TRD-100001' }), aTrade({ tradeId: 'TRD-100002' })]
+  it('stops booking at the cap and only works what is already there', () => {
+    const open = [aTrade({ tradeId: 'TRD-100001' }), aTrade({ tradeId: 'TRD-100002' })]
 
     // Many seeds, because the point is that no seed can reach the create branch.
     for (let seed = 1; seed <= 200; seed += 1) {
-      const action = nextAction(active, active.length, new Rng(seed))
+      const action = nextAction(open, open.length, new Rng(seed))
       expect(action.kind).not.toBe('create')
     }
   })
 
   it('targets a real trade at its current version', () => {
-    const active = [
+    const open = [
       aTrade({ tradeId: 'TRD-100001', version: 3 }),
       aTrade({ tradeId: 'TRD-100002', version: 7 }),
     ]
-    const versions = new Map(active.map((trade) => [trade.tradeId, trade.version]))
+    const versions = new Map(open.map((trade) => [trade.tradeId, trade.version]))
 
     for (let seed = 1; seed <= 200; seed += 1) {
-      const action = nextAction(active, active.length, new Rng(seed))
+      const action = nextAction(open, open.length, new Rng(seed))
       if (action.kind === 'create') {
         throw new Error('unreachable at the cap')
       }
@@ -125,9 +133,9 @@ describe('nextAction', () => {
   })
 
   it('never amends symbol or side', () => {
-    const active = [aTrade()]
+    const open = [aTrade()]
     for (let seed = 1; seed <= 100; seed += 1) {
-      const action = nextAction(active, active.length, new Rng(seed))
+      const action = nextAction(open, open.length, new Rng(seed))
       if (action.kind !== 'amend') {
         continue
       }
@@ -136,20 +144,44 @@ describe('nextAction', () => {
     }
   })
 
-  it('produces all three kinds across a run', () => {
-    const active = [aTrade({ tradeId: 'TRD-100001' }), aTrade({ tradeId: 'TRD-100002' })]
+  it('produces all four kinds across a run', () => {
+    const open = [aTrade({ tradeId: 'TRD-100001' }), aTrade({ tradeId: 'TRD-100002' })]
     const rng = new Rng(42)
     const kinds = new Set<string>()
     for (let i = 0; i < 300; i += 1) {
-      kinds.add(nextAction(active, 900, rng).kind)
+      kinds.add(nextAction(open, 900, rng).kind)
     }
-    expect([...kinds].sort()).toEqual(['amend', 'cancel', 'create'])
+    expect([...kinds].sort()).toEqual(['amend', 'cancel', 'create', 'fill'])
+  })
+
+  it('reports a cumulative fill the write path will accept', () => {
+    // Part filled already, so a report that restated the total rather than
+    // advancing it would be refused as a duplicate execution.
+    const open = [aTrade({ quantity: 10_000, filledQuantity: 4_000, status: 'PARTIALLY_FILLED' })]
+
+    for (let seed = 1; seed <= 200; seed += 1) {
+      const action = nextAction(open, open.length, new Rng(seed))
+      if (action.kind !== 'fill') {
+        continue
+      }
+      expect(() => fillTradeInput.parse(action.input)).not.toThrow()
+      expect(action.input.filledQuantity).toBeGreaterThan(4_000)
+      expect(action.input.filledQuantity).toBeLessThanOrEqual(10_000)
+    }
+  })
+
+  it('never reports a fill against a trade that has nothing left to execute', () => {
+    const done = [aTrade({ filledQuantity: 10_000, status: 'FILLED' })]
+
+    for (let seed = 1; seed <= 200; seed += 1) {
+      expect(nextAction(done, done.length, new Rng(seed)).kind).not.toBe('fill')
+    }
   })
 
   it('keeps the quantity when the symbol is not in the reference data', () => {
-    const active = [aTrade({ symbol: 'WEIRD', quantity: 1234 })]
+    const open = [aTrade({ symbol: 'WEIRD', quantity: 1234 })]
     for (let seed = 1; seed <= 100; seed += 1) {
-      const action = nextAction(active, active.length, new Rng(seed))
+      const action = nextAction(open, open.length, new Rng(seed))
       if (action.kind === 'amend') {
         expect(action.input.quantity).toBe(1234)
       }
@@ -176,12 +208,16 @@ describe('simulator', () => {
     expect(input.trader.length).toBeGreaterThan(0)
   })
 
-  it('amends or cancels an existing trade when at the cap', async () => {
+  it('works an existing trade rather than booking when at the cap', async () => {
     const { simulator, writes } = buildSimulator([aTrade()], { maxTrades: 1 })
     await simulator.runOnce()
 
     expect(writes.create).not.toHaveBeenCalled()
-    expect(writes.amend.mock.calls.length + writes.cancel.mock.calls.length).toBe(1)
+    expect(
+      writes.amend.mock.calls.length +
+        writes.fill.mock.calls.length +
+        writes.cancel.mock.calls.length,
+    ).toBe(1)
   })
 
   it('publishes nothing of its own: frames come from the write path', async () => {

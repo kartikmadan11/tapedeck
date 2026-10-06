@@ -3,6 +3,7 @@ import {
   BLOTTER_LIMIT,
   cancelTradeInput,
   createTradeInput,
+  fillTradeInput,
   notFound,
   tradeId as tradeIdSchema,
   tradeQuery,
@@ -67,6 +68,17 @@ export function registerTradeRoutes(app: FastifyInstance): void {
     const { tradeId } = tradeIdParams.parse(request.params)
     const input = amendTradeInput.parse(request.body)
     return app.tradeService.amendTrade(tradeId, input, actorOf(request.headers))
+  })
+
+  /**
+   * An execution report. A sub-resource too, and for the stronger reason: the
+   * body carries the cumulative quantity filled and the status follows from it,
+   * so there is no field here for a client to patch.
+   */
+  app.post('/api/trades/:tradeId/fills', async (request) => {
+    const { tradeId } = tradeIdParams.parse(request.params)
+    const input = fillTradeInput.parse(request.body)
+    return app.tradeService.fillTrade(tradeId, input, actorOf(request.headers))
   })
 
   /** A sub-resource action, not a status patch: status is not a field a client sets. */

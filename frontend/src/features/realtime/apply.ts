@@ -85,6 +85,7 @@ export function apply(state: BlotterState, frame: ServerFrame): BlotterState {
 
     case 'trade.created':
     case 'trade.amended':
+    case 'trade.filled':
     case 'trade.cancelled':
       // Not <: a frame at the current cursor is one already applied.
       if (frame.seq <= state.seq) {
@@ -121,6 +122,7 @@ export function isTradeDelta(frame: ServerFrame): frame is TradeDeltaFrame {
   return (
     frame.type === 'trade.created' ||
     frame.type === 'trade.amended' ||
+    frame.type === 'trade.filled' ||
     frame.type === 'trade.cancelled'
   )
 }

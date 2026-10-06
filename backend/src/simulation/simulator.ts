@@ -3,6 +3,7 @@ import type {
   AmendTradeInput,
   CancelTradeInput,
   CreateTradeInput,
+  FillTradeInput,
   SimulationState,
   Trade,
 } from '@tapedeck/shared'
@@ -19,9 +20,11 @@ export interface SimulatorOptions {
   rng: Rng
   log: FastifyBaseLogger
   bus: Bus
-  listActive: () => Promise<Trade[]>
+  /** Every trade a write can still touch, so everything but the cancelled. */
+  listOpen: () => Promise<Trade[]>
   create: (input: CreateTradeInput, actor: string) => Promise<Trade>
   amend: (tradeId: string, input: AmendTradeInput, actor: string) => Promise<Trade>
+  fill: (tradeId: string, input: FillTradeInput, actor: string) => Promise<Trade>
   cancel: (tradeId: string, input: CancelTradeInput, actor: string) => Promise<Trade>
 }
 
@@ -50,8 +53,8 @@ export function createSimulator(options: SimulatorOptions): Simulator {
   }
 
   async function runOnce(): Promise<void> {
-    const active = await options.listActive()
-    const action = nextAction(active, maxTrades, rng)
+    const open = await options.listOpen()
+    const action = nextAction(open, maxTrades, rng)
 
     switch (action.kind) {
       case 'create':
@@ -59,6 +62,9 @@ export function createSimulator(options: SimulatorOptions): Simulator {
         return
       case 'amend':
         await options.amend(action.tradeId, action.input, SIMULATOR_ACTOR)
+        return
+      case 'fill':
+        await options.fill(action.tradeId, action.input, SIMULATOR_ACTOR)
         return
       case 'cancel':
         await options.cancel(action.tradeId, action.input, SIMULATOR_ACTOR)

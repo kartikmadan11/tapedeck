@@ -1,47 +1,60 @@
 import { BOOKS, INSTRUMENTS, type Rng, TRADERS, ticketSize, walkPrice } from '@tapedeck/database'
-import type { AmendTradeInput, CancelTradeInput, CreateTradeInput, Trade } from '@tapedeck/shared'
-import { COUNTERPARTIES } from '@tapedeck/shared'
+import type {
+  AmendTradeInput,
+  CancelTradeInput,
+  CreateTradeInput,
+  FillTradeInput,
+  Trade,
+} from '@tapedeck/shared'
+import { COUNTERPARTIES, isWorking } from '@tapedeck/shared'
 
 /** What the feed does on one tick. */
 export type SimulationAction =
   | { kind: 'create'; input: CreateTradeInput }
   | { kind: 'amend'; tradeId: string; input: AmendTradeInput }
+  | { kind: 'fill'; tradeId: string; input: FillTradeInput }
   | { kind: 'cancel'; tradeId: string; input: CancelTradeInput }
 
-/** Mostly new trades with a trickle of corrections. */
-const CREATE_WEIGHT = 0.7
-const AMEND_WEIGHT = 0.2
+/**
+ * Bookings and executions carry the feed, with a trickle of corrections. Fills
+ * outweigh amendments and cancellations together because a desk executes far
+ * more than it re-books. Cancel takes the remainder.
+ */
+const CREATE_WEIGHT = 0.46
+const FILL_WEIGHT = 0.34
+const AMEND_WEIGHT = 0.13
 
-/** Of the amend-or-cancel remainder, how much is an amend. Mirrors 0.2 : 0.1. */
-const AMEND_SHARE = AMEND_WEIGHT / (AMEND_WEIGHT + (1 - CREATE_WEIGHT - AMEND_WEIGHT))
+/** How often an execution closes the ticket rather than leaving a remainder. */
+const COMPLETE_SHARE = 0.55
 
 /**
- * Chooses the next write. Pure: no clock, no database, no timers. At
- * `maxTrades` the create branch is dropped and the weights fall back to amend
- * and cancel, so the table stops growing.
+ * Chooses the next write. Pure: no clock, no database, no timers.
+ *
+ * `open` is every trade a write can still touch. At `maxTrades` the booking
+ * band is skipped and its share goes to the three writes against trades
+ * already on the tape, so the table stops growing.
  */
-export function nextAction(
-  active: readonly Trade[],
-  maxTrades: number,
-  rng: Rng,
-): SimulationAction {
-  // Nothing to amend or cancel, so the only legal move is to book.
-  if (active.length === 0) {
+export function nextAction(open: readonly Trade[], maxTrades: number, rng: Rng): SimulationAction {
+  // Nothing on the tape, so the only legal move is to book.
+  if (open.length === 0) {
     return { kind: 'create', input: createInput(rng) }
   }
 
-  if (active.length >= maxTrades) {
-    return rng.chance(AMEND_SHARE) ? amendAction(active, rng) : cancelAction(active, rng)
-  }
+  const roll =
+    open.length >= maxTrades ? CREATE_WEIGHT + rng.next() * (1 - CREATE_WEIGHT) : rng.next()
 
-  const roll = rng.next()
   if (roll < CREATE_WEIGHT) {
     return { kind: 'create', input: createInput(rng) }
   }
-  if (roll < CREATE_WEIGHT + AMEND_WEIGHT) {
-    return amendAction(active, rng)
+  if (roll < CREATE_WEIGHT + FILL_WEIGHT) {
+    const working = open.filter(isWorking)
+    // A book with nothing left to execute amends instead of skipping the tick.
+    return working.length > 0 ? fillAction(working, rng) : amendAction(open, rng)
   }
-  return cancelAction(active, rng)
+  if (roll < CREATE_WEIGHT + FILL_WEIGHT + AMEND_WEIGHT) {
+    return amendAction(open, rng)
+  }
+  return cancelAction(open, rng)
 }
 
 /**
@@ -82,17 +95,46 @@ function amendAction(active: readonly Trade[], rng: Rng): SimulationAction {
   }
 }
 
-function cancelAction(active: readonly Trade[], rng: Rng): SimulationAction {
-  const target = rng.pick(active)
+/** Picked from the working trades only, since a filled one cannot fill again. */
+function fillAction(working: readonly Trade[], rng: Rng): SimulationAction {
+  const target = rng.pick(working)
+  return {
+    kind: 'fill',
+    tradeId: target.tradeId,
+    input: { filledQuantity: nextFill(target, rng), version: target.version },
+  }
+}
+
+function cancelAction(open: readonly Trade[], rng: Rng): SimulationAction {
+  const target = rng.pick(open)
   return { kind: 'cancel', tradeId: target.tradeId, input: { version: target.version } }
 }
 
 /**
- * Re-rolls the ticket against the instrument's lot size. A hand-booked trade can
- * carry a symbol outside the reference list, so an unknown instrument keeps the
- * existing quantity.
+ * The cumulative total after this execution: either the rest of the ticket or a
+ * whole-lot step beyond what has already filled, so a trade can report twice
+ * before it completes. Always advances, which is what the write path demands.
+ */
+function nextFill(target: Trade, rng: Rng): number {
+  const remaining = target.quantity - target.filledQuantity
+  const lotSize = lotSizeOf(target.symbol) ?? remaining
+  const lots = Math.floor(remaining / lotSize)
+  if (lots <= 1 || rng.chance(COMPLETE_SHARE)) {
+    return target.quantity
+  }
+  return target.filledQuantity + lotSize * rng.int(1, lots - 1)
+}
+
+/**
+ * Re-rolls the ticket against the instrument's lot size. An unknown instrument
+ * keeps the existing quantity.
  */
 function resize(target: Trade, rng: Rng): number {
-  const instrument = INSTRUMENTS.find((candidate) => candidate.symbol === target.symbol)
-  return instrument === undefined ? target.quantity : ticketSize(instrument.lotSize, rng)
+  const lotSize = lotSizeOf(target.symbol)
+  return lotSize === undefined ? target.quantity : ticketSize(lotSize, rng)
+}
+
+/** Undefined for a symbol outside the reference list, which a trade may carry. */
+function lotSizeOf(symbol: string): number | undefined {
+  return INSTRUMENTS.find((candidate) => candidate.symbol === symbol)?.lotSize
 }
