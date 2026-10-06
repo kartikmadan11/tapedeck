@@ -29,11 +29,11 @@ changed underneath it, and which version it is now on.
 configuration, a reset, a workspace link and a close. Holding **Shift** gives
 the browser its own menu back.
 
-**The check worth making.** Pause the feed and set **Group by** to symbol.
-While the book still fits the 500-row window, every group row's net quantity
-and net notional equal the positions panel's row for that symbol, digit for
-digit: one in `bigint` in the browser, the other in `numeric` in Postgres. Past
-500 trades the panel stays firm-wide and the grid is a window, so they differ.
+**The check worth making.** Pause the feed and set **Group by** to symbol. Every
+group row's net quantity and net notional equal the positions panel's row for
+that symbol, digit for digit: one in `bigint` in the browser, the other in
+`numeric` in Postgres. The seed is 400 trades against a 500-row window, so it
+holds from a fresh start until the feed books 100 more, then legitimately stops.
 
 ## Architecture decisions
 
@@ -142,8 +142,8 @@ Postgres is published on **5433** so it will not collide with one already
 running on the reviewer's machine: inside the compose network the API uses
 `db:5432`, and anything on the host uses `localhost:5433`.
 
-The seed is deterministic: every run starts from the same 500 trades across 12
-symbols, 83 amended, 32 cancelled, 615 events. `SIMULATION_ENABLED=false` holds
+The seed is deterministic: every run starts from the same 400 trades across 12
+symbols, 69 amended, 25 cancelled, 494 events. `SIMULATION_ENABLED=false` holds
 the blotter at exactly that state.
 
 ## How to run tests

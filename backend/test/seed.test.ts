@@ -11,7 +11,7 @@ let handle: DatabaseHandle
 let app: FastifyInstance
 let summary: SeedSummary
 
-// Seeded once for the whole file: 500 trades through the real write path is the
+// Seeded once for the whole file: 400 trades through the real write path is the
 // expensive part, and every assertion here is read-only.
 beforeAll(async () => {
   handle = await setupTestDatabase()
@@ -27,7 +27,7 @@ afterAll(async () => {
 
 describe('the seeded dataset', () => {
   it('is deterministic, so the README can quote its counts', () => {
-    expect(summary).toEqual({ trades: 500, amended: 83, cancelled: 32, events: 615 })
+    expect(summary).toEqual({ trades: 400, amended: 69, cancelled: 25, events: 494 })
     expect(summary.events).toBe(summary.trades + summary.amended + summary.cancelled)
   })
 
@@ -79,7 +79,7 @@ describe('the seeded dataset', () => {
 
     // Gap-free only because every write took the advisory lock: a bigserial on
     // its own leaves holes wherever a transaction rolled back.
-    expect(row).toMatchObject({ rows: 615, lowest: 1, highest: 615 })
+    expect(row).toMatchObject({ rows: 494, lowest: 1, highest: 494 })
   })
 
   it('issues contiguous readable ids from TRD-100001', async () => {
@@ -91,8 +91,8 @@ describe('the seeded dataset', () => {
 
     expect(result.rows[0]).toMatchObject({
       lowest: 'TRD-100001',
-      highest: 'TRD-100500',
-      unique_ids: 500,
+      highest: 'TRD-100400',
+      unique_ids: 400,
     })
   })
 
@@ -128,12 +128,12 @@ describe('the seeded dataset', () => {
 })
 
 describe('the seeded dataset over the API', () => {
-  it('satisfies the shared trade contract for all 500 rows', async () => {
+  it('satisfies the shared trade contract for all 400 rows', async () => {
     const response = await app.inject({ method: 'GET', url: '/api/trades' })
     const body = response.json()
 
-    expect(body.seq).toBe(615)
-    expect(body.trades).toHaveLength(500)
+    expect(body.seq).toBe(494)
+    expect(body.trades).toHaveLength(400)
     // Parsed, not spot-checked: one bad row fails here.
     for (const row of body.trades) {
       trade.parse(row)

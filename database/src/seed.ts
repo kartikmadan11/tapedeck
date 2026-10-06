@@ -12,7 +12,13 @@ import { ticketSize, walkPrice } from './ticket.js'
 // Deterministic, so the blotter matches the counts quoted in the README.
 // Changing SEED invalidates those counts.
 const SEED = 20_261_002
-const TRADE_COUNT = 500
+
+// Under BLOTTER_LIMIT, not equal to it. At 500 the seeded book filled the
+// 500-row window exactly, so the generated feed's first booking pushed the
+// oldest trade out of it and the group rows stopped equalling the positions
+// panel two seconds after boot. The headroom is what makes that check
+// reproducible for as long as it takes to open the app and pause the feed.
+const TRADE_COUNT = 400
 
 /** Fraction of trades later amended, and separately, later cancelled. */
 const AMEND_RATE = 0.18
