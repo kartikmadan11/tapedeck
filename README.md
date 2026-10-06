@@ -195,6 +195,12 @@ Each of these is argued at length in [`docs/DECISIONS.md`](docs/DECISIONS.md).
   `BLOTTER_LIMIT` lives in `shared` because the REST read, the handshake
   snapshot and the cache trim have to agree. Positions stay firm-wide, being a
   fact about the book rather than about what is on screen.
+- **P&L is marked against the instrument master's reference price, not a market
+  price.** The brief asks for aggregate P&L by symbol and supplies no market
+  data. A reference price is a static indicative level, so the figure moves when
+  the book moves rather than when the market does, and the column is headed
+  `P&L vs ref` rather than `P&L`. A symbol the master no longer carries reads as
+  a dash rather than as a zero, since a zero there would mean a flat position.
 - **Symbol, book and counterparty are all picklists over reference data**, so a
   booking cannot name an instrument that does not exist: the ticker is resolved
   against an instrument master that the API, the form and the feed all read from

@@ -71,11 +71,8 @@ function open(): void {
   act(() => FakeSocket.live.onopen?.())
 }
 
-/**
- * React Query flushes cache notifications on a timer rather than inline, which
- * act() does not wait for, so everything a delivered frame changes is asserted
- * with findBy or waitFor rather than read straight afterwards.
- */
+/** React Query flushes cache notifications on a timer that act() does not wait for,
+ *  so assert what a frame changed with findBy or waitFor, not a straight read. */
 function deliver(frame: ServerFrame): void {
   act(() => FakeSocket.live.onmessage?.({ data: JSON.stringify(frame) }))
 }
@@ -86,8 +83,8 @@ const SIMULATION_INTERVAL_MS = 2_000
 
 function respondWith(trades: Trade[], positions: Position[], seq: number, running = false): void {
   fetchMock.mockImplementation((url: string, init?: RequestInit) => {
-    // Matched on the url before the method, because this endpoint is both read
-    // and written and a POST here does not answer with a trade.
+    // Url before method: this endpoint is read and written, and a POST here does
+    // not answer with a trade.
     if (url.startsWith('/api/simulation')) {
       const body = init?.body === undefined ? null : JSON.parse(init.body as string)
       return Promise.resolve(
@@ -101,8 +98,7 @@ function respondWith(trades: Trade[], positions: Position[], seq: number, runnin
       )
     }
 
-    // A write answers with the created trade, not a list, so the real response
-    // schema is the one the client parses.
+    // A write answers with the created trade, not a list, as the real API does.
     if (init?.method !== undefined) {
       return Promise.resolve(
         new Response(JSON.stringify(aTrade({ tradeId: 'TRD-100999' })), { status: 201 }),
@@ -115,7 +111,6 @@ function respondWith(trades: Trade[], positions: Position[], seq: number, runnin
   })
 }
 
-/** The request behind the most recent write, so a test can read what was sent. */
 function lastWrite(): { actor: string; body: Record<string, unknown> } {
   const call = fetchMock.mock.calls.findLast((entry) => entry[1]?.method !== undefined)
   if (call === undefined) {
@@ -140,8 +135,8 @@ function renderApp(): ReturnType<typeof createQueryClient> {
 }
 
 beforeEach(() => {
-  // The identity lives in sessionStorage, which jsdom keeps for the whole file, so
-  // without this one test arriving under a name would decide the next test's actor.
+  // jsdom keeps sessionStorage for the whole file, so one test's identity would
+  // otherwise decide the next test's actor.
   sessionStorage.clear()
   FakeSocket.instances = []
   fetchMock.mockReset()
@@ -159,7 +154,6 @@ function row(tradeId: string): HTMLElement | null {
   return document.querySelector(`tr[data-trade-id="${tradeId}"]`)
 }
 
-/** Waits for a trade to reach the tape, which is what a REST load or a frame does. */
 function findRow(tradeId: string): Promise<HTMLElement> {
   return waitFor(() => {
     const found = row(tradeId)
@@ -185,11 +179,36 @@ describe('App', () => {
 
     expect(await findRow('TRD-100001')).toBeInTheDocument()
 
-    // The positions panel is populated on first paint, not after the first
-    // mutation: the snapshot carries exposure as well as trades.
-    const panel = screen.getByRole('complementary')
-    expect(within(panel).getByText('VOD')).toBeInTheDocument()
-    expect(within(panel).getByText('724,650.00')).toBeInTheDocument()
+    // Populated on first paint: the snapshot carries exposure as well as trades.
+    // Scoped to the table, because the band under it restates the same figure.
+    const rows = within(within(screen.getByRole('complementary')).getByRole('table'))
+    expect(rows.getByText('VOD')).toBeInTheDocument()
+    expect(rows.getByText('724,650.00')).toBeInTheDocument()
+  })
+
+  it('marks each position against its reference price and totals the book beneath', async () => {
+    renderApp()
+    await findRow('TRD-100001')
+
+    const panel = within(screen.getByRole('complementary'))
+
+    // VOD references 68.42, so 10,000 shares mark at 684,200 against 724,650 paid.
+    expect(within(panel.getByRole('table')).getByText('-40,450.00')).toBeInTheDocument()
+
+    expect(panel.getAllByRole('term').map((label) => label.textContent)).toEqual([
+      'Gross',
+      'Net',
+      'P&L vs ref',
+      'Trades',
+    ])
+
+    // One symbol, so the book agrees with the row above it digit for digit.
+    expect(panel.getAllByRole('definition').map((figure) => figure.textContent)).toEqual([
+      '724,650.00',
+      '724,650.00',
+      '-40,450.00',
+      '1',
+    ])
   })
 
   it('slides the positions panel off the screen with the boundary beside it', async () => {
@@ -201,15 +220,13 @@ describe('App', () => {
 
     fireEvent.click(toggle)
 
-    // Out of reach while it is away, and the handle with it: it resizes its own
-    // next sibling, so one left behind would be a boundary with nothing on the
-    // far side of it.
+    // The handle goes with it: it resizes its next sibling, so one left behind
+    // would have nothing on the far side.
     expect(screen.queryByRole('complementary')).toBeNull()
     expect(screen.queryByRole('separator', { name: 'Resize the positions panel' })).toBeNull()
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
 
-    // Still mounted, which is what lets it slide rather than vanish, and inert,
-    // which is what keeps a handle it can no longer see out of the tab order.
+    // Still mounted so it slides, inert so the handle stays out of the tab order.
     expect(screen.getByRole('complementary', { hidden: true }).closest('[inert]')).not.toBeNull()
 
     fireEvent.click(toggle)
@@ -223,9 +240,8 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Positions' }))
     expect(screen.queryByRole('complementary')).toBeNull()
 
-    // The workspace's own menu, from a right-click no pane claimed. Nothing
-    // inside the workspace could put the panel back: it is the frame the panes
-    // sit in rather than one of them.
+    // The panel is the frame the panes sit in, so nothing inside the workspace
+    // could restore it.
     fireEvent.pointerDown(document.body)
     fireEvent.contextMenu(document.body)
     fireEvent.click(screen.getByRole('menuitem', { name: 'Reset workspace' }))
@@ -233,8 +249,7 @@ describe('App', () => {
     expect(within(screen.getByRole('complementary')).getByText('VOD')).toBeInTheDocument()
   })
 
-  // The reload itself is jsdom's one unstubbable navigation, so what is held
-  // here is that the wordmark is a control rather than a heading again.
+  // jsdom cannot stub the reload, so this only holds that the wordmark is a control.
   it('offers the wordmark as the way back to a clean start', () => {
     renderApp()
     expect(screen.getByRole('button', { name: 'tapedeck' })).toHaveAttribute('title', 'Reload')
@@ -277,8 +292,7 @@ describe('App', () => {
 
     expect(await screen.findByText('CANCELLED')).toBeInTheDocument()
 
-    // A cancelled trade keeps its place on the tape, and the bar refuses to write
-    // to it.
+    // A cancelled trade keeps its place, and the bar refuses to write to it.
     selectRow('TRD-100001')
     expect(screen.getByRole('button', { name: 'Amend' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
@@ -296,12 +310,11 @@ describe('App', () => {
       positions: [aPosition({ netQuantity: 4_000, netNotional: '289860.000000' })],
     })
 
-    const panel = screen.getByRole('complementary')
-    expect(await within(panel).findByText('289,860.00')).toBeInTheDocument()
+    const rows = within(screen.getByRole('complementary')).getByRole('table')
+    expect(await within(rows).findByText('289,860.00')).toBeInTheDocument()
 
-    // A positions frame carries no seq, so there is nothing for it to advance.
-    // Seq 2 is accepted only against a cursor still on 1, so the row arriving is
-    // the proof.
+    // A positions frame carries no seq, and seq 2 is accepted only against a
+    // cursor still on 1, so the row arriving is the proof.
     deliver({ type: 'trade.created', seq: 2, trade: aTrade({ tradeId: 'TRD-100002' }) })
 
     expect(await findRow('TRD-100002')).toBeInTheDocument()
@@ -354,7 +367,6 @@ describe('App', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Book trade' }))
 
-    // One identity feeds both the trader on the trade and the actor on the event.
     await waitFor(() => {
       const write = lastWrite()
       expect(write.body.trader).toBe('j.okonkwo')
@@ -366,9 +378,8 @@ describe('App', () => {
     renderApp()
     await findRow('TRD-100001')
 
-    // The name stamped on an amend is the one thing a trader should not be able
-    // to choose, so the header states it and holds no box. Addressed off the
-    // title, since every pane bar is a banner too.
+    // The header states the name and holds no box. Addressed off the title,
+    // because every pane bar is a banner too.
     const header = screen.getByRole('heading', { name: 'tapedeck' }).closest('header')
     expect(header).toHaveTextContent('k.madan')
     expect(within(header as HTMLElement).queryByRole('textbox')).toBeNull()
@@ -380,8 +391,7 @@ describe('the simulated feed control', () => {
     respondWith([aTrade()], [aPosition()], 1, true)
     renderApp()
 
-    // Read over REST on load, so a client arriving after the feed started shows
-    // the right control rather than guessing it is stopped.
+    // Read over REST on load, so a client arriving mid-feed does not guess it is off.
     expect(await screen.findByRole('button', { name: 'Pause feed' })).toBeInTheDocument()
   })
 
@@ -404,8 +414,7 @@ describe('the simulated feed control', () => {
 
     deliver({ type: 'simulation', running: true, intervalMs: SIMULATION_INTERVAL_MS })
 
-    // Without the broadcast this client would still read 'Start feed' while trades
-    // arrived underneath it.
+    // Without the broadcast this client reads 'Start feed' while trades arrive.
     expect(await screen.findByRole('button', { name: 'Pause feed' })).toBeInTheDocument()
   })
 
@@ -419,8 +428,8 @@ describe('the simulated feed control', () => {
     await screen.findByRole('button', { name: 'Pause feed' })
     expect(row('TRD-100001')).not.toBeNull()
 
-    // An unsequenced frame must not advance the cursor, or the client would
-    // discard the trade frames the feed is about to produce.
+    // An unsequenced frame must not advance the cursor, or the client discards
+    // the trade frames the feed is about to produce.
     deliver({ type: 'trade.created', seq: 2, trade: aTrade({ tradeId: 'TRD-100002' }) })
 
     expect(await findRow('TRD-100002')).toBeInTheDocument()
@@ -441,8 +450,8 @@ describe('booking guards', () => {
     fireEvent.click(screen.getByRole('button', { name: label }))
   }
 
-  /** The ticket's box, not the config panel's Quantity column checkbox, which
-   *  carries the same label text and is mounted even while the panel is shut. */
+  /** The ticket's box, not the config panel's Quantity column checkbox: same label
+   *  text, and mounted even while the panel is shut. */
   function quantity(): HTMLElement {
     return screen.getByLabelText('Quantity', { selector: '#quantity' })
   }
@@ -463,8 +472,7 @@ describe('booking guards', () => {
     book()
     await waitFor(() => expect(bookings()).toHaveLength(1))
 
-    // The form keeps the ticket it just sent, so pressing again is the accident
-    // the guard exists for.
+    // The form keeps the ticket it just sent, so a second press is the accident.
     book()
     expect(await screen.findByRole('button', { name: 'Confirm duplicate' })).toBeInTheDocument()
     expect(screen.getByRole('alert')).toHaveTextContent(
@@ -472,7 +480,6 @@ describe('booking guards', () => {
     )
     expect(bookings()).toHaveLength(1)
 
-    // Confirming is the same button, and a confirmed repeat books.
     book('Confirm duplicate')
     await waitFor(() => expect(bookings()).toHaveLength(2))
     expect(screen.getByRole('button', { name: 'Book trade' })).toBeInTheDocument()
@@ -514,13 +521,12 @@ describe('booking guards', () => {
     book()
     expect(await screen.findByText(MASTER)).toBeInTheDocument()
 
-    // The defect: an empty box fails the instrument master too, so revalidating
-    // on the keystroke put the message back under a box with nothing in it.
+    // An empty box fails the instrument master too, so revalidating per keystroke
+    // puts the message straight back under a box just emptied.
     fireEvent.change(symbol(), { target: { value: '' } })
 
-    // Settled rather than momentarily gone. The validation is async, so a poll
-    // would pass on the gap between the edit clearing the message and the
-    // revalidation putting it back, which is the defect itself.
+    // Settled, not momentarily gone: validation is async, so a poll could pass in
+    // the gap between the edit clearing the message and revalidation restoring it.
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
@@ -546,8 +552,7 @@ describe('booking guards', () => {
     for (const key of keys) {
       expect(key).toMatch(UUID)
     }
-    // A key reused here would make the second clip a silent replay of the first
-    // and lose a booking.
+    // A reused key would make the second clip a silent replay and lose a booking.
     expect(new Set(keys).size).toBe(2)
   })
 })
@@ -563,8 +568,7 @@ describe('cancelling a trade', () => {
   it('confirms against the trade rather than cancelling on the first click', async () => {
     await openCancelDialog()
 
-    // With rows arriving on their own, a bare one-click Cancel is easy to land on
-    // the wrong trade.
+    // With rows arriving on their own, one-click Cancel lands on the wrong trade.
     expect(await screen.findByText('Cancel TRD-100001?')).toBeInTheDocument()
     expect(() => lastWrite()).toThrow(/nothing was written/)
   })
@@ -573,9 +577,8 @@ describe('cancelling a trade', () => {
     await openCancelDialog()
     const dialog = await screen.findByRole('dialog')
 
-    // A press in the dialog is not a press somewhere else on the tape, and a
-    // pane drops its selection on one of those. Without the distinction,
-    // confirming a cancellation would deselect the trade the dialog names.
+    // A pane drops its selection on a press elsewhere, so without the distinction
+    // confirming would deselect the trade the dialog names.
     fireEvent.pointerDown(dialog)
 
     expect(screen.getByRole('status')).toHaveTextContent('TRD-100001')
@@ -600,8 +603,7 @@ describe('cancelling a trade', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancel trade' }))
 
     await waitFor(() => {
-      // The version carried is the one the cache holds, so a cancel racing an
-      // amend is refused rather than applied to a row that has moved on.
+      // The version carried is the cache's, so a cancel racing an amend is refused.
       expect(lastWrite().body).toEqual({ version: 1 })
     })
   })
@@ -643,8 +645,7 @@ describe('acting on a row', () => {
     })
 
     fireEvent.keyDown(grid, { key: 'c' })
-    // Still a confirmation, not a write: a hotkey must not be a shorter path to
-    // cancelling the wrong trade than the button is.
+    // Still a confirmation: a hotkey must not be a shorter path to the wrong trade.
     expect(await screen.findByText('Cancel TRD-100001?')).toBeInTheDocument()
     expect(() => lastWrite()).toThrow(/nothing was written/)
   })
@@ -667,7 +668,7 @@ describe('acting on a row', () => {
     fireEvent.keyDown(grid, { key: 'ArrowDown' })
     expect(readback()).toHaveTextContent('TRD-100001')
 
-    // Clamped rather than wrapping: the key held down stops at the end of the tape.
+    // Clamped, not wrapping: a held key stops at the end of the tape.
     fireEvent.keyDown(grid, { key: 'ArrowDown' })
     expect(readback()).toHaveTextContent('TRD-100001')
 
@@ -677,8 +678,8 @@ describe('acting on a row', () => {
 })
 
 describe('whose trade it is', () => {
-  /** The default identity is the fixture's trader, so a case about someone
-   *  else's trade moves the trade rather than the window. */
+  /** The default identity is the fixture's trader, so a case about someone else's
+   *  trade moves the trade rather than the window. */
   async function open(chip: 'Amend' | 'Cancel', trader?: string): Promise<void> {
     if (trader !== undefined) {
       respondWith([aTrade({ trader })], [aPosition()], 1)
@@ -699,8 +700,7 @@ describe('whose trade it is', () => {
   it('names the trader and says whose name the amendment will carry', async () => {
     await open('Amend', 'r.chatterjee')
 
-    // Not a refusal. Correcting someone else's booking is trade support's job,
-    // so the control is saying whose trade it is and who the event will name.
+    // Not a refusal: correcting someone else's booking is trade support's job.
     expect(screen.getByText(/Booked by r\.chatterjee/)).toHaveTextContent(
       'Your name goes on the amendment.',
     )
