@@ -612,9 +612,49 @@ describe('the configuration panel', () => {
   })
 })
 
+describe('the filters suggest what is on the tape', () => {
+  /** The values a box offers, read through the list it actually points at. */
+  function offered(label: string): string[] {
+    const box = screen.getByLabelText(label)
+    const list = document.getElementById(box.getAttribute('list') ?? '')
+    return Array.from(list?.querySelectorAll('option') ?? []).map((option) => option.value)
+  }
+
+  it('offers the symbols, traders and books the pane holds', () => {
+    renderBlotter()
+
+    expect(offered('Filter by symbol')).toEqual(['BARC', 'VOD'])
+    expect(offered('Filter by book')).toEqual(['EQ-LDN-01', 'EQ-LDN-02'])
+    expect(offered('Filter by trader')).toEqual(['k.madan'])
+  })
+
+  it('leaves the box free text, so a part of a value still filters', () => {
+    renderBlotter()
+
+    // The reason these are a datalist and not a select: LDN-02 is nobody's book
+    // and it is how a trader finds the one book that ends that way.
+    fireEvent.change(screen.getByLabelText('Filter by book'), { target: { value: 'LDN-02' } })
+
+    expect(row('TRD-100004')).not.toBeNull()
+    expect(row('TRD-100001')).toBeNull()
+  })
+
+  it('gives each pane its own lists, so two panes cannot share one id', () => {
+    renderBlotter()
+    renderBlotter([aTrade({ symbol: 'HSBA' })])
+
+    const ids = screen.getAllByLabelText('Filter by symbol').map((box) => box.getAttribute('list'))
+
+    expect(new Set(ids).size).toBe(2)
+    // The second pane's box reads the second pane's tape, which is the bug a
+    // shared id would hide: both boxes would offer the first pane's symbols.
+    expect(ids.map((id) => document.getElementById(id ?? '')?.children.length)).toEqual([2, 1])
+  })
+})
+
 describe("a pane's own menu", () => {
-  /** The positioned sheet, which is the menu's parent: the line about shift is
-   *  inside the sheet and outside the menu, so the menu's children are all items. */
+  /** The positioned sheet, which is the menu's parent rather than the menu: the
+   *  coordinates are set on it, so the menu's children are all items. */
   const sheet = (): HTMLElement | null => screen.queryByRole('menu')?.parentElement ?? null
 
   /** Returns false when the event was cancelled, which is the preventDefault

@@ -33,6 +33,8 @@ import type { Point } from './PaneMenu.js'
 import { PaneMenu } from './PaneMenu.js'
 import type { RowActions } from './SelectionBar.js'
 import { canWrite, SelectionBar } from './SelectionBar.js'
+import type { Suggestions } from './suggestions.js'
+import { SuggestionList, suggestionsOf } from './suggestions.js'
 import { useRowFlash } from './useRowFlash.js'
 
 type Props = {
@@ -176,7 +178,10 @@ export function BlotterTable({
   const [configOpen, setConfigOpen] = useState(false)
   // Generated rather than a literal, because the panel is per grid and a second
   // grid's toggle must not have its aria-controls pointing at this one's panel.
+  // The filter boxes hang their suggestion lists off it for the same reason.
   const configPanelId = useId()
+
+  const suggestions = useMemo(() => suggestionsOf(trades), [trades])
 
   /**
    * Back to the view a pane opens on: no sort, no filters, no grouping, and the
@@ -407,7 +412,13 @@ export function BlotterTable({
           )
         }}
       >
-        <FilterBar grip={grip} nameplate={nameplate} table={table} />
+        <FilterBar
+          grip={grip}
+          idPrefix={configPanelId}
+          nameplate={nameplate}
+          suggestions={suggestions}
+          table={table}
+        />
 
         {menuAt === null ? null : (
           <PaneMenu
@@ -644,7 +655,12 @@ export function BlotterTable({
             ) : null}
           </div>
 
-          <GridConfigPanel id={configPanelId} open={configOpen} table={table} />
+          <GridConfigPanel
+            counterparties={suggestions.counterparty}
+            id={configPanelId}
+            open={configOpen}
+            table={table}
+          />
         </div>
 
         <SelectionBar
@@ -757,6 +773,9 @@ type FilterBarProps = {
   table: Table<Trade>
   grip: ReactNode | undefined
   nameplate: ReactNode | undefined
+  suggestions: Suggestions
+  /** Unique per grid, so a second pane's boxes do not read this one's lists. */
+  idPrefix: string
 }
 
 /**
@@ -764,11 +783,18 @@ type FilterBarProps = {
  * trade: a frame for a trade outside the current filter still belongs in the
  * cache, and clearing the filter must not need a round trip.
  */
-function FilterBar({ table, grip, nameplate }: FilterBarProps): ReactElement {
+function FilterBar({
+  table,
+  grip,
+  nameplate,
+  suggestions,
+  idPrefix,
+}: FilterBarProps): ReactElement {
   const value = (id: string): string => (table.getColumn(id)?.getFilterValue() as string) ?? ''
   const set = (id: string, next: string): void => {
     table.getColumn(id)?.setFilterValue(next === '' ? undefined : next)
   }
+  const listId = (column: string): string => `${idPrefix}-${column}`
 
   return (
     <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -781,25 +807,31 @@ function FilterBar({ table, grip, nameplate }: FilterBarProps): ReactElement {
         aria-label="Filter by symbol"
         placeholder="Symbol"
         className={`${FILTER} w-24`}
+        list={listId('symbol')}
         value={value('symbol')}
         onChange={(event) => set('symbol', event.target.value.toUpperCase())}
       />
+      <SuggestionList id={listId('symbol')} values={suggestions.symbol} />
 
       <input
         aria-label="Filter by trader"
         placeholder="Trader"
         className={`${FILTER} w-32`}
+        list={listId('trader')}
         value={value('trader')}
         onChange={(event) => set('trader', event.target.value)}
       />
+      <SuggestionList id={listId('trader')} values={suggestions.trader} />
 
       <input
         aria-label="Filter by book"
         placeholder="Book"
         className={`${FILTER} w-32`}
+        list={listId('book')}
         value={value('book')}
         onChange={(event) => set('book', event.target.value)}
       />
+      <SuggestionList id={listId('book')} values={suggestions.book} />
 
       <select
         aria-label="Filter by side"

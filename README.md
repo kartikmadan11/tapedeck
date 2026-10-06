@@ -210,12 +210,22 @@ would look like a recording rather than a feed.
 ## How to run tests
 
 ```sh
+npm run check       # typecheck, lint, palette, tests. The one to run
 npm test            # all four workspaces
 npm run typecheck   # tsc --noEmit over both the node and the web projects
 npm run lint        # biome
+npm run lint:palette  # no raw colour in a .tsx
+npm run format      # biome, writing its fixes
 ```
 
-504 tests across 20 files. The ones that matter most:
+`check` runs the four gates in the order a failure is cheapest to read: the
+compiler first, then the linter, then the palette, then the tests. The palette
+gate is the invariant the colour tokens were introduced for, now a script rather
+than a grep to remember: a raw hex or a stock Tailwind `zinc-`, `indigo-`,
+`emerald-` or `rose-` in a `.tsx` fails the build, because a one-off colour is
+how a dark trading surface drifts into five greys that nearly match.
+
+510 tests across 21 files. The ones that matter most:
 
 - **concurrency**: two amends submitted at the same `version`, where the second
   gets a 409 `VERSION_CONFLICT` naming the current version
@@ -544,6 +554,23 @@ the grid rather than an overlay, so opening it shrinks the tape instead of
 covering the columns being read, and while it is closed it is `inert`, because a
 zero-width panel still holds real form controls and the next **Tab** out of the
 grid would otherwise land in an invisible select.
+
+**The filter boxes suggest what is on the tape, not what the reference data
+says.** Symbol, Trader and Book on the pane bar, and Counterparty in the panel,
+each hang a `datalist` off the trades the pane is holding, so every suggestion
+matches a row and a value that is on the tape but absent from a reference list
+surfaces here rather than hiding. That is exactly the class of defect the
+phantom `EQ-LDN-1` book was, above: the list said one thing, the tape said
+another, and nothing on screen put the two side by side. The suggestions come
+off the unfiltered set, so the lists do not shift while a filter is being typed,
+and they include a cancelled row's values, unlike an aggregate, which nets the
+cancelled leaf out: a filter is about which rows are on screen, and a cancelled
+row is one of them. The box stays free text rather than becoming a select,
+because it filters by substring, so a select would refuse `LD` for every London
+book and refuse a value that has since left the tape. The ids are derived per
+grid, since every pane renders the same filter bar and one id shared across two
+panes is invalid HTML that would quietly point every pane's box at the first
+pane's list, which is the test that holds it.
 
 **A pane's own controls are on the pane, behind a right-click.** Its bar carries
 the handle, the name and those five filters, and nothing else. **New pane**,

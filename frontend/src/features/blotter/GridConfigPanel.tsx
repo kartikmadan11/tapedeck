@@ -3,12 +3,15 @@ import type { Trade } from '@tapedeck/shared'
 import type { ReactElement, ReactNode } from 'react'
 import { CHIP, CONTROL, MICRO_LABEL } from '../../lib/ui.js'
 import { groupedVisibility } from './columns.js'
+import { SuggestionList } from './suggestions.js'
 
 type Props = {
   table: Table<Trade>
   open: boolean
   /** Referenced by the toggle button's aria-controls, so it is passed in. */
   id: string
+  /** The names the Counterparty box offers, taken off the tape. */
+  counterparties: readonly string[]
 }
 
 /** Darker than the panel it sits on, per the note in lib/ui.ts. */
@@ -21,7 +24,7 @@ const PANEL_CONTROL = `${CONTROL} w-full bg-tape-bg`
  * the panel cannot drift from the grid it describes: a header click shows up in
  * Order By because both are looking at `sorting`.
  */
-export function GridConfigPanel({ table, open, id }: Props): ReactElement {
+export function GridConfigPanel({ table, open, id, counterparties }: Props): ReactElement {
   const { grouping, sorting } = table.getState()
   const groupBy = grouping[0]
   const splitBy = grouping[1]
@@ -145,7 +148,12 @@ export function GridConfigPanel({ table, open, id }: Props): ReactElement {
         <Section title="Where">
           {/* Filters whether or not the column itself is shown. */}
           <Where column={table.getColumn('tradeId')} label="Trade id" placeholder="TRD-" />
-          <Where column={table.getColumn('counterparty')} label="Counterparty" placeholder="Name" />
+          <Where
+            column={table.getColumn('counterparty')}
+            label="Counterparty"
+            placeholder="Name"
+            suggest={{ id: `${id}-counterparty`, values: counterparties }}
+          />
           <Where
             column={table.getColumn('quantity')}
             label="Minimum quantity"
@@ -213,28 +221,34 @@ type WhereProps = {
   column: Column<Trade, unknown> | undefined
   label: string
   placeholder: string
+  /** Absent for the boxes a list would be noise on, like a 500-row trade id. */
+  suggest?: { id: string; values: readonly string[] } | undefined
 }
 
 /**
  * One filter box. The column is looked up by id, so it is typed as possibly
  * absent: an id that stops existing drops its control rather than throwing.
  */
-function Where({ column, label, placeholder }: WhereProps): ReactElement | null {
+function Where({ column, label, placeholder, suggest }: WhereProps): ReactElement | null {
   if (column === undefined) {
     return null
   }
 
   return (
-    <input
-      aria-label={label}
-      className={PANEL_CONTROL}
-      // undefined, not '': an empty string is a filter that matches everything
-      // and would leave the column listed in columnFilters forever.
-      onChange={(event) =>
-        column.setFilterValue(event.target.value === '' ? undefined : event.target.value)
-      }
-      placeholder={placeholder}
-      value={(column.getFilterValue() as string) ?? ''}
-    />
+    <>
+      <input
+        aria-label={label}
+        className={PANEL_CONTROL}
+        list={suggest?.id}
+        // undefined, not '': an empty string is a filter that matches everything
+        // and would leave the column listed in columnFilters forever.
+        onChange={(event) =>
+          column.setFilterValue(event.target.value === '' ? undefined : event.target.value)
+        }
+        placeholder={placeholder}
+        value={(column.getFilterValue() as string) ?? ''}
+      />
+      {suggest === undefined ? null : <SuggestionList id={suggest.id} values={suggest.values} />}
+    </>
   )
 }
