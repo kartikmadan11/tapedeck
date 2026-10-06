@@ -70,6 +70,22 @@ function row(paneName: string, tradeId: string): HTMLElement | null {
 const panes = (): HTMLElement[] => screen.getAllByRole('grid')
 
 /**
+ * A picklist in one pane. The control is a button and a list of its own rather
+ * than a native select, and the list is portaled to the body, so the rows are
+ * outside the pane the button sits in.
+ */
+function pick(paneName: string, label: string, value: string): void {
+  fireEvent.click(pane(paneName).getByLabelText(label))
+  const found = screen
+    .getByRole('listbox', { name: label })
+    .querySelector(`[role="option"][data-value="${value}"]`)
+  if (!(found instanceof HTMLElement)) {
+    throw new Error(`${label} does not offer ${value}`)
+  }
+  fireEvent.click(found)
+}
+
+/**
  * A pane's own controls, which are behind its right-click rather than on its
  * bar. Portaled to the body, so the menu is not inside the region it belongs to
  * and has to be addressed on its own.
@@ -244,11 +260,11 @@ describe('the workspace', () => {
     // A duplicate that arrived on the defaults would make the button useless:
     // the whole point is to branch off the arrangement in front of you.
     choose('Trades', 'Config')
-    fireEvent.change(first().getByLabelText('Group by'), { target: { value: 'symbol' } })
+    pick('Trades', 'Group by', 'symbol')
     choose('Trades', 'Duplicate')
 
     expect(second().getByRole('button', { name: 'VOD, 1 trades' })).toBeInTheDocument()
-    expect(second().getByLabelText('Group by')).toHaveValue('symbol')
+    expect(second().getByLabelText('Group by')).toHaveAttribute('data-value', 'symbol')
   })
 
   it('leaves each pane holding its own view', () => {
@@ -390,7 +406,7 @@ describe('opening a pane', () => {
   it('opens it on the default view rather than on the view in front of you', () => {
     renderWorkspace()
     choose('Trades', 'Config')
-    fireEvent.change(first().getByLabelText('Group by'), { target: { value: 'symbol' } })
+    pick('Trades', 'Group by', 'symbol')
     openPane('EU Flow')
 
     // The difference from Duplicate: that one branches off what you are reading.
@@ -1000,7 +1016,7 @@ describe('sharing a workspace', () => {
     renderWorkspace()
 
     choose('Trades', 'Config')
-    fireEvent.change(first().getByLabelText('Group by'), { target: { value: 'book' } })
+    pick('Trades', 'Group by', 'book')
     choose('Trades', 'Duplicate')
     fireEvent.change(second().getByLabelText('Filter by trader'), { target: { value: 'k.m' } })
 

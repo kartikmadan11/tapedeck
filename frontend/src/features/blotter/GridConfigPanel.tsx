@@ -1,6 +1,8 @@
 import type { Column, Table } from '@tanstack/react-table'
 import type { Trade } from '@tapedeck/shared'
 import type { ReactElement, ReactNode } from 'react'
+import type { SelectOption } from '../../components/Select.js'
+import { Select } from '../../components/Select.js'
 import { CHIP, CONTROL, MICRO_LABEL } from '../../lib/ui.js'
 import { groupedVisibility, orderedColumnIds } from './columns.js'
 import { SuggestionList } from './suggestions.js'
@@ -112,11 +114,10 @@ export function GridConfigPanel({
         </div>
 
         <Section title="Group by">
-          <select
-            aria-label="Group by"
-            className={`${PANEL_CONTROL} cursor-pointer`}
-            onChange={(event) => {
-              const next = event.target.value
+          <Select
+            className={PANEL_CONTROL}
+            label="Group by"
+            onChange={(next) => {
               // Clearing Group By clears Split By with it. A split is blocks of
               // netted columns across a group row, so with nothing grouped there
               // is nothing for it to lie across.
@@ -126,67 +127,48 @@ export function GridConfigPanel({
               }
               onGrouping(splitBy === undefined || splitBy === next ? [next] : [next, splitBy])
             }}
+            options={[{ value: '', label: 'No grouping' }, ...choices(groupable)]}
             value={groupBy ?? ''}
-          >
-            <option value="">No grouping</option>
-            {groupable.map((column) => (
-              <option key={column.id} value={column.id}>
-                {headerText(column)}
-              </option>
-            ))}
-          </select>
+          />
         </Section>
 
         <Section title="Split by">
-          <select
-            aria-label="Split by"
-            className={`${PANEL_CONTROL} cursor-pointer`}
+          <Select
+            className={PANEL_CONTROL}
             // Nothing to split across until there are group rows to lay the
             // blocks across. The choice taken above is excluded below: a block
             // per symbol inside a group per symbol is one block.
             disabled={groupBy === undefined}
-            onChange={(event) => {
+            label="Split by"
+            onChange={(next) => {
               if (groupBy === undefined) {
                 return
               }
-              const next = event.target.value
               onGrouping(next === '' ? [groupBy] : [groupBy, next])
             }}
+            options={[
+              { value: '', label: 'No split' },
+              ...choices(groupable.filter((column) => column.id !== groupBy)),
+            ]}
             value={splitBy ?? ''}
-          >
-            <option value="">No split</option>
-            {groupable
-              .filter((column) => column.id !== groupBy)
-              .map((column) => (
-                <option key={column.id} value={column.id}>
-                  {headerText(column)}
-                </option>
-              ))}
-          </select>
+          />
         </Section>
 
         <Section title="Order by">
           {/* The same state the column headers write, so the two cannot
               disagree about what the grid is sorted by. */}
           <div className="flex gap-2">
-            <select
-              aria-label="Order by"
-              className={`${PANEL_CONTROL} cursor-pointer`}
-              onChange={(event) => {
-                const next = event.target.value
+            <Select
+              className={PANEL_CONTROL}
+              label="Order by"
+              onChange={(next) => {
                 // Carries the direction across a change of column rather than
                 // snapping back to ascending.
                 table.setSorting(next === '' ? [] : [{ id: next, desc: order?.desc ?? true }])
               }}
+              options={[{ value: '', label: 'Unsorted' }, ...choices(sortable)]}
               value={order?.id ?? ''}
-            >
-              <option value="">Unsorted</option>
-              {sortable.map((column) => (
-                <option key={column.id} value={column.id}>
-                  {headerText(column)}
-                </option>
-              ))}
-            </select>
+            />
 
             <button
               className={`${CHIP} shrink-0`}
@@ -301,6 +283,11 @@ export function GridConfigPanel({
  */
 function headerText(column: Column<Trade, unknown>): string {
   return String(column.columnDef.header)
+}
+
+/** Columns as a list to pick from, under the names their headers carry. */
+function choices(columns: readonly Column<Trade, unknown>[]): SelectOption[] {
+  return columns.map((column) => ({ value: column.id, label: headerText(column) }))
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }): ReactElement {

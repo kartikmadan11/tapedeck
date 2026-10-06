@@ -26,6 +26,8 @@ import type { DecimalString, Trade } from '@tapedeck/shared'
 import { toMinorUnits } from '@tapedeck/shared'
 import type { KeyboardEvent, ReactElement, ReactNode } from 'react'
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import type { SelectOption } from '../../components/Select.js'
+import { Select } from '../../components/Select.js'
 import { CONTROL } from '../../lib/ui.js'
 import type { PaneConfig } from '../workspace/paneConfig.js'
 import { DEFAULT_VIEW } from '../workspace/paneConfig.js'
@@ -947,32 +949,40 @@ function FilterBar({
       />
       <SuggestionList id={listId('book')} values={suggestions.book} />
 
-      <select
-        aria-label="Filter by side"
-        className={`${FILTER} cursor-pointer`}
+      <Select
+        className={`${FILTER} w-28`}
+        label="Filter by side"
+        onChange={(next) => set('side', next)}
+        options={SIDE_FILTER}
         value={value('side')}
-        onChange={(event) => set('side', event.target.value)}
-      >
-        <option value="">Both sides</option>
-        <option value="BUY">BUY</option>
-        <option value="SELL">SELL</option>
-      </select>
+      />
 
-      <select
-        aria-label="Filter by status"
-        className={`${FILTER} cursor-pointer`}
+      <Select
+        className={`${FILTER} w-44`}
+        label="Filter by status"
+        onChange={(next) => set('status', next)}
+        options={STATUS_FILTER}
         value={value('status')}
-        onChange={(event) => set('status', event.target.value)}
-      >
-        <option value="">Any status</option>
-        <option value="NEW">NEW</option>
-        <option value="PARTIALLY_FILLED">PARTIALLY_FILLED</option>
-        <option value="FILLED">FILLED</option>
-        <option value="CANCELLED">CANCELLED</option>
-      </select>
+      />
     </div>
   )
 }
+
+/** Stated widths, because a button takes its width from the label it is holding
+ *  and a filter row that resized as it was used would move the box beside it. */
+const SIDE_FILTER: SelectOption[] = [
+  { value: '', label: 'Both sides' },
+  { value: 'BUY', label: 'BUY' },
+  { value: 'SELL', label: 'SELL' },
+]
+
+const STATUS_FILTER: SelectOption[] = [
+  { value: '', label: 'Any status' },
+  { value: 'NEW', label: 'NEW' },
+  { value: 'PARTIALLY_FILLED', label: 'PARTIALLY_FILLED' },
+  { value: 'FILLED', label: 'FILLED' },
+  { value: 'CANCELLED', label: 'CANCELLED' },
+]
 
 /** Lighter than the canvas it sits on, so the filter row reads as chrome. */
 const FILTER = `${CONTROL} bg-tape-panel`

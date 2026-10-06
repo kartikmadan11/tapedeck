@@ -147,8 +147,30 @@ function choose(item: string): void {
 
 const openConfig = (): void => choose('Config')
 
+/**
+ * Writes a control, whichever of the two kinds it is. A picklist is a button and
+ * a list of its own rather than a native select, so setting one is two presses.
+ */
 function set(label: string, value: string): void {
-  fireEvent.change(screen.getByLabelText(label), { target: { value } })
+  const control = screen.getByLabelText(label)
+  if (control.getAttribute('role') !== 'combobox') {
+    fireEvent.change(control, { target: { value } })
+    return
+  }
+  fireEvent.click(control)
+  fireEvent.click(option(label, value))
+}
+
+/** One row of an open list, by the value it carries rather than by its label.
+ *  The list is portaled, so it is reached through the screen. */
+function option(label: string, value: string): HTMLElement {
+  const found = screen
+    .getByRole('listbox', { name: label })
+    .querySelector(`[role="option"][data-value="${value}"]`)
+  if (!(found instanceof HTMLElement)) {
+    throw new Error(`${label} does not offer ${value === '' ? 'a blank' : value}`)
+  }
+  return found
 }
 
 /** The group's own row, found by the toggle that opens it. */
@@ -602,8 +624,9 @@ describe('the configuration panel', () => {
 
     // A block per symbol inside a group per symbol is one block, so it is not
     // on the list.
-    const options = within(screen.getByLabelText('Split by')).getAllByRole('option')
-    expect(options.map((option) => option.textContent)).not.toContain('Symbol')
+    fireEvent.click(screen.getByLabelText('Split by'))
+    const offered = within(screen.getByRole('listbox', { name: 'Split by' })).getAllByRole('option')
+    expect(offered.map((row) => row.getAttribute('data-value'))).not.toContain('symbol')
   })
 
   it('clears the split when the level it sits under goes away', () => {
@@ -615,7 +638,7 @@ describe('the configuration panel', () => {
 
     // A split is blocks of netted columns across a group row, so with nothing
     // grouped there is nothing left for it to lie across.
-    expect(screen.getByLabelText('Split by')).toHaveValue('')
+    expect(screen.getByLabelText('Split by')).toHaveAttribute('data-value', '')
     expect(row('TRD-100001')).not.toBeNull()
   })
 
@@ -625,11 +648,11 @@ describe('the configuration panel', () => {
 
     // The header starts the grid on time, newest first, so the panel has to say so
     // rather than reporting its own idea of the order.
-    expect(screen.getByLabelText('Order by')).toHaveValue('tradeTimestamp')
+    expect(screen.getByLabelText('Order by')).toHaveAttribute('data-value', 'tradeTimestamp')
     expect(screen.getByRole('button', { name: 'Desc' })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Quantity' }))
-    expect(screen.getByLabelText('Order by')).toHaveValue('quantity')
+    expect(screen.getByLabelText('Order by')).toHaveAttribute('data-value', 'quantity')
   })
 
   it('carries the direction across a change of column', () => {
@@ -991,10 +1014,10 @@ describe("a pane's own menu", () => {
     // one left behind is the one nobody thinks to look for.
     expect(headers()).toEqual(UNGROUPED)
     expect(row('TRD-100004')).not.toBeNull()
-    expect(screen.getByLabelText('Order by')).toHaveValue('tradeTimestamp')
+    expect(screen.getByLabelText('Order by')).toHaveAttribute('data-value', 'tradeTimestamp')
     expect(screen.getByRole('button', { name: 'Desc' })).toBeInTheDocument()
 
     // Still open: Reset is the view and not the pane.
-    expect(screen.getByRole('combobox', { name: 'Group by' })).toHaveValue('')
+    expect(screen.getByRole('combobox', { name: 'Group by' })).toHaveAttribute('data-value', '')
   })
 })

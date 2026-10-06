@@ -151,7 +151,7 @@ npm run lint          # biome
 npm run lint:palette  # no raw colour in a .tsx
 ```
 
-582 tests across 24 files. The database-backed ones need a database, defaulting
+600 tests across 25 files. The database-backed ones need a database, defaulting
 to `postgres://tapedeck:tapedeck@localhost:5433/tapedeck_test` and overridable
 with `TEST_DATABASE_URL`:
 
@@ -220,11 +220,11 @@ Each of these is argued at length in [`docs/DECISIONS.md`](docs/DECISIONS.md).
 - **The multi-pane workspace keeps its controls on the pane, not in a shared
   bar.** One top bar could only ever describe one of two open panes, so each
   grid owns a side panel that groups, orders, filters, hides and reorders its
-  own columns, shrinking the tape rather than covering it, and a pane's own
-  actions sit behind a right-click. The cost is discoverability, which is why
-  the demo above says so. The positions panel is what the top bar does keep, as
-  a disclosure that opens showing, since net exposure is most of the reason to
-  keep a blotter open.
+  own columns, shrinking the tape rather than covering it, and both a pane's
+  actions and the workspace's own sit behind a right-click that answers
+  anywhere. The cost is discoverability, which is why the demo above says so.
+  The positions panel slides off from an arrow at its own edge and opens
+  showing, since net exposure is most of the reason to keep a blotter open.
 - **A workspace is a tree of splits, and travels as a readable link**:
   `?panes=2&p1.group=symbol&p2.where.symbol=BARC` is the whole format, carrying
   the view and the arrangement, never the data. A flat axis with a weight per

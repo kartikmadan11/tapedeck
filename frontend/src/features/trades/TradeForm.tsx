@@ -3,9 +3,11 @@ import type { CreateTradeInput } from '@tapedeck/shared'
 import { BOOKS, COUNTERPARTIES, createTradeInput, INSTRUMENTS } from '@tapedeck/shared'
 import type { ReactElement, ReactNode } from 'react'
 import { useRef, useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
 import type { z } from 'zod'
 import { ErrorNotice } from '../../components/ErrorNotice.js'
+import type { SelectOption } from '../../components/Select.js'
+import { Select } from '../../components/Select.js'
 import { DEFAULT_TRADER } from '../../lib/identity.js'
 import { ACTION, ACTION_HELD, CONTROL, MICRO_LABEL } from '../../lib/ui.js'
 import type { Guard, LastBooking } from './guards.js'
@@ -34,6 +36,18 @@ const DEFAULTS: FormValues = {
   book: BOOKS[0],
   counterparty: COUNTERPARTIES[0],
 }
+
+/** The three picklists, built once off the same const tuples the schema
+ *  validates against, so a list cannot offer what a booking would reject. */
+const SIDES: SelectOption[] = [
+  { value: 'BUY', label: 'BUY' },
+  { value: 'SELL', label: 'SELL' },
+]
+const BOOK_CHOICES: SelectOption[] = BOOKS.map((name) => ({ value: name, label: name }))
+const COUNTERPARTY_CHOICES: SelectOption[] = COUNTERPARTIES.map((name) => ({
+  value: name,
+  label: name,
+}))
 
 /**
  * `trader` has no input of its own. It is the window's identity, so typing it
@@ -139,11 +153,23 @@ export function TradeForm({ trader }: Props): ReactElement {
           ))}
         </datalist>
 
+        {/* Controller rather than register: the control is a button and a
+            listbox, so there is no change event on an input to hook. */}
         <Field name="side" label="Side" error={errors.side?.message} width="w-24">
-          <select id="side" className={`${INPUT} cursor-pointer`} {...form.register('side')}>
-            <option value="BUY">BUY</option>
-            <option value="SELL">SELL</option>
-          </select>
+          <Controller
+            control={form.control}
+            name="side"
+            render={({ field }) => (
+              <Select
+                className={INPUT}
+                id="side"
+                label="Side"
+                onChange={field.onChange}
+                options={SIDES}
+                value={field.value}
+              />
+            )}
+          />
         </Field>
 
         <Field name="quantity" label="Quantity" error={errors.quantity?.message} width="w-28">
@@ -167,13 +193,20 @@ export function TradeForm({ trader }: Props): ReactElement {
         {/* A picklist for the reason the counterparty is: a book owns the
             position, so a near miss opens a second book rather than failing. */}
         <Field name="book" label="Book" error={errors.book?.message} width="w-36">
-          <select id="book" className={`${INPUT} cursor-pointer`} {...form.register('book')}>
-            {BOOKS.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
+          <Controller
+            control={form.control}
+            name="book"
+            render={({ field }) => (
+              <Select
+                className={INPUT}
+                id="book"
+                label="Book"
+                onChange={field.onChange}
+                options={BOOK_CHOICES}
+                value={field.value}
+              />
+            )}
+          />
         </Field>
 
         {/* A picklist, not a text box. A counterparty is resolved from a
@@ -186,17 +219,20 @@ export function TradeForm({ trader }: Props): ReactElement {
           error={errors.counterparty?.message}
           width="w-40"
         >
-          <select
-            id="counterparty"
-            className={`${INPUT} cursor-pointer`}
-            {...form.register('counterparty')}
-          >
-            {COUNTERPARTIES.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
+          <Controller
+            control={form.control}
+            name="counterparty"
+            render={({ field }) => (
+              <Select
+                className={INPUT}
+                id="counterparty"
+                label="Counterparty"
+                onChange={field.onChange}
+                options={COUNTERPARTY_CHOICES}
+                value={field.value}
+              />
+            )}
+          />
         </Field>
 
         {/* One button, three labels. A separate confirm button would have to
