@@ -1,7 +1,6 @@
 import type { Trade } from '@tapedeck/shared'
 import type { CSSProperties, ReactElement } from 'react'
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { CHIP, MICRO_LABEL } from '../../lib/ui.js'
 import { BlotterTable } from '../blotter/BlotterTable.js'
 import type { RowActions } from '../blotter/SelectionBar.js'
@@ -19,7 +18,6 @@ import {
   withPaneAtEnd,
   withShares,
 } from './layout.js'
-import { NewPane } from './NewPane.js'
 import { PaneName } from './PaneName.js'
 import type { PaneConfig } from './paneConfig.js'
 import { DEFAULT_VIEW } from './paneConfig.js'
@@ -30,19 +28,6 @@ type Props = {
   trades: Trade[]
   pendingIds: ReadonlySet<string>
   actions: RowActions
-
-  /**
-   * Where in the nav to put the control that opens a pane, or null before the
-   * nav has been laid out.
-   *
-   * The control belongs up there, because opening a pane is the one thing a
-   * trader asks of the workspace without having a pane in mind. It is rendered
-   * from here through a portal rather than by lifting the arrangement into the
-   * app, which is the trade this prop exists to make: a pane tree held one level
-   * up would put every rename, resize and rearrangement through the component
-   * that also holds the booking form and the positions panel.
-   */
-  nav: HTMLElement | null
 }
 
 /** Said rather than copied, because the clipboard needs a secure context. */
@@ -123,7 +108,7 @@ const axisOf = (region: Region): string =>
  * virtualised first: two unvirtualised panes would be a thousand rows, which is
  * exactly the cost the 500-row window was introduced to remove.
  */
-export function Workspace({ trades, pendingIds, actions, nav }: Props): ReactElement {
+export function Workspace({ trades, pendingIds, actions }: Props): ReactElement {
   /**
    * Each pane's current view, written by the pane and read when Share is pressed
    * or when a pane has to be remounted. A ref and not state on purpose: holding
@@ -576,9 +561,7 @@ export function Workspace({ trades, pendingIds, actions, nav }: Props): ReactEle
           onDuplicate={
             order.length >= MAX_PANES ? undefined : (config) => duplicate(region.id, config)
           }
-          // The same control the nav carries, reached from the pane instead.
-          // Two routes to one pane because the nav is where you look for it and
-          // the menu is where your hand already is.
+          // Withheld at the ceiling for the same reason Duplicate is.
           onNewPane={order.length >= MAX_PANES ? undefined : () => addPane('')}
           onShare={share}
           pendingIds={pendingIds}
@@ -602,14 +585,6 @@ export function Workspace({ trades, pendingIds, actions, nav }: Props): ReactEle
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
-      {/* In the nav, because opening a pane is the one thing asked of the
-        workspace with no pane in mind, and rendered from here because the
-        arrangement it adds to is here. Withheld at the ceiling for the same
-        reason Duplicate is: the link numbers its panes p1 to p8. */}
-      {nav === null || order.length >= MAX_PANES
-        ? null
-        : createPortal(<NewPane onOpen={addPane} />, nav)}
-
       {/* Fixed, so a line that is up for four seconds costs the panes no height.
         Kept rather than dropped with the button because the clipboard can refuse
         outright, and then this is the only thing that says the link is in the

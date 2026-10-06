@@ -83,21 +83,6 @@ body {
   animation: tape-flash 900ms ease-out;
 }
 
-/* One ring per delivered frame, restarted by remounting the dot on the cursor.
-   Reverts to the resting glow when it ends, since animation-fill-mode is none. */
-@keyframes tape-tick {
-  from {
-    box-shadow: 0 0 0 0 currentColor;
-  }
-  to {
-    box-shadow: 0 0 0 4px transparent;
-  }
-}
-
-.tape-tick {
-  animation: tape-tick 600ms ease-out;
-}
-
 /* The grid's configuration panel, which shrinks the grid rather than covering
    it. Animating width is normally the wrong choice because every frame relays
    out the content, and it is the right one here for one specific reason: the
@@ -109,8 +94,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tape-flash,
-  .tape-tick {
+  .tape-flash {
     animation: none;
   }
 

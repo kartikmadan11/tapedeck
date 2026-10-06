@@ -1,6 +1,5 @@
 import type { ReactElement } from 'react'
 import { useCallback, useMemo, useState } from 'react'
-import { ConnectionBadge } from './components/ConnectionBadge.js'
 import { ErrorNotice } from './components/ErrorNotice.js'
 import { PanelSeparator } from './components/PanelSeparator.js'
 import { RefreshButton } from './components/RefreshButton.js'
@@ -23,7 +22,7 @@ import { useBlotter, usePendingTradeIds, useRefreshBlotter } from './features/tr
 import { Workspace } from './features/workspace/Workspace.js'
 
 export function App(): ReactElement {
-  const { status } = useRealtime()
+  useRealtime()
   const blotter = useBlotter()
   const pendingIds = usePendingTradeIds()
   const refresh = useRefreshBlotter()
@@ -68,14 +67,6 @@ export function App(): ReactElement {
    */
   const [panelWidth, setPanelWidth] = useState(PANEL_WIDTH)
 
-  /**
-   * The nav's slot for the workspace's own controls, which the workspace fills
-   * through a portal. Held as the element rather than looked up by id, because a
-   * render is the wrong place to read the DOM and the node does not exist in the
-   * first one.
-   */
-  const [nav, setNav] = useState<HTMLElement | null>(null)
-
   const closeAmend = useCallback(() => setAmendingId(null), [])
   const closeCancel = useCallback(() => setCancellingId(null), [])
   const closeHistory = useCallback(() => setHistoryId(null), [])
@@ -88,13 +79,9 @@ export function App(): ReactElement {
       <header className="flex items-baseline gap-3 border-b border-tape-line pb-2">
         <h1 className="text-sm font-semibold uppercase tracking-[0.2em]">tapedeck</h1>
         <div className="ml-auto flex items-center gap-2">
-          {/* display:contents, so an empty slot is not a gap in the row: what the
-            workspace puts here is a flex item of this row, not of a wrapper. */}
-          <div className="contents" ref={setNav} />
-          <IdentityBadge trader={trader} />
           <SimulationToggle />
           <RefreshButton onRefresh={refresh} refreshing={blotter.isFetching} />
-          <ConnectionBadge status={status} cursor={blotter.data?.seq ?? 0} />
+          <IdentityBadge trader={trader} />
         </div>
       </header>
 
@@ -105,7 +92,7 @@ export function App(): ReactElement {
       {/* No gap: the handle between them is the gap, so the boundary a pointer
         aims at is the line that divides the two. */}
       <div className="flex min-h-0 flex-1">
-        <Workspace trades={trades} pendingIds={pendingIds} actions={actions} nav={nav} />
+        <Workspace trades={trades} pendingIds={pendingIds} actions={actions} />
         <PanelSeparator
           label="Resize the positions panel"
           max={PANEL_MAX_WIDTH}

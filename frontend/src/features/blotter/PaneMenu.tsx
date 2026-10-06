@@ -1,7 +1,6 @@
 import type { KeyboardEvent, ReactElement } from 'react'
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { MICRO_LABEL } from '../../lib/ui.js'
 
 /** Where the menu was asked for, in viewport coordinates. */
 export type Point = { x: number; y: number }
@@ -162,12 +161,6 @@ export function PaneMenu({ label, at, items, onDismiss }: Props): ReactElement {
           </Fragment>
         ))}
       </div>
-
-      {/* Outside the menu rather than a last item in it, since a menu whose
-        children are not all items is a menu a screen reader miscounts. */}
-      <p className={`mt-1 border-t border-tape-line px-3 pt-1.5 ${MICRO_LABEL}`}>
-        Hold shift for the browser menu
-      </p>
     </div>,
     document.body,
   )

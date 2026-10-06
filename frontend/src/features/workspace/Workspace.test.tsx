@@ -1,8 +1,6 @@
 import type { Trade } from '@tapedeck/shared'
 import { trade as tradeSchema } from '@tapedeck/shared'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import type { ReactElement } from 'react'
-import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MIN_WEIGHT } from './layout.js'
 import { decodeWorkspace } from './state.js'
@@ -38,28 +36,14 @@ const BOOK = [
   }),
 ]
 
-/**
- * The workspace and the nav slot it fills, which is how the app composes the
- * two. The control that opens a pane renders through a portal into the nav, so
- * a test that rendered the workspace on its own could not reach it at all.
- */
-function Harness(): ReactElement {
-  const [nav, setNav] = useState<HTMLElement | null>(null)
-  return (
-    <>
-      <div ref={setNav} />
-      <Workspace
-        actions={{ onAmend: vi.fn(), onCancel: vi.fn(), onHistory: vi.fn() }}
-        nav={nav}
-        pendingIds={new Set()}
-        trades={BOOK}
-      />
-    </>
-  )
-}
-
 function renderWorkspace(): void {
-  render(<Harness />)
+  render(
+    <Workspace
+      actions={{ onAmend: vi.fn(), onCancel: vi.fn(), onHistory: vi.fn() }}
+      pendingIds={new Set()}
+      trades={BOOK}
+    />,
+  )
 }
 
 /**
@@ -119,18 +103,13 @@ function rename(from: string, to: string): void {
   fireEvent.keyDown(nameBox(from), { key: 'Enter' })
 }
 
-/** The nav's control for opening a pane, and the box it turns into. */
-const newPane = (): HTMLElement => screen.getByRole('button', { name: 'New pane' })
-
-const newPaneBox = (): HTMLElement => screen.getByRole('textbox', { name: 'Name for the new pane' })
-
-/** Opens one from the nav, with no name at all when none is given. */
+/** Opens one from a pane's menu. It arrives unnamed, so a name is a rename. */
 function openPane(name: string): void {
-  fireEvent.click(newPane())
+  const opened = `Trades, pane ${panes().length + 1}`
+  choose('Trades', 'New pane')
   if (name !== '') {
-    fireEvent.change(newPaneBox(), { target: { value: name } })
+    rename(opened, name)
   }
-  fireEvent.keyDown(newPaneBox(), { key: 'Enter' })
 }
 
 /** The workspace reads the address bar on mount, and follows it as it changes. */
@@ -191,17 +170,15 @@ describe('the workspace', () => {
     address('?panes=8')
     renderWorkspace()
 
-    // Refused, and both routes to a ninth pane are. The link numbers its panes
-    // p1 to p8, so a ninth would be a workspace that cannot be shared. One
-    // pane's menu rather than all eight, since the items come off the same two
-    // props for every pane and only one menu is open at a time.
+    // Refused rather than missing. The link numbers its panes p1 to p8, so a
+    // ninth would be a workspace that cannot be shared. One pane's menu rather
+    // than all eight, since the items come off the same two props for every pane
+    // and only one menu is open at a time.
     expect(panes()).toHaveLength(8)
     const items = menu('Trades')
     expect(items.getByRole('menuitem', { name: 'Duplicate' })).toBeDisabled()
     expect(items.getByRole('menuitem', { name: 'New pane' })).toBeDisabled()
     expect(items.getByRole('menuitem', { name: 'Close' })).toBeEnabled()
-    // The nav's control is withheld instead, since nothing moves up into it.
-    expect(screen.queryByRole('button', { name: 'New pane' })).toBeNull()
   })
 
   it('opens the duplicate on the view it was duplicated from', () => {
@@ -343,29 +320,14 @@ describe('naming a pane', () => {
   })
 })
 
-describe('opening a pane from the nav', () => {
-  it('opens one on the name it was given, with no pane to open it from', () => {
-    renderWorkspace()
-    openPane('EU Flow')
-
-    expect(panes()).toHaveLength(2)
-    expect(screen.getByRole('region', { name: 'EU Flow' })).toBeInTheDocument()
-  })
-
+describe('opening a pane', () => {
   it('opens one with no name, which the workspace then names by where it put it', () => {
     renderWorkspace()
-    openPane('')
+    choose('Trades', 'New pane')
 
-    // Pressing the chip and pressing Enter is the whole gesture for a trader who
-    // wants another pane and has nothing to call it.
+    // The name comes off the position, and the nameplate changes it.
+    expect(panes()).toHaveLength(2)
     expect(screen.getByRole('region', { name: 'Trades, pane 2' })).toBeInTheDocument()
-  })
-
-  it('puts the cursor in the box, so the name is typed and not aimed at', () => {
-    renderWorkspace()
-    fireEvent.click(newPane())
-
-    expect(document.activeElement).toBe(newPaneBox())
   })
 
   it('opens it on the default view rather than on the view in front of you', () => {
@@ -374,44 +336,12 @@ describe('opening a pane from the nav', () => {
     fireEvent.change(first().getByLabelText('Group by'), { target: { value: 'symbol' } })
     openPane('EU Flow')
 
-    // The difference from Duplicate, and the reason both controls are there: one
-    // branches off what you are reading and this one is the empty second view.
+    // The difference from Duplicate: that one branches off what you are reading.
     expect(first().getByRole('button', { name: 'VOD, 1 trades' })).toBeInTheDocument()
     expect(pane('EU Flow').queryByRole('button', { name: 'VOD, 1 trades' })).toBeNull()
     // Flat, so both trades are rows of their own rather than inside a group.
     expect(row('EU Flow', 'TRD-100001')).not.toBeNull()
     expect(row('EU Flow', 'TRD-100002')).not.toBeNull()
-  })
-
-  it('opens nothing when the naming is abandoned', () => {
-    renderWorkspace()
-    fireEvent.click(newPane())
-    fireEvent.change(newPaneBox(), { target: { value: 'EU Flow' } })
-    fireEvent.keyDown(newPaneBox(), { key: 'Escape' })
-
-    expect(panes()).toHaveLength(1)
-    expect(newPane()).toBeInTheDocument()
-  })
-
-  it('opens nothing when the box is left rather than committed', () => {
-    renderWorkspace()
-    fireEvent.click(newPane())
-    fireEvent.change(newPaneBox(), { target: { value: 'EU Flow' } })
-    fireEvent.blur(newPaneBox())
-
-    // The opposite of what leaving a rename does, on purpose. A pane appears and
-    // rearranges the workspace, so it takes saying so; a name typed onto a pane
-    // that is already there does not.
-    expect(panes()).toHaveLength(1)
-    expect(newPane()).toBeInTheDocument()
-  })
-
-  it('stops offering to open one at the ceiling the link format can carry', () => {
-    address('?panes=8')
-    renderWorkspace()
-
-    expect(panes()).toHaveLength(8)
-    expect(screen.queryByRole('button', { name: 'New pane' })).toBeNull()
   })
 })
 

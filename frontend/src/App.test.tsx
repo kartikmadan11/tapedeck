@@ -153,10 +153,6 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function badge(): HTMLElement {
-  return screen.getByText(/^(Connecting|Live|Reconnecting)$/).parentElement as HTMLElement
-}
-
 /** A trade's row, by the id it carries: the Trade column is off by default. */
 function row(tradeId: string): HTMLElement | null {
   return document.querySelector(`tr[data-trade-id="${tradeId}"]`)
@@ -193,9 +189,6 @@ describe('App', () => {
     const panel = screen.getByRole('complementary')
     expect(within(panel).getByText('VOD')).toBeInTheDocument()
     expect(within(panel).getByText('724,650.00')).toBeInTheDocument()
-
-    expect(badge()).toHaveTextContent('Connecting')
-    expect(badge()).toHaveTextContent('seq 1')
   })
 
   it('connects to the same origin it was served from', () => {
@@ -220,8 +213,6 @@ describe('App', () => {
     })
 
     expect(await findRow('TRD-100002')).toBeInTheDocument()
-    expect(badge()).toHaveTextContent('Live')
-    expect(badge()).toHaveTextContent('seq 2')
   })
 
   it('strikes a row through when it is cancelled elsewhere rather than removing it', async () => {
@@ -259,19 +250,22 @@ describe('App', () => {
     const panel = screen.getByRole('complementary')
     expect(await within(panel).findByText('289,860.00')).toBeInTheDocument()
 
-    // A positions frame carries no seq, so there is nothing for it to advance and
-    // no frame it can cause the client to skip.
-    expect(badge()).toHaveTextContent('seq 1')
+    // A positions frame carries no seq, so there is nothing for it to advance.
+    // Seq 2 is accepted only against a cursor still on 1, so the row arriving is
+    // the proof.
+    deliver({ type: 'trade.created', seq: 2, trade: aTrade({ tradeId: 'TRD-100002' }) })
+
+    expect(await findRow('TRD-100002')).toBeInTheDocument()
   })
 
-  it('reports a dropped connection and keeps the rows it already has', async () => {
+  it('keeps the rows it already has when the connection drops', async () => {
     renderApp()
     await findRow('TRD-100001')
     open()
 
     act(() => FakeSocket.live.onclose?.())
 
-    expect(badge()).toHaveTextContent('Reconnecting')
+    // A drop is not a reason to blank the tape. Reconnecting is the resync.
     expect(row('TRD-100001')).not.toBeNull()
   })
 
@@ -299,7 +293,6 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
 
     expect(await findRow('TRD-100002')).toBeInTheDocument()
-    expect(badge()).toHaveTextContent('seq 2')
   })
 
   it('books under the window identity and stamps the same name as the actor', async () => {
@@ -324,10 +317,12 @@ describe('App', () => {
     renderApp()
     await findRow('TRD-100001')
 
-    // The name stamped on an amend is the one thing a trader should not be able to
-    // choose, so there is no control labelled with it, only the name itself.
-    expect(screen.queryByLabelText('Trading as')).toBeNull()
-    expect(screen.getByText('Trading as').parentElement).toHaveTextContent('Trading as k.madan')
+    // The name stamped on an amend is the one thing a trader should not be able
+    // to choose, so the header states it and holds no box. Addressed off the
+    // title, since every pane bar is a banner too.
+    const header = screen.getByRole('heading', { name: 'tapedeck' }).closest('header')
+    expect(header).toHaveTextContent('k.madan')
+    expect(within(header as HTMLElement).queryByRole('textbox')).toBeNull()
   })
 })
 
@@ -373,10 +368,13 @@ describe('the simulated feed control', () => {
     deliver({ type: 'simulation', running: true, intervalMs: SIMULATION_INTERVAL_MS })
 
     await screen.findByRole('button', { name: 'Pause feed' })
-    // An unsequenced frame must not advance the cursor: doing so would make the
-    // client discard the trade frames the feed is about to produce.
-    expect(badge()).toHaveTextContent('seq 1')
     expect(row('TRD-100001')).not.toBeNull()
+
+    // An unsequenced frame must not advance the cursor, or the client would
+    // discard the trade frames the feed is about to produce.
+    deliver({ type: 'trade.created', seq: 2, trade: aTrade({ tradeId: 'TRD-100002' }) })
+
+    expect(await findRow('TRD-100002')).toBeInTheDocument()
   })
 })
 

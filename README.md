@@ -215,7 +215,7 @@ npm run typecheck   # tsc --noEmit over both the node and the web projects
 npm run lint        # biome
 ```
 
-509 tests across 20 files. The ones that matter most:
+504 tests across 20 files. The ones that matter most:
 
 - **concurrency**: two amends submitted at the same `version`, where the second
   gets a 409 `VERSION_CONFLICT` naming the current version
@@ -298,12 +298,10 @@ npm run lint        # biome
   nothing for the panes nobody named. Driven by typing into the nameplate, so the
   draft held in the box, the one rename the workspace hears and the parameter it
   writes are all one path
-- **the nav's new pane, through the slot it really renders into**: the test
-  mounts the workspace beside a nav node and passes it, so the control is driven
-  where it sits rather than where it is declared. It opens a pane on the name it
-  was given, opens one with no name at all on Enter alone, arrives on the default
-  view where a duplicate arrives on its source's, and lands at the end of a
-  side-by-side workspace beside the other two rather than under the last of them
+- **a new pane**: that it arrives unnamed and the workspace names it by where it
+  put it, that it arrives on the default view where a duplicate arrives on its
+  source's, and that it lands at the end of a side-by-side workspace beside the
+  other two rather than under the last of them
 - **the pane's own menu**: that it opens where the pointer was, that it opens at
   the pane's corner instead when the event carries no coordinates, which is the
   keyboard route, that holding **Shift** leaves the event uncancelled so the
@@ -558,8 +556,8 @@ pane's name, its size and the trades alone, because a reset that also renamed
 and resized the pane is a control nobody would risk pressing.
 
 Two of the six are the workspace's rather than the pane's, and the one that
-needed it is named for it. **New pane** means what it says wherever it is
-pressed. **Share workspace** does not: an unqualified Share sitting among a
+needed it is named for it. **New pane** means what it says. **Share workspace**
+does not: an unqualified Share sitting among a
 pane's own controls could not say whether it meant that pane or all of them,
 which is the argument that kept it off a pane's bar in the first place, and
 naming the item answers it. The menu is now the only route to it: the strip that
@@ -583,13 +581,15 @@ below it moves up into, and a list read off muscle memory has to be the same lis
 every time it opens.
 
 The cost is discoverability, and it is real: nothing on screen says to
-right-click. That is the convention this comes from, where every grid in a
-trading application is configured this way and a trader learns it once across all
-of them, and it is the wrong trade for somebody opening this one for the first
-time. **New pane** is in the nav for that reason, named, as the one route in that
-needs no prior knowledge. For the rest the mitigation is the line at the top of
-this file rather than a hint on the bar, which would be a chip spent saying there
-are no chips.
+right-click, and the menu is now the only route to every one of the six. That is
+the convention this comes from, where every grid in a trading application is
+configured this way and a trader learns it once across all of them, and it is the
+wrong trade for somebody opening this one for the first time. The mitigation is
+the line at the top of this file rather than a hint on the bar, which would be a
+chip spent saying there are no chips. A named control in the top bar is the
+honest answer for a first-time reader, and it was there; it came out because a
+blotter's top bar is not where a trader looks for a view control, and two routes
+to one pane is two things to keep in step for one gesture.
 
 **A workspace is a tree of splits, not one axis with a weight per pane.** Panes
 are dragged by the handle on their own bar and dropped on another pane's edge,
@@ -678,31 +678,15 @@ It is refused at eight panes, which is the point where the link format's `p1` to
 `p8` could no longer carry the workspace: a control that produced a workspace
 **Share** cannot describe is worse than one that will not fire.
 
-**A pane can also be opened from the nav, named as it is opened.** Duplicate is a
-pane's own control and hands over the view in front of it. **New pane** is the
-empty one, for a trader who wants a second reading of the tape rather than
-another copy of the one they already have, and it takes a name on the way in
-because opening a pane is the moment someone knows what it is for. It lands at
-the end of the workspace, on the axis the workspace is already divided on, so a
-third pane joins two that stand side by side rather than arriving under whichever
-of them happens to be last. It takes its half out of that end, so the pane at the
-other end keeps the size it was given, and at eight panes it stops for the same
-reason Duplicate does. The nav's copy is withheld rather than refused, which is
-the one place the two differ: nothing moves up into the gap a missing chip
-leaves, where a missing menu item would hand its position to the next one.
-
-Where that control sits is worth a line, because it is the one place in the
-application where a component renders outside its own tree. The nav is where it
-belongs: opening a pane is the only thing a trader asks of the workspace without
-having a pane in mind. The arrangement it adds to is held inside the workspace,
-though, and lifting that one level up to reach the nav would put every rename,
-resize and rearrangement through the component that also holds the booking form
-and the positions panel. So the app leaves a `display: contents` slot in the nav
-and the workspace fills it through a portal: the button's markup, its place in
-the tab order and its place in a screen reader's reading of the page are all in
-the nav, and the state behind it never leaves the workspace. **Share workspace**
-is reached from a pane's menu instead, since it needs no slot of its own and a
-chip for it cost the panes a strip of height.
+**New pane** is the empty one, next to Duplicate, for a trader who wants a
+second reading of the tape rather than another copy of the one they already
+have. It arrives unnamed and the workspace names it by where it put it, so the
+gesture is one menu item and the nameplate is there when the pane turns out to
+be worth a name. It lands at the end of the workspace, on the axis the workspace
+is already divided on, so a third pane joins two that stand side by side rather
+than arriving under whichever of them happens to be last. It takes its half out
+of that end, so the pane at the other end keeps the size it was given, and at
+eight panes it is greyed in place for the same reason Duplicate is.
 
 **A pane can be named, and the name belongs to the pane rather than to the slot.**
 Clicking the title on a pane's bar turns it into a box, which is also why there is

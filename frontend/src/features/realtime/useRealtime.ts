@@ -1,13 +1,10 @@
 import { useQueryClient } from '@tanstack/react-query'
 import type { BlotterState, ServerFrame, SimulationState } from '@tapedeck/shared'
 import { serverFrame } from '@tapedeck/shared'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { websocketUrl } from '../../lib/api.js'
 import { queryKeys } from '../../lib/queryClient.js'
 import { apply, emptyBlotter, hasGap, isTradeDelta } from './apply.js'
-
-/** No permanent failure state: the client retries for as long as the page is open. */
-export type ConnectionStatus = 'connecting' | 'live' | 'reconnecting'
 
 const BASE_DELAY_MS = 250
 const MAX_DELAY_MS = 10_000
@@ -21,9 +18,8 @@ const JITTER_MS = 250
  * a consistent snapshot, so reconnecting is the resync, and a detected gap is
  * handled by refetching over REST.
  */
-export function useRealtime(): { status: ConnectionStatus } {
+export function useRealtime(): void {
   const queryClient = useQueryClient()
-  const [status, setStatus] = useState<ConnectionStatus>('connecting')
 
   useEffect(() => {
     let disposed = false
@@ -76,9 +72,9 @@ export function useRealtime(): { status: ConnectionStatus } {
       const next = new WebSocket(websocketUrl())
       socket = next
 
+      // Resets the backoff, so the next drop starts over rather than at 10s.
       next.onopen = () => {
         attempt = 0
-        setStatus('live')
       }
 
       next.onmessage = (event: MessageEvent) => {
@@ -101,7 +97,6 @@ export function useRealtime(): { status: ConnectionStatus } {
         if (disposed) {
           return
         }
-        setStatus('reconnecting')
         schedule()
       }
     }
@@ -116,8 +111,6 @@ export function useRealtime(): { status: ConnectionStatus } {
       socket?.close()
     }
   }, [queryClient])
-
-  return { status }
 }
 
 function parseJson(text: string): unknown {
