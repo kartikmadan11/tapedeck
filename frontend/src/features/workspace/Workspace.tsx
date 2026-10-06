@@ -3,6 +3,8 @@ import type { CSSProperties, ReactElement } from 'react'
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { CHIP, MICRO_LABEL } from '../../lib/ui.js'
 import { BlotterTable } from '../blotter/BlotterTable.js'
+import type { Point } from '../blotter/PaneMenu.js'
+import { PaneMenu } from '../blotter/PaneMenu.js'
 import type { RowActions } from '../blotter/SelectionBar.js'
 import type { Edge, Leaf, Region, Split } from './layout.js'
 import {
@@ -255,6 +257,41 @@ export function Workspace({ trades, pendingIds, actions }: Props): ReactElement 
   /** An object, not a string, so pressing Share twice restarts the timer below. */
   const [shared, setShared] = useState<{ text: string } | null>(null)
 
+  /**
+   * Where the application's own menu was asked for, which is anywhere a pane did
+   * not already answer: the header, the ticket, the positions panel, the gaps.
+   */
+  const [menuAt, setMenuAt] = useState<Point | null>(null)
+  const dismissMenu = useCallback(() => setMenuAt(null), [])
+
+  useEffect(() => {
+    const onContextMenu = (event: MouseEvent): void => {
+      // A pane's own menu is the longer list and it has already claimed the
+      // event by the time this runs: React's handlers sit on the root element,
+      // which is inside the document this is bound to. Shift goes to the
+      // browser, which is the deal a grid taking over right-click makes.
+      if (event.defaultPrevented || event.shiftKey) {
+        return
+      }
+      const target = event.target instanceof Element ? event.target : null
+      // Cut, copy and paste belong to the field. A sheet already open belongs to
+      // itself: both menus portal out of the pane that raised them, so without
+      // this a right-click on one would open the other over the top of it.
+      const own = target?.closest('input, select, textarea, [role="menu"], [role="listbox"]')
+      if (own != null) {
+        return
+      }
+      event.preventDefault()
+      // A menu raised from the keyboard carries no coordinates, and the sheet
+      // clamps (0, 0) to the corner, which is where it belongs with no pointer
+      // to be clear of.
+      setMenuAt({ x: event.clientX, y: event.clientY })
+    }
+
+    document.addEventListener('contextmenu', onContextMenu)
+    return () => document.removeEventListener('contextmenu', onContextMenu)
+  }, [])
+
   useEffect(() => {
     if (shared === null) {
       return
@@ -382,6 +419,25 @@ export function Workspace({ trades, pendingIds, actions }: Props): ReactElement 
       return
     }
     place(id, neighbour.id, edge)
+  }
+
+  /**
+   * Back to one pane on the default view, names and all.
+   *
+   * Named for the workspace rather than left as Reset, because a pane's own menu
+   * already has a Reset and that one resets the view in front of you. Two items
+   * called the same thing meaning two different scopes is worse than a longer
+   * label. The address bar follows, since the effect above tracks the tree.
+   */
+  const resetWorkspace = (): void => {
+    // Cleared before the pane is opened, which writes the default view back in
+    // under its own id.
+    views.current.clear()
+    reporters.current.clear()
+    // Outside the updater, which has to be pure, for the same reason the
+    // duplicate and the new pane are.
+    const pane = open()
+    setRoot(pane)
   }
 
   const share = (): void => {
@@ -596,6 +652,26 @@ export function Workspace({ trades, pendingIds, actions }: Props): ReactElement 
         >
           {shared.text}
         </p>
+      )}
+
+      {/* The three items that need no pane, so right-click answers everywhere
+        rather than only over the tape. A pane's own menu carries these as well,
+        above the four that are about the pane you clicked. */}
+      {menuAt === null ? null : (
+        <PaneMenu
+          at={menuAt}
+          items={[
+            {
+              label: 'New pane',
+              onSelect: () => addPane(''),
+              disabled: order.length >= MAX_PANES,
+            },
+            { label: 'Reset workspace', onSelect: resetWorkspace },
+            { label: 'Share workspace', onSelect: share },
+          ]}
+          label="Workspace"
+          onDismiss={dismissMenu}
+        />
       )}
 
       {/*

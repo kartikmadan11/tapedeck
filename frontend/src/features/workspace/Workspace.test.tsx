@@ -89,6 +89,17 @@ function choose(paneName: string, item: string): void {
   fireEvent.click(menu(paneName).getByRole('menuitem', { name: item }))
 }
 
+/**
+ * The application's own menu, raised from outside every pane. The body stands in
+ * for the header, the ticket and the positions panel, which are all the same
+ * thing to the listener: a right-click no pane claimed.
+ */
+function appMenu() {
+  fireEvent.pointerDown(document.body)
+  fireEvent.contextMenu(document.body)
+  return within(screen.getByRole('menu'))
+}
+
 /** A pane's name on its own bar, which is also the control that changes it. */
 const nameplate = (paneName: string): HTMLElement =>
   pane(paneName).getByRole('button', { name: `Rename ${paneName}` })
@@ -163,6 +174,51 @@ describe('the workspace', () => {
     expect(panes()).toHaveLength(2)
 
     choose('Trades, pane 2', 'Close')
+    expect(panes()).toHaveLength(1)
+    expect(screen.getByRole('region', { name: 'Trades' })).toBeInTheDocument()
+  })
+
+  it('answers a right-click outside every pane, carrying what needs no pane', () => {
+    renderWorkspace()
+
+    const items = appMenu()
+    expect(items.getByRole('menuitem', { name: 'New pane' })).toBeEnabled()
+    expect(items.getByRole('menuitem', { name: 'Reset workspace' })).toBeEnabled()
+    expect(items.getByRole('menuitem', { name: 'Share workspace' })).toBeEnabled()
+
+    // The four that are about the pane you clicked are not offered here, since
+    // there is no pane to be about.
+    expect(items.queryByRole('menuitem', { name: 'Close' })).toBeNull()
+    expect(items.queryByRole('menuitem', { name: 'Duplicate' })).toBeNull()
+    expect(items.queryByRole('menuitem', { name: 'Config' })).toBeNull()
+  })
+
+  it('leaves a right-click over a pane to the pane', () => {
+    renderWorkspace()
+
+    // One menu, and the longer one. The pane's handler runs first and takes the
+    // event, which is what the application-wide listener reads to stand down.
+    const items = menu('Trades')
+    expect(screen.getAllByRole('menu')).toHaveLength(1)
+    expect(items.getByRole('menuitem', { name: 'Duplicate' })).toBeInTheDocument()
+  })
+
+  it('gives Shift back to the browser outside a pane as well as over one', () => {
+    renderWorkspace()
+
+    fireEvent.contextMenu(document.body, { shiftKey: true })
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('resets the workspace to the one pane it opens on', () => {
+    renderWorkspace()
+    choose('Trades', 'Duplicate')
+    rename('Trades', 'Risk')
+
+    fireEvent.click(appMenu().getByRole('menuitem', { name: 'Reset workspace' }))
+
+    // The arrangement, the views and the names all go: a reset that kept the
+    // names would leave a pane called Risk on the default view.
     expect(panes()).toHaveLength(1)
     expect(screen.getByRole('region', { name: 'Trades' })).toBeInTheDocument()
   })
