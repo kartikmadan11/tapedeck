@@ -57,14 +57,15 @@ export function PnlBySymbol({ positions }: Props): ReactElement | null {
 
   return (
     <section aria-labelledby={headingId} className="border-t border-tape-line px-1.5 py-1">
-      <h3 className={`flex h-5 items-center ${SECTION_LABEL}`} id={headingId}>
+      <h3 className={`flex h-6 items-center ${SECTION_LABEL}`} id={headingId}>
         P&amp;L by symbol
       </h3>
 
-      <ul>
+      {/* 15px, matching the band below: the same figures, so the same size. */}
+      <ul className="text-[15px]">
         {rows.map(({ symbol, minor }) => (
-          <li key={symbol} className="flex h-5 items-center gap-1">
-            <span className="w-9 shrink-0 truncate text-tape-muted">{symbol}</span>
+          <li key={symbol} className="flex h-6 items-center gap-1">
+            <span className="w-11 shrink-0 truncate text-tape-muted">{symbol}</span>
 
             {/* Not announced: the symbol and figure either side of it already say
               everything a bar can, and the table above says it a third time. */}
@@ -81,8 +82,8 @@ export function PnlBySymbol({ positions }: Props): ReactElement | null {
             </span>
 
             {/* Fixed, or each row's track ends somewhere else and the bars stop
-              being comparable. 120px holds -99,999,999.99 at 13px monospace. */}
-            <span className={`w-[120px] shrink-0 text-right tabular-nums ${pnlTone(minor)}`}>
+              being comparable. 140px holds -99,999,999.99 at 15px monospace. */}
+            <span className={`w-[140px] shrink-0 text-right tabular-nums ${pnlTone(minor)}`}>
               {formatDecimal(fromMinorUnits(minor), 2)}
             </span>
           </li>

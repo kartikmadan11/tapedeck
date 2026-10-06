@@ -2,7 +2,7 @@ import { formatDecimal, fromMinorUnits } from '@tapedeck/shared'
 import type { ReactElement } from 'react'
 import { useId, useMemo } from 'react'
 import { formatQuantity } from '../../lib/format.js'
-import { MICRO_LABEL, SECTION_LABEL } from '../../lib/ui.js'
+import { SECTION_LABEL } from '../../lib/ui.js'
 import { PnlBySymbol } from './PnlBySymbol.js'
 import { pnlMinor, pnlTone } from './pnl.js'
 import { bookTotals } from './totals.js'
@@ -19,6 +19,10 @@ export const PANEL_MAX_WIDTH = 560
  *  the column reads as mark-to-market. */
 const PNL_NOTE =
   'Marked against each instrument reference price, a static indicative level rather than a live market price'
+
+/** MICRO_LABEL one step up, because the figures beside it read at 15px. Local, not
+ *  the shared token: the rest of the screen is still 13px. */
+const LABEL = 'text-[11px] uppercase tracking-[0.14em] text-tape-muted'
 
 type Props = {
   width: number
@@ -44,7 +48,7 @@ export function PositionsPanel({ width, id }: Props): ReactElement {
         clears it. */}
       <header className="flex h-8 shrink-0 items-center justify-between border-b border-tape-line bg-tape-panel pr-7 pl-2">
         <h2 className={SECTION_LABEL}>Positions</h2>
-        <span className={MICRO_LABEL}>{positions.length} symbols</span>
+        <span className={LABEL}>{positions.length} symbols</span>
       </header>
 
       <div className="min-h-0 flex-1 overflow-auto">
@@ -114,11 +118,13 @@ export function PositionsPanel({ width, id }: Props): ReactElement {
           {/* Names the scope, not the arithmetic: the figures are plainly sums, and
             what a reader cannot tell is that the trade count is the whole book
             while the tape beside it holds the newest 500. */}
-          <h3 className={`flex h-5 items-center ${SECTION_LABEL}`} id={bandId}>
+          <h3 className={`flex h-6 items-center ${SECTION_LABEL}`} id={bandId}>
             Firm-wide totals
           </h3>
 
-          <dl>
+          {/* The book's own figures are the longest on screen, so they get a step up
+            from the 13px body rather than being read off the smallest type. */}
+          <dl className="text-[15px]">
             <Total label="Gross" value={formatDecimal(fromMinorUnits(totals.grossMinor), 2)} />
             <Total label="Net" value={formatDecimal(fromMinorUnits(totals.netMinor), 2)} />
             <Total
@@ -146,8 +152,8 @@ type TotalProps = {
  *  rather than a digit. */
 function Total({ label, title, tone: figureTone, value }: TotalProps): ReactElement {
   return (
-    <div className="flex h-6 items-center justify-between gap-2">
-      <dt className={`min-w-0 truncate ${MICRO_LABEL}`} title={title}>
+    <div className="flex h-7 items-center justify-between gap-2">
+      <dt className={`min-w-0 truncate ${LABEL}`} title={title}>
         {label}
       </dt>
       <dd className={`shrink-0 tabular-nums ${figureTone ?? 'text-tape-text'}`}>{value}</dd>

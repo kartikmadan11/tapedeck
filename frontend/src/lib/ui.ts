@@ -24,8 +24,9 @@ export const CHIP_ON = `${CHIP_BASE} border-tape-accent text-tape-accent`
 export const MICRO_LABEL = 'text-[10px] uppercase tracking-[0.14em] text-tape-muted'
 
 /** A panel's title, and any section heading inside it. Wider tracking and full
- *  brightness, so a heading is not read as another MICRO_LABEL row. */
-export const SECTION_LABEL = 'text-[10px] font-semibold uppercase tracking-[0.18em]'
+ *  brightness, so a heading is not read as another MICRO_LABEL row. A step up from
+ *  MICRO_LABEL because the positions panel reads at 15px, not 13px. */
+export const SECTION_LABEL = 'text-[11px] font-semibold uppercase tracking-[0.18em]'
 
 /** A draggable boundary. The bar is the hit area; the pill is a pseudo-element so
  *  an hr can have one without a child, an hr already carrying role="separator". */
