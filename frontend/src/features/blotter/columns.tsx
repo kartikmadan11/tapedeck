@@ -11,7 +11,7 @@ import {
   vwap,
 } from '@tapedeck/shared'
 import type { ReactElement, ReactNode } from 'react'
-import { formatDateTime, formatQuantity } from '../../lib/format.js'
+import { formatCount, formatDateTime, formatQuantity } from '../../lib/format.js'
 import { Magnitude } from './magnitude.js'
 
 // Lets a column carry its alignment class, which the table applies to its cells.
@@ -103,7 +103,7 @@ export function GroupToggle({
         row.toggleExpanded()
       }}
       aria-expanded={open}
-      aria-label={`${String(row.groupingValue)}, ${legs} trades`}
+      aria-label={`${String(row.groupingValue)}, ${formatCount(legs, 'trade')}`}
       className="flex cursor-pointer items-center gap-1.5 text-tape-text hover:text-tape-accent"
     >
       {/* Fixed width so the label does not shift when the group opens. */}

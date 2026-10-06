@@ -28,6 +28,7 @@ import type { KeyboardEvent, ReactElement, ReactNode } from 'react'
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { SelectOption } from '../../components/Select.js'
 import { Select } from '../../components/Select.js'
+import { formatCount } from '../../lib/format.js'
 import { CONTROL } from '../../lib/ui.js'
 import type { PaneConfig } from '../workspace/paneConfig.js'
 import { DEFAULT_VIEW } from '../workspace/paneConfig.js'
@@ -248,7 +249,9 @@ export function BlotterTable({
    *  does not turn the count into a number of rails. A full window says `latest`:
    *  at the bound the figure is no longer a count of the book. */
   const held =
-    trades.length === BLOTTER_LIMIT ? `latest ${BLOTTER_LIMIT} trades` : `${trades.length} trades`
+    trades.length === BLOTTER_LIMIT
+      ? `latest ${BLOTTER_LIMIT} trades`
+      : formatCount(trades.length, 'trade')
   const counted = leaves.length === trades.length ? held : `${leaves.length} of ${held}`
 
   /** Two bands under a split, the blocks above the measures they span. One otherwise. */

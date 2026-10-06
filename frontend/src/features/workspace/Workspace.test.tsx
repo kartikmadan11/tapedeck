@@ -241,7 +241,7 @@ describe('the workspace', () => {
     pick('Trades', 'Group by', 'symbol')
     choose('Trades', 'Duplicate')
 
-    expect(second().getByRole('button', { name: 'VOD, 1 trades' })).toBeInTheDocument()
+    expect(second().getByRole('button', { name: 'VOD, 1 trade' })).toBeInTheDocument()
     expect(second().getByLabelText('Group by')).toHaveAttribute('data-value', 'symbol')
   })
 
@@ -379,8 +379,8 @@ describe('opening a pane', () => {
     openPane('EU Flow')
 
     // The difference from Duplicate: that one branches off what you are reading.
-    expect(first().getByRole('button', { name: 'VOD, 1 trades' })).toBeInTheDocument()
-    expect(pane('EU Flow').queryByRole('button', { name: 'VOD, 1 trades' })).toBeNull()
+    expect(first().getByRole('button', { name: 'VOD, 1 trade' })).toBeInTheDocument()
+    expect(pane('EU Flow').queryByRole('button', { name: 'VOD, 1 trade' })).toBeNull()
     // Flat, so both trades are rows of their own rather than inside a group.
     expect(row('EU Flow', 'TRD-100001')).not.toBeNull()
     expect(row('EU Flow', 'TRD-100002')).not.toBeNull()
@@ -883,7 +883,7 @@ describe('a shared workspace', () => {
     renderWorkspace()
 
     expect(panes()).toHaveLength(2)
-    expect(first().getByRole('button', { name: 'VOD, 1 trades' })).toBeInTheDocument()
+    expect(first().getByRole('button', { name: 'VOD, 1 trade' })).toBeInTheDocument()
     expect(first().queryByRole('button', { name: 'Book' })).toBeNull()
     expect(row('Trades, pane 2', 'TRD-100001')).toBeNull()
     // The link turns the Trade column on, which the default view has off.

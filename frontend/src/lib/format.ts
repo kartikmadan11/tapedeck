@@ -32,3 +32,9 @@ export function formatTime(iso: string): string {
 export function formatQuantity(quantity: number): string {
   return INTEGER.format(quantity)
 }
+
+/** `1 symbol`, `2 symbols`. Every noun it is used with takes a plain -s, so there
+ *  is no irregular form to pass in. */
+export function formatCount(count: number, noun: string): string {
+  return `${formatQuantity(count)} ${count === 1 ? noun : `${noun}s`}`
+}

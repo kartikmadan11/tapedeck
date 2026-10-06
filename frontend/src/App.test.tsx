@@ -195,6 +195,8 @@ describe('App', () => {
     // VOD references 68.42, so 10,000 shares mark at 684,200 against 724,650 paid.
     expect(within(panel.getByRole('table')).getByText('-40,450.00')).toBeInTheDocument()
 
+    expect(panel.getByText('1 symbol')).toBeInTheDocument()
+
     // Named, so the figures carry their scope: the count is the book, not the tape.
     const band = within(panel.getByRole('region', { name: 'Firm-wide totals' }))
 

@@ -265,7 +265,7 @@ describe('grouping and aggregation', () => {
     // Hidden, not taken out of the table: TanStack silently skips a filter whose
     // column it cannot resolve, and this figure would become everybody's flow.
     expect(headers()).toEqual(['Symbol', ...NETTED])
-    expect(cells(groupRow('VOD, 1 trades'))[2]).toBe('10,000')
+    expect(cells(groupRow('VOD, 1 trade'))[2]).toBe('10,000')
   })
 
   it('leaves cancelled trades out of the netting', () => {
@@ -386,7 +386,7 @@ describe('a split pivots the measures across the grid', () => {
     // Off the filtered rows, a keystroke would take columns out from under the
     // cursor. The block stays and reports nothing.
     expect(headers().slice(1, 3)).toEqual(['BUY', 'SELL'])
-    expect(cells(groupRow('VOD, 1 trades')).slice(-4)).toEqual(['-', '0', '0', '0.00'])
+    expect(cells(groupRow('VOD, 1 trade')).slice(-4)).toEqual(['-', '0', '0', '0.00'])
   })
 
   it('caps how many blocks a split lays across the grid', () => {
