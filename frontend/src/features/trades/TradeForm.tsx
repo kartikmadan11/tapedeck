@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import type { CreateTradeInput } from '@tapedeck/shared'
-import { BOOKS, COUNTERPARTIES, createTradeInput } from '@tapedeck/shared'
+import { BOOKS, COUNTERPARTIES, createTradeInput, INSTRUMENTS } from '@tapedeck/shared'
 import type { ReactElement, ReactNode } from 'react'
 import { useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
@@ -118,9 +118,26 @@ export function TradeForm({ trader }: Props): ReactElement {
       noValidate
     >
       <div className="flex flex-wrap items-end gap-2">
+        {/* A typeahead, not a select: a real master holds thousands of lines.
+            The schema resolves against the same list either way. */}
         <Field name="symbol" label="Symbol" error={errors.symbol?.message} width="w-24">
-          <input id="symbol" className={INPUT} {...form.register('symbol')} />
+          <input
+            id="symbol"
+            autoComplete="off"
+            className={INPUT}
+            list="instruments"
+            {...form.register('symbol')}
+          />
         </Field>
+        {/* Value is the ticker, label is the name, so the list reads as a
+            master rather than as twelve abbreviations. */}
+        <datalist id="instruments">
+          {INSTRUMENTS.map((instrument) => (
+            <option key={instrument.symbol} value={instrument.symbol}>
+              {instrument.name}
+            </option>
+          ))}
+        </datalist>
 
         <Field name="side" label="Side" error={errors.side?.message} width="w-24">
           <select id="side" className={`${INPUT} cursor-pointer`} {...form.register('side')}>

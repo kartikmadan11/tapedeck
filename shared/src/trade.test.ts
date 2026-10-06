@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { INSTRUMENTS } from './instruments.js'
 import {
   amendTradeInput,
   type CreateTradeInput,
   cancelTradeInput,
   createTradeInput,
+  tradeQuery,
 } from './trade.js'
 
 const validCreate: CreateTradeInput = {
@@ -21,8 +23,18 @@ describe('creating a trade', () => {
     expect(createTradeInput.parse(validCreate)).toMatchObject({ symbol: 'VOD', quantity: 10_000 })
   })
 
+  // Uppercased before the master is consulted, so `vod` resolves.
   it('normalises the ticker to upper case', () => {
-    expect(createTradeInput.parse({ ...validCreate, symbol: ' vod.l ' }).symbol).toBe('VOD.L')
+    expect(createTradeInput.parse({ ...validCreate, symbol: ' vod ' }).symbol).toBe('VOD')
+  })
+
+  // The seed and the simulator book straight off the master, and the read model
+  // parses what comes back, so every ticker on it has to pass both schemas.
+  it('accepts every ticker the instrument master carries', () => {
+    for (const { symbol } of INSTRUMENTS) {
+      expect(createTradeInput.parse({ ...validCreate, symbol }).symbol).toBe(symbol)
+      expect(tradeQuery.parse({ symbol }).symbol).toBe(symbol)
+    }
   })
 
   it.each(['tradeId', 'status', 'version', 'updatedAt'])(
@@ -48,6 +60,9 @@ describe('creating a trade', () => {
     // The near miss that was live: the form prefilled this against EQ-LDN-01.
     ['a book off the list', { book: 'EQ-LDN-1' }],
     ['bad ticker', { symbol: 'VOD LN' }],
+    // Well formed and meaningless: a shape check passes it.
+    ['a ticker off the instrument master', { symbol: 'DSJBSDBJK' }],
+    ['empty ticker', { symbol: '' }],
   ])('rejects %s', (_label, patch) => {
     expect(createTradeInput.safeParse({ ...validCreate, ...patch }).success).toBe(false)
   })

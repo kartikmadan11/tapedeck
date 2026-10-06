@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { BOOKS } from './books.js'
 import { COUNTERPARTIES } from './counterparties.js'
+import { SYMBOLS } from './instruments.js'
 import { decimalString, priceString } from './money.js'
 
 // The specification's TypeScript interface and its sample JSON disagree. This
@@ -18,11 +19,31 @@ export const tradeId = z
   .string()
   .regex(/^TRD-\d{6,}$/, { error: 'expected a TRD-nnnnnn identifier' })
 
+/**
+ * A ticker in the shape tickers come in. Used by the read model and by the
+ * filters, which have to name instruments the master no longer carries.
+ */
 const symbol = z
   .string()
   .trim()
   .toUpperCase()
   .regex(/^[A-Z0-9][A-Z0-9.]{0,11}$/, { error: 'expected a ticker such as VOD or VOD.L' })
+
+/**
+ * A ticker the instrument master carries, which is the only kind a ticket may
+ * name. Uppercased first, so `vod` resolves.
+ *
+ * The shape check above validates a string, not a symbol: `DSJBSDBJK` passes it.
+ * A desk resolves the ticker against the security master at entry, because the
+ * master carries the ISIN, the exchange and whether the line is tradeable. A
+ * trade on a symbol nothing resolves cannot be settled, reconciled or reported,
+ * so it fails here rather than downstream.
+ */
+const bookableSymbol = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .pipe(z.enum(SYMBOLS, { error: 'not a ticker on the instrument master' }))
 
 /**
  * Exported because the identity input in the UI caps itself at the same bound, and
@@ -48,6 +69,10 @@ const quantity = z
 
 export const trade = z.object({
   tradeId,
+  /**
+   * Looser than the master a ticket is checked against, for the same reason book
+   * and counterparty are: a delisting has to leave last month's trades readable.
+   */
   symbol,
   side,
   quantity,
@@ -73,7 +98,7 @@ export type Trade = z.infer<typeof trade>
  * not accepted here. tradeTimestamp defaults to the moment of booking.
  */
 export const createTradeInput = z.strictObject({
-  symbol,
+  symbol: bookableSymbol,
   side,
   quantity,
   price: priceString,

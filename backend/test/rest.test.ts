@@ -63,8 +63,19 @@ describe('POST /api/trades', () => {
   })
 
   it('uppercases the symbol through the shared schema', async () => {
-    const trade = await createTrade(app, { symbol: 'vod.l' })
-    expect(trade).toMatchObject({ symbol: 'VOD.L' })
+    const trade = await createTrade(app, { symbol: 'vod' })
+    expect(trade).toMatchObject({ symbol: 'VOD' })
+  })
+
+  // A well formed string is not a tradeable instrument.
+  it('refuses a ticker the instrument master does not carry', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/trades',
+      payload: newTradeBody({ symbol: 'DSJBSDBJK' }),
+    })
+
+    expect(response.statusCode).toBe(400)
   })
 
   it('rejects a price of zero', async () => {
