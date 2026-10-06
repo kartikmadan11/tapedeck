@@ -162,8 +162,8 @@ npm run lint          # biome
 npm run lint:palette  # no raw colour in a .tsx
 ```
 
-643 tests across 28 files. They truncate and reseed between files, which is why
-they get a database of their own rather than sharing `tapedeck`.
+They truncate and reseed between files, which is why they get a database of their
+own rather than sharing `tapedeck`.
 [`docs/DECISIONS.md`](docs/DECISIONS.md) lists the heaviest and what they hold.
 
 ## Assumptions made
