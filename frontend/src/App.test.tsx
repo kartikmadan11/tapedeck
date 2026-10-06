@@ -216,6 +216,23 @@ describe('App', () => {
     expect(within(screen.getByRole('complementary')).getByText('VOD')).toBeInTheDocument()
   })
 
+  it('brings the positions panel back on a reset, since a reset is a clean start', async () => {
+    renderApp()
+    await findRow('TRD-100001')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Positions' }))
+    expect(screen.queryByRole('complementary')).toBeNull()
+
+    // The workspace's own menu, from a right-click no pane claimed. Nothing
+    // inside the workspace could put the panel back: it is the frame the panes
+    // sit in rather than one of them.
+    fireEvent.pointerDown(document.body)
+    fireEvent.contextMenu(document.body)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Reset workspace' }))
+
+    expect(within(screen.getByRole('complementary')).getByText('VOD')).toBeInTheDocument()
+  })
+
   // The reload itself is jsdom's one unstubbable navigation, so what is held
   // here is that the wordmark is a control rather than a heading again.
   it('offers the wordmark as the way back to a clean start', () => {

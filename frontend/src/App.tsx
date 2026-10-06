@@ -28,10 +28,16 @@ import { CHIP, HANDLE_PX } from './lib/ui.js'
  */
 type Props = { onSignOut?: (() => void) | undefined }
 
-/** A tab on the edge of the screen, not a chip in the bar: it is the panel's
- *  own control and it has to be reachable with the panel off screen. */
-const RAIL =
-  'ml-2 flex w-5 shrink-0 cursor-pointer items-center justify-center rounded-sm border border-tape-line bg-tape-panel text-tape-muted transition-colors duration-100 hover:border-tape-accent hover:text-tape-accent focus-visible:border-tape-focus focus-visible:outline-none'
+/**
+ * The panel's own control, in the corner of the panel's own header band.
+ *
+ * Laid over the frame rather than placed in it: a column of its own was a full
+ * screen height of nothing holding one arrow. Outside the drawer, because it is
+ * the only way back once the panel has gone, and in the same corner in both
+ * states, so the arrow that sends the panel away is the arrow that returns it.
+ */
+const TAB =
+  'absolute top-1.5 right-1.5 z-20 flex h-5 w-5 cursor-pointer items-center justify-center rounded-xs border border-tape-line bg-tape-panel text-tape-muted transition-colors duration-100 hover:border-tape-accent hover:text-tape-accent focus-visible:border-tape-focus focus-visible:outline-none'
 
 export function App({ onSignOut }: Props = {}): ReactElement {
   useRealtime()
@@ -84,6 +90,7 @@ export function App({ onSignOut }: Props = {}): ReactElement {
   const [positionsOpen, setPositionsOpen] = useState(true)
   const positionsId = useId()
 
+  const showPositions = useCallback(() => setPositionsOpen(true), [])
   const closeAmend = useCallback(() => setAmendingId(null), [])
   const closeCancel = useCallback(() => setCancellingId(null), [])
   const closeHistory = useCallback(() => setHistoryId(null), [])
@@ -125,9 +132,18 @@ export function App({ onSignOut }: Props = {}): ReactElement {
 
       {/* overflow-hidden is what the panel slides out into. No gap between the
         tape and the panel: the handle between them is the gap, so the boundary a
-        pointer aims at is the line that divides the two. */}
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        <Workspace trades={trades} pendingIds={pendingIds} actions={actions} />
+        pointer aims at is the line that divides the two. relative for the tab
+        below, which is laid over this corner rather than given a column. */}
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        <Workspace
+          trades={trades}
+          pendingIds={pendingIds}
+          actions={actions}
+          // A reset is a clean start, and the panel is part of the frame the
+          // panes sit in rather than one of the panes, so nothing inside the
+          // workspace could put it back.
+          onReset={showPositions}
+        />
 
         {/*
          * The handle travels with the panel: it resizes its own next sibling, so
@@ -158,15 +174,13 @@ export function App({ onSignOut }: Props = {}): ReactElement {
           <PositionsPanel id={positionsId} width={panelWidth} />
         </div>
 
-        {/* The one control, and it is in the same place in both states: the
-          arrow that sends the panel away is the arrow that brings it back. Named
-          for the thing rather than the action, so aria-expanded carries the
-          state and the name does not change under a screen reader. */}
+        {/* Named for the thing rather than the action, so aria-expanded carries
+          the state and the name does not change under a screen reader. */}
         <button
           aria-controls={positionsId}
           aria-expanded={positionsOpen}
           aria-label="Positions"
-          className={RAIL}
+          className={TAB}
           onClick={() => setPositionsOpen((open) => !open)}
           title={positionsOpen ? 'Hide positions' : 'Show positions'}
           type="button"

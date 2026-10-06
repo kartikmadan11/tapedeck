@@ -31,8 +31,10 @@ export function PositionsPanel({ width, id }: Props): ReactElement {
       id={id}
       style={{ width }}
     >
-      {/* h-8 matches the blotter's header band, so the two panels align. */}
-      <header className="flex h-8 shrink-0 items-center justify-between border-b border-tape-line bg-tape-panel px-2">
+      {/* h-8 matches the blotter's header band, so the two panels align. The
+        right padding is the frame's hide tab, which is laid over this corner
+        rather than given a column of its own, so the count clears it. */}
+      <header className="flex h-8 shrink-0 items-center justify-between border-b border-tape-line bg-tape-panel pr-7 pl-2">
         <h2 className="text-[10px] font-semibold uppercase tracking-[0.18em]">Positions</h2>
         <span className={MICRO_LABEL}>{positions.length} symbols</span>
       </header>

@@ -30,6 +30,9 @@ type Props = {
   trades: Trade[]
   pendingIds: ReadonlySet<string>
   actions: RowActions
+  /** What a reset puts back outside the panes. Optional, so the tests can render
+   *  the workspace on its own. */
+  onReset?: (() => void) | undefined
 }
 
 /** Said rather than copied, because the clipboard needs a secure context. */
@@ -110,7 +113,7 @@ const axisOf = (region: Region): string =>
  * virtualised first: two unvirtualised panes would be a thousand rows, which is
  * exactly the cost the 500-row window was introduced to remove.
  */
-export function Workspace({ trades, pendingIds, actions }: Props): ReactElement {
+export function Workspace({ trades, pendingIds, actions, onReset }: Props): ReactElement {
   /**
    * Each pane's current view, written by the pane and read when Share is pressed
    * or when a pane has to be remounted. A ref and not state on purpose: holding
@@ -422,7 +425,8 @@ export function Workspace({ trades, pendingIds, actions }: Props): ReactElement 
   }
 
   /**
-   * Back to one pane on the default view, names and all.
+   * Back to one pane on the default view, names and all, and the frame around
+   * the panes with it.
    *
    * Named for the workspace rather than left as Reset, because a pane's own menu
    * already has a Reset and that one resets the view in front of you. Two items
@@ -438,6 +442,7 @@ export function Workspace({ trades, pendingIds, actions }: Props): ReactElement 
     // duplicate and the new pane are.
     const pane = open()
     setRoot(pane)
+    onReset?.()
   }
 
   const share = (): void => {
