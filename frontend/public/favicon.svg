@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Geist Mono 700, outlined. An SVG cannot load the webfont, so a
+       font-family here would render as each visitor's own monospace. -->
+  <rect width="64" height="64" fill="#3b00ff"/>
+  <path fill="#fff" d="M37.93 55.04Q31.65 55.04 28.69 52.18Q25.73 49.32 25.73 43.37V8.96H35.17V42.45Q35.17 45.03 36.42 46.29Q37.67 47.55 40.19 47.55H48.99V55.04ZM15.01 25.21V17.72H48.99V25.21Z"/>
+</svg>
