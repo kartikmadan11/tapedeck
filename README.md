@@ -225,6 +225,25 @@ than a grep to remember: a raw hex or a stock Tailwind `zinc-`, `indigo-`,
 `emerald-` or `rose-` in a `.tsx` fails the build, because a one-off colour is
 how a dark trading surface drifts into five greys that nearly match.
 
+**The two `tsc` projects are split by environment, and the root `tsconfig.json`
+exists only to point an editor at them.** `tsconfig.node.json` covers `shared`,
+`database` and `backend` with `types: ["node"]`; `tsconfig.web.json` covers
+`shared` and `frontend` with the DOM libs and `vite/client`. Neither is named
+`tsconfig.json`, so a language server walking up from an open file found no
+project at all, fell back to its own defaults, and reported errors the build
+does not have: `process` undefined across the backend, and every jest-dom
+matcher missing in every test, since those types arrive through the setup file
+an inferred project never loads. The root config holds no files of its own and
+only references the two, which is enough for the server to put each file in the
+project that actually compiles it.
+
+`.vscode/settings.json` is committed rather than ignored for the same reason. It
+pins the formatter to Biome for the four file types Biome owns and leaves the
+rest alone, since Biome does not format markdown and these docs are wrapped by
+hand. An editor on its own defaults formats TypeScript to 80 columns with double
+quotes and semicolons, which is three disagreements with `biome.json` at once
+and a diff of pure noise.
+
 510 tests across 21 files. The ones that matter most:
 
 - **concurrency**: two amends submitted at the same `version`, where the second

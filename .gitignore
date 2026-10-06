@@ -29,8 +29,11 @@ docs/prompt-log-raw.md
 # editor and OS
 # ~$ files are the owner locks Word leaves beside an open .docx
 ~$*
+# settings.json is in, because it is the project's formatter and not a personal
+# preference: without it an editor formats to its own defaults and fights Biome.
 .vscode/*
 !.vscode/extensions.json
+!.vscode/settings.json
 .idea/
 .DS_Store
 
