@@ -22,6 +22,17 @@ export const priceString = decimalString.refine((value) => toMinorUnits(value) >
   error: 'price must be greater than zero',
 })
 
+/** Same scale, no integer-digit cap: a book has no bound on how many trades it
+ * holds, so a sum over it has none either. */
+const SUMMED_PATTERN = /^-?(?:0|[1-9]\d*)(?:\.\d{1,6})?$/
+
+/** For a sum of prices rather than one price. Branded as DecimalString because
+ * every reader of one is bigint arithmetic, which does not care how wide it is. */
+export const summedDecimalString = z
+  .string()
+  .regex(SUMMED_PATTERN, { error: 'expected a decimal string with up to 6 decimal places' })
+  .brand<'DecimalString'>()
+
 /** For boundaries not already covered by a zod schema: seed data, tests. */
 export function toDecimal(value: string): DecimalString {
   return decimalString.parse(value)

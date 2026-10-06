@@ -1,6 +1,6 @@
 import type { DatabaseHandle } from '@tapedeck/database'
 import type { Trade } from '@tapedeck/shared'
-import { apiError, BLOTTER_LIMIT } from '@tapedeck/shared'
+import { apiError, BLOTTER_LIMIT, positionsResponse } from '@tapedeck/shared'
 import type { FastifyInstance } from 'fastify'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { buildTestApp } from './helpers/app.js'
@@ -684,6 +684,30 @@ describe('GET /api/positions', () => {
       soldQuantity: 400,
       // 1000 * 2.5 - 400 * 2.0, exact, not 1699.9999999999998.
       netNotional: '1700.000000',
+      tradeCount: 2,
+    })
+  })
+
+  // Both figures are inside what POST /api/trades accepts and outside what the
+  // aggregate used to return: the quantities sum past int4, and their notional
+  // needs 13 integer digits where numeric(18, 6) holds 12.
+  it('nets two trades at the quantity cap without overflowing', async () => {
+    const quantity = 2_000_000_000
+    await createTrade(app, { side: 'BUY', quantity, price: '500.000000' })
+    await createTrade(app, { side: 'BUY', quantity, price: '500.000000' })
+
+    const response = await app.inject({ method: 'GET', url: '/api/positions' })
+
+    expect(response.statusCode).toBe(200)
+    // Through the shared schema, the way the client reads it: a figure the contract
+    // refuses is as broken as one the query refuses.
+    const { positions } = positionsResponse.parse(response.json())
+    expect(positions[0]).toMatchObject({
+      symbol: 'VOD',
+      netQuantity: 4_000_000_000,
+      boughtQuantity: 4_000_000_000,
+      soldQuantity: 0,
+      netNotional: '2000000000000.000000',
       tradeCount: 2,
     })
   })

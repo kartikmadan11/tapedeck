@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { BOOKS } from './books.js'
 import { COUNTERPARTIES } from './counterparties.js'
 import { SYMBOLS } from './instruments.js'
-import { decimalString, priceString } from './money.js'
+import { priceString, summedDecimalString } from './money.js'
 
 // The spec's TypeScript interface and its sample JSON disagree. This follows the
 // JSON, the superset. Recorded under Assumptions in the README.
@@ -160,13 +160,15 @@ export const tradeEvent = z.object({
 })
 export type TradeEvent = z.infer<typeof tradeEvent>
 
-/** Computed by Postgres in numeric, never on the client, so clients agree. */
+/** Computed by Postgres in numeric, never on the client, so clients agree. Every
+ * field here is a sum, so none of them carries a single trade's bounds: a quantity
+ * is capped but a sum of quantities is not. */
 export const position = z.object({
   symbol,
   netQuantity: z.number().int(),
   boughtQuantity: z.number().int().nonnegative(),
   soldQuantity: z.number().int().nonnegative(),
-  netNotional: decimalString,
+  netNotional: summedDecimalString,
   tradeCount: z.number().int().nonnegative(),
 })
 export type Position = z.infer<typeof position>

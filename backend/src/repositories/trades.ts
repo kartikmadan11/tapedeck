@@ -9,6 +9,7 @@ import {
   invalidState,
   notFound,
   type Position,
+  summedDecimalString,
   type Trade,
   type TradeEvent,
   type TradeEventType,
@@ -359,20 +360,23 @@ function selectTrades(tx: Queryable, query: TradeQuery): Promise<Trade[]> {
  * excluded, not netted out. Booked quantity, not filled: the exposure the desk has
  * committed to, which a pre-trade limit is checked against. Argued in DECISIONS. */
 async function selectPositions(tx: Queryable): Promise<Position[]> {
+  // bigint, not int: two trades at the API's own 2,000,000,000 quantity cap sum
+  // past int4 and the cast would raise rather than return a position. node-postgres
+  // hands int8 back as a string, hence Number() below.
   const result = await tx.execute<{
     symbol: string
-    net_quantity: number
-    bought_quantity: number
-    sold_quantity: number
+    net_quantity: string
+    bought_quantity: string
+    sold_quantity: string
     net_notional: string
     trade_count: number
   }>(sql`
     select
       symbol,
-      sum(case when side = 'BUY' then quantity else -quantity end)::int as net_quantity,
-      sum(case when side = 'BUY' then quantity else 0 end)::int as bought_quantity,
-      sum(case when side = 'SELL' then quantity else 0 end)::int as sold_quantity,
-      sum(case when side = 'BUY' then quantity * price else -quantity * price end)::numeric(18, 6)
+      sum(case when side = 'BUY' then quantity else -quantity end)::bigint as net_quantity,
+      sum(case when side = 'BUY' then quantity else 0 end)::bigint as bought_quantity,
+      sum(case when side = 'SELL' then quantity else 0 end)::bigint as sold_quantity,
+      sum(case when side = 'BUY' then quantity * price else -quantity * price end)
         as net_notional,
       count(*)::int as trade_count
     from ${trades}
@@ -381,12 +385,15 @@ async function selectPositions(tx: Queryable): Promise<Position[]> {
     order by symbol
   `)
 
+  // Uncast, so the sum keeps whatever width it needs. numeric(18, 6) holds 12
+  // integer digits, and one trade at the quantity cap and a price of 500 is 13.
+  // The scale is still 6: quantity is an integer, so the product adds no places.
   return result.rows.map((row) => ({
     symbol: row.symbol,
-    netQuantity: row.net_quantity,
-    boughtQuantity: row.bought_quantity,
-    soldQuantity: row.sold_quantity,
-    netNotional: row.net_notional as Position['netNotional'],
+    netQuantity: Number(row.net_quantity),
+    boughtQuantity: Number(row.bought_quantity),
+    soldQuantity: Number(row.sold_quantity),
+    netNotional: summedDecimalString.parse(row.net_notional),
     tradeCount: row.trade_count,
   }))
 }
