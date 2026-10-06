@@ -7,9 +7,10 @@ import { pnlMinor } from './pnl.js'
 import { bookTotals } from './totals.js'
 import { usePositions } from './usePositions.js'
 
-/** Declared here rather than where the boundary is drawn: the floor is the width at
- *  which four columns of six-figure notional stop truncating. */
-export const PANEL_WIDTH = 384
+/** Declared here rather than where the boundary is drawn. 400 because this book's
+ *  widest row is `-481,680,700.00`, and four columns of that plus their gutters
+ *  need about 381px at 13px monospace. The min scrolls rather than fits. */
+export const PANEL_WIDTH = 400
 export const PANEL_MIN_WIDTH = 288
 export const PANEL_MAX_WIDTH = 560
 
