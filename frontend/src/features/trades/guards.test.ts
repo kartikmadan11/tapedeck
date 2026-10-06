@@ -17,7 +17,7 @@ const TICKET: CreateTradeInput = {
   quantity: 1_000,
   price: '72.500000' as CreateTradeInput['price'],
   trader: 'k.madan',
-  book: 'EQ-LDN-1',
+  book: 'EQ-LDN-01',
   counterparty: 'HSBC',
 }
 

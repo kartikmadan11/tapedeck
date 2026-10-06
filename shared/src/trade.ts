@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { BOOKS } from './books.js'
 import { COUNTERPARTIES } from './counterparties.js'
 import { decimalString, priceString } from './money.js'
 
@@ -52,14 +53,13 @@ export const trade = z.object({
   quantity,
   price: priceString,
   trader: party,
-  book: party,
   /**
-   * Deliberately looser than the enum that books it. This is the read model, so
-   * it has to parse every row already in the table, including trades booked
-   * before an entity left the list. Narrowing it would turn a change to
-   * reference data into a data migration, and would make the blotter fail to
-   * render a trade rather than show a counterparty it no longer offers.
+   * Book and counterparty are looser here than the enums that book them. The
+   * read model has to parse rows booked before a book closed or an entity left
+   * the list, so narrowing it would make a reference-data change a data
+   * migration.
    */
+  book: party,
   counterparty: party,
   tradeTimestamp: timestamp,
   status: tradeStatus,
@@ -78,7 +78,12 @@ export const createTradeInput = z.strictObject({
   quantity,
   price: priceString,
   trader: party,
-  book: party,
+  /**
+   * Chosen from the list, never typed. A book owns the position, so a near miss
+   * does not fail: it opens a second book that nets on its own. No length check
+   * can tell `EQ-LDN-1` from `EQ-LDN-01`.
+   */
+  book: z.enum(BOOKS, { error: 'book must be chosen from the book list' }),
   /**
    * Chosen from the list, never typed. A counterparty is resolved from a
    * counterparty master at booking, and a free-text one is how `UBSf` gets into

@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import type { CreateTradeInput } from '@tapedeck/shared'
-import { COUNTERPARTIES, createTradeInput } from '@tapedeck/shared'
+import { BOOKS, COUNTERPARTIES, createTradeInput } from '@tapedeck/shared'
 import type { ReactElement, ReactNode } from 'react'
 import { useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
@@ -29,9 +29,9 @@ const DEFAULTS: FormValues = {
   quantity: 1_000,
   price: '72.500000',
   trader: DEFAULT_TRADER,
-  book: 'EQ-LDN-1',
-  // The first name on the list rather than a literal, so the default cannot be
-  // a value the picklist does not offer.
+  // Off the head of each list, not written out, so a default cannot be a value
+  // its picklist does not offer.
+  book: BOOKS[0],
   counterparty: COUNTERPARTIES[0],
 }
 
@@ -147,8 +147,16 @@ export function TradeForm({ trader }: Props): ReactElement {
           />
         </Field>
 
-        <Field name="book" label="Book" error={errors.book?.message} width="w-32">
-          <input id="book" className={INPUT} {...form.register('book')} />
+        {/* A picklist for the reason the counterparty is: a book owns the
+            position, so a near miss opens a second book rather than failing. */}
+        <Field name="book" label="Book" error={errors.book?.message} width="w-36">
+          <select id="book" className={`${INPUT} cursor-pointer`} {...form.register('book')}>
+            {BOOKS.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
         </Field>
 
         {/* A picklist, not a text box. A counterparty is resolved from a

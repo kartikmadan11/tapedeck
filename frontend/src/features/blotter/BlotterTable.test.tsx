@@ -14,7 +14,7 @@ function aTrade(overrides: Record<string, unknown> = {}): Trade {
     quantity: 10_000,
     price: '72.465000',
     trader: 'k.madan',
-    book: 'EQ-LDN-1',
+    book: 'EQ-LDN-01',
     counterparty: 'GSIL',
     tradeTimestamp: '2026-10-02T09:15:00.000Z',
     status: 'ACTIVE',
@@ -55,7 +55,7 @@ const BOOK = [
     symbol: 'BARC',
     quantity: 1_000,
     price: '2.500000',
-    book: 'EQ-LDN-2',
+    book: 'EQ-LDN-02',
     tradeTimestamp: '2026-10-02T09:14:00.000Z',
   }),
 ]
@@ -234,13 +234,13 @@ describe('grouping and aggregation', () => {
     renderBlotter()
     openConfig()
     fireEvent.click(screen.getByRole('checkbox', { name: 'Book' }))
-    expect(screen.queryByText('EQ-LDN-1')).toBeNull()
+    expect(screen.queryByText('EQ-LDN-01')).toBeNull()
 
     set('Group by', 'book')
 
     // It carries the label and the expander, so left hidden the grouping would
     // produce groups that can be neither read nor opened.
-    expect(screen.getByRole('button', { name: 'EQ-LDN-1, 2 trades' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'EQ-LDN-01, 2 trades' })).toBeInTheDocument()
     expect(headers()).toEqual(['Book', ...NETTED])
   })
 
@@ -319,16 +319,16 @@ describe('grouping and aggregation', () => {
 
     // The inner level nets only its own leaves, and sits indented under the
     // outer one.
-    const inner = screen.getByRole('button', { name: 'EQ-LDN-1, 2 trades' })
+    const inner = screen.getByRole('button', { name: 'EQ-LDN-01, 2 trades' })
     expect(inner).toHaveStyle({ paddingLeft: '0.75rem' })
 
     // Both levels lead the row, in the order they were asked for, with the
     // outer one blank here because it is on the group row above. Left where
     // Book is declared, this label would have sat after the three figures it
     // heads.
-    expect(cells(groupRow('EQ-LDN-1, 2 trades'))).toEqual([
+    expect(cells(groupRow('EQ-LDN-01, 2 trades'))).toEqual([
       '',
-      '▸EQ-LDN-1(2)',
+      '▸EQ-LDN-01(2)',
       '72.6464',
       '6,000',
       '432,250.00',
@@ -540,7 +540,7 @@ describe('the configuration panel', () => {
     openConfig()
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'Book' }))
-    expect(screen.queryByText('EQ-LDN-1')).not.toBeInTheDocument()
+    expect(screen.queryByText('EQ-LDN-01')).not.toBeInTheDocument()
   })
 
   it('keeps the trade id off the tape until it is asked for', () => {

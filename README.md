@@ -41,8 +41,8 @@ breaks compilation on both sides at once rather than at runtime on one of them.
 **The contracts are the design.** `AmendTradeInput` has exactly `quantity`,
 `price` and `version`. There is no way to express amending a symbol, a side or a
 counterparty, so the rule is not a runtime check that can be forgotten but a type
-that cannot be written. `CreateTradeInput` narrows counterparty to the names on
-the counterparty list for the same reason, which is argued under Assumptions.
+that cannot be written. `CreateTradeInput` narrows book and counterparty to the
+entries on their lists for the same reason, argued under Assumptions.
 Cancellation is a separate sub-resource rather than a status patch, again for the
 same reason.
 
@@ -464,6 +464,20 @@ since left the list, so narrowing it would turn a reference-data change into a
 data migration and would make the blotter fail to render a trade rather than
 display a name it no longer offers. The narrowing is on the write path, where it
 belongs.
+
+**The book is a picklist for the same reason, and that closed a live defect.** A
+book owns the position, so which one a trade lands in decides whose P&L moves
+and which entity reports it, and a near miss opens a second book that nets on
+its own rather than failing. The form prefilled `EQ-LDN-1` while the reference
+list said `EQ-LDN-01`: the books lived in `database` as a `readonly string[]`,
+so the schema saw a legal string and the compiler had no literals to compare,
+and every trade booked from the prefilled ticket went into a sixth book nothing
+else wrote to. `BOOKS` now sits in `shared` beside `COUNTERPARTIES` as a const
+tuple that `createTradeInput` validates against, and `database` re-exports it so
+the seed and the feed book from the list that rejects. The read model keeps
+`book` free for the reason counterparty is free. In a real build the list is a
+book master narrowed to the books the actor is entitled to, which is the
+argument that also keeps the actor out of an editable box.
 
 **Positions stay firm-wide and are not windowed with the blotter.** They are
 aggregated in Postgres over every active trade, so the panel can legitimately

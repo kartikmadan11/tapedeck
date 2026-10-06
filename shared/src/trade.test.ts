@@ -44,6 +44,9 @@ describe('creating a trade', () => {
     // The whole point of the picklist: a near miss for a real name is still a
     // different counterparty, and length validation cannot tell them apart.
     ['a counterparty off the list', { counterparty: 'UBSf' }],
+    ['empty book', { book: '' }],
+    // The near miss that was live: the form prefilled this against EQ-LDN-01.
+    ['a book off the list', { book: 'EQ-LDN-1' }],
     ['bad ticker', { symbol: 'VOD LN' }],
   ])('rejects %s', (_label, patch) => {
     expect(createTradeInput.safeParse({ ...validCreate, ...patch }).success).toBe(false)

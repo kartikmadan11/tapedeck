@@ -36,13 +36,8 @@ export const TRADERS: readonly string[] = [
   'k.yamamoto',
 ]
 
-export const BOOKS: readonly string[] = [
-  'EQ-LDN-01',
-  'EQ-LDN-02',
-  'EQ-LDN-ARB',
-  'EQ-NYC-01',
-  'EQ-PROP-DELTA',
-]
+/** Re-exported, not declared: a second copy drifts out of the one that rejects. */
+export { BOOKS } from '@tapedeck/shared'
 
 /** Recorded on seeded events, so seeded history is distinguishable. */
 export const SEED_ACTOR = 'seed'

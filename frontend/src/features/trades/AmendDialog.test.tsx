@@ -14,7 +14,7 @@ const ACTIVE: Trade = tradeSchema.parse({
   quantity: 10_000,
   price: '72.465000',
   trader: 'k.madan',
-  book: 'EQ-LDN-1',
+  book: 'EQ-LDN-01',
   counterparty: 'GSIL',
   tradeTimestamp: '2026-10-02T09:15:00.000Z',
   status: 'ACTIVE',
