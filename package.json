@@ -17,7 +17,7 @@
     "check": "npm run typecheck && npm run lint && npm run lint:palette && npm test",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "lint": "biome check .",
-    "lint:palette": "if grep -rnE 'zinc-|indigo-|emerald-|rose-|#[0-9a-fA-F]{6}' frontend/src --include='*.tsx'; then echo 'palette: use a tape-* token, not a raw colour' && exit 1; fi",
+    "lint:palette": "node scripts/check-palette.mjs",
     "format": "biome check --write .",
     "test": "vitest run",
     "test:watch": "vitest",
