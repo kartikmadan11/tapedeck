@@ -5,11 +5,8 @@ import type { ApiRequestError } from '../../lib/api.js'
 import { amendTrade } from '../../lib/api.js'
 import { TRADE_MUTATION_KEY, useRefreshBlotter } from './useTrades.js'
 
-/**
- * `tradeId` sits in the variables rather than being captured by the hook, so one
- * instance serves every row and the pending-row lookup can read the id off the
- * in-flight mutation.
- */
+/** `tradeId` is a variable rather than captured, so one instance serves every row
+ *  and the pending-row lookup can read the id off the in-flight mutation. */
 export type AmendVariables = { tradeId: string; input: AmendTradeInput }
 
 export function useAmendTrade(): UseMutationResult<Trade, ApiRequestError, AmendVariables> {

@@ -4,11 +4,8 @@ import type { BlotterState } from '@tapedeck/shared'
 import { useCallback } from 'react'
 import { loadBlotter, queryKeys } from '../../lib/queryClient.js'
 
-/**
- * The blotter cache entry. REST fills it, the socket keeps it current, and both
- * go through the same cursor guard, so there is no second state container to
- * reconcile.
- */
+/** The blotter cache entry. REST fills it, the socket keeps it current, and both go
+ *  through the same cursor guard, so there is no second container to reconcile. */
 export function useBlotter(): UseQueryResult<BlotterState> {
   const queryClient = useQueryClient()
   return useQuery({
@@ -17,14 +14,9 @@ export function useBlotter(): UseQueryResult<BlotterState> {
   })
 }
 
-/**
- * Run after every mutation, whether it succeeded or failed, so the user's own
- * action lands even if the socket happens to be reconnecting.
- *
- * This is only safe because the refetch goes through the cursor guard: a bare
- * refetch replaces the cache when it lands and discards every frame that
- * arrived while it was in flight.
- */
+/** Run after every mutation, succeeded or failed, so the action lands even if the
+ *  socket is reconnecting. Safe only because the refetch goes through the cursor
+ *  guard: a bare one would discard every frame that arrived while it was in flight. */
 export function useRefreshBlotter(): () => void {
   const queryClient = useQueryClient()
   return useCallback(() => {
@@ -37,14 +29,9 @@ export const TRADE_MUTATION_KEY = ['trade', 'mutate'] as const
 
 type TradeMutationVariables = { tradeId: string }
 
-/**
- * The trades with a mutation in flight, read from React Query's own mutation
- * state rather than tracked separately.
- *
- * This is what replaces an optimistic write. Guessing the next version locally
- * would briefly show a version the server never assigned, so the row is marked
- * pending instead and the broadcast clears it.
- */
+/** Read off React Query rather than tracked. Stands in for an optimistic write:
+ *  guessing the next version locally would show one the server never assigned, so
+ *  the row is marked pending instead and the broadcast clears it. */
 export function usePendingTradeIds(): ReadonlySet<string> {
   const pending = useMutationState({
     filters: { mutationKey: TRADE_MUTATION_KEY, status: 'pending' },

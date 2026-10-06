@@ -3,18 +3,14 @@ import type { FastifyInstance } from 'fastify'
 import { ZodError } from 'zod'
 
 export interface ErrorHandlerOptions {
-  /**
-   * True when @fastify/static is serving a built frontend, so an unknown
-   * non-API path is a client route. False in development and in tests.
-   */
+  /** True when @fastify/static is serving a built frontend, so an unknown non-API
+   * path is a client route. False in development and in tests. */
   serveSpaFallback: boolean
 }
 
-/**
- * The one place an error becomes an ApiError, so no route hand-rolls a response
- * shape. Internal errors return a fixed message and log the detail: a stack
- * trace or a constraint name in a response is needless disclosure.
- */
+/** The one place an error becomes an ApiError, so no route hand-rolls a shape.
+ * Internal errors return a fixed message and log the detail: a stack trace or a
+ * constraint name in a response is needless disclosure. */
 export function registerErrorHandler(app: FastifyInstance, options: ErrorHandlerOptions): void {
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof DomainError) {
@@ -52,12 +48,8 @@ export function registerErrorHandler(app: FastifyInstance, options: ErrorHandler
     return reply.status(HTTP_STATUS.INTERNAL).send(payload)
   })
 
-  /**
-   * An unknown /api route returns JSON, not the SPA shell; everything else falls
-   * through to index.html so the client router owns client routes.
-   *
-   * Cannot call reply.callNotFound(), which would re-enter this handler.
-   */
+  /** An unknown /api route returns JSON, not the SPA shell; everything else falls
+   * through to index.html. Not reply.callNotFound(), which would re-enter this handler. */
   app.setNotFoundHandler((request, reply) => {
     if (request.url.startsWith('/api') || !options.serveSpaFallback) {
       const payload: ApiError = {
@@ -71,11 +63,9 @@ export function registerErrorHandler(app: FastifyInstance, options: ErrorHandler
   })
 }
 
-/**
- * One issue per offending field, so a form can attach each message to an input.
- * An unrecognized_keys issue names the keys in `keys` and leaves `path` empty, so
- * posting `symbol` to an amend would otherwise return a field-less error.
- */
+/** One issue per offending field, so a form can attach each message to an input. An
+ * unrecognized_keys issue leaves `path` empty and names the keys in `keys`, so an
+ * amend carrying `symbol` would otherwise return a field-less error. */
 function toIssues(error: ZodError): { path: string; message: string }[] {
   return error.issues.flatMap((issue) => {
     const prefix = issue.path.map(String).join('.')

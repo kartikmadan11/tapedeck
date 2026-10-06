@@ -1,21 +1,14 @@
 /**
- * How the panes of a workspace are arranged: a tree of splits, each dividing its
- * own share of the screen along one axis.
+ * How the panes of a workspace are arranged: a tree of splits, each dividing its own
+ * share of the screen along one axis, so a drop beside one pane moves nothing outside
+ * that pane's slot. Weights, not pixels: a region is a flex item with flex-basis 0 and
+ * flex-grow of its weight, and because a weight means something only beside its
+ * siblings, the children of every split sum to one and every operation that changes
+ * the set of them renormalises.
  *
- * A tree rather than one axis for the whole workspace, so a drop on a left edge
- * lands the pane beside that one pane, in that one pane's slot, and nothing
- * outside the slot moves.
- *
- * Weights, not pixels. A region is a flex item with a flex-basis of 0 and a
- * flex-grow of its weight, so nothing here needs to know how wide the window is
- * or how thick a separator is. A weight only means anything beside its siblings,
- * which is why the children of every split sum to one and every operation that
- * changes the set of children renormalises them.
- *
- * Two invariants hold the shape down, and every operation here maintains both:
- * a split has at least two children, and no split has a child split on its own
- * axis. The second makes the axes alternate with depth, so a shared link can
- * state the root axis alone and every other axis follows from how deep it sits.
+ * Two invariants, held by every operation here: a split has at least two children, and
+ * no split holds a child split on its own axis. The second makes the axes alternate
+ * with depth, so a link states the root axis alone.
  */
 
 /** Stacked, or side by side. Each split has its own. */
@@ -24,19 +17,13 @@ export type Orientation = 'rows' | 'columns'
 /** The edge of a pane that another pane can be dropped on. */
 export type Edge = 'top' | 'bottom' | 'left' | 'right'
 
-/**
- * One blotter, holding its share of the split it sits in.
- *
- * The name is on the leaf rather than in a map beside the tree, so it follows
- * its pane through a move, a promotion and a reshare, all of which rebuild a
- * leaf by spreading it. Absent means nobody has named it, which is not the same
- * as a name that happens to match the default: one is carried in a shared link
- * and the other is not.
- */
+/** One blotter, holding its share of the split it sits in. The name is on the leaf, so
+ *  it follows its pane through the moves and promotions that rebuild one; absent means
+ *  unnamed, which a link carries differently from a name matching the default. */
 export type Leaf = { kind: 'pane'; id: string; weight: number; name?: string }
 
-/** Two or more regions divided along one axis, holding their share of whatever
- *  is above them. */
+/** Two or more regions divided along one axis, holding their share of what is
+ *  above them. */
 export type Split = {
   kind: 'split'
   id: string
@@ -47,19 +34,14 @@ export type Split = {
 
 export type Region = Leaf | Split
 
-/**
- * The smallest share a separator can leave a region with. Below about an eighth
- * a pane is its own filter bar and no rows.
- */
+/** The smallest share a separator can leave a region with: below about an eighth
+ *  a pane is all filter bar and no rows. */
 export const MIN_WEIGHT = 0.12
 
 /** Clockwise from the top, which is the order the drop zones are drawn in. */
 export const EDGES: readonly Edge[] = ['top', 'right', 'bottom', 'left']
 
-/**
- * What dropping on an edge means: the axis it asks for, and which side of the
- * target it lands on.
- */
+/** What dropping on an edge means: which axis, and which side of the target. */
 export function placementFor(edge: Edge): { orientation: Orientation; before: boolean } {
   return {
     orientation: edge === 'top' || edge === 'bottom' ? 'rows' : 'columns',
@@ -74,22 +56,15 @@ export function evenWeights(count: number): number[] {
 
 export function normalised(weights: readonly number[]): number[] {
   const total = weights.reduce((sum, weight) => sum + weight, 0)
-  // An even split rather than a division by zero. Only reachable from weights
-  // somebody else built, which a shared link is, and the alternative is a row of
-  // NaN flex-grows and a workspace with no panes in it.
+  // An even split rather than a division by zero: weights off a shared link can
+  // sum to nothing, and NaN flex-grows would leave a workspace with no panes.
   return total > 0 ? weights.map((weight) => weight / total) : evenWeights(weights.length)
 }
 
-/**
- * Moves the boundary between `boundary` and the region after it, by a delta in
- * the same units as the weights.
- *
- * The total is untouched, so this does not renormalise: a separator takes from
- * one region and gives to its neighbour, and a region the trader is not dragging
- * must not move because of a rounding pass. Clamped against both floors, so
- * dragging past the end of the travel stops there instead of pushing the far
- * region under the floor.
- */
+/** Moves the boundary between `boundary` and the region after it, by a delta in weight
+ *  units. No renormalising: the pair's total is untouched, so a region nobody is
+ *  dragging cannot move on a rounding pass. Clamped against MIN_WEIGHT on both sides,
+ *  so dragging past the end of the travel stops there. */
 export function resized(weights: readonly number[], boundary: number, delta: number): number[] {
   const before = weights[boundary]
   const after = weights[boundary + 1]
@@ -109,11 +84,9 @@ export function panesOf(region: Region): Leaf[] {
   return region.kind === 'pane' ? [region] : region.children.flatMap(panesOf)
 }
 
-/**
- * Each pane's path from the root, as the child index at every level down to it.
- * The form an arrangement travels in: a split id is minted on a drop and means
- * nothing to whoever opens the link.
- */
+/** Each pane's path from the root, as the child index at every level down to it. The
+ *  form an arrangement travels in: a split id is minted on a drop and means nothing to
+ *  whoever opens the link. */
 export function pathsOf(region: Region, at: readonly number[] = []): Map<string, number[]> {
   if (region.kind === 'pane') {
     return new Map([[region.id, [...at]]])
@@ -127,11 +100,8 @@ export function pathsOf(region: Region, at: readonly number[] = []): Map<string,
   return paths
 }
 
-/**
- * Each pane's share of the whole window, as opposed to of the split it sits in:
- * the product of the weights down to it, which is the only form in which two
- * panes at different depths are comparable.
- */
+/** Each pane's share of the window rather than of the split it sits in: the product of
+ *  the weights down to it, and the only form comparable across depths. */
 export function sharesOf(region: Region, scale = 1): Map<string, number> {
   if (region.kind === 'pane') {
     return new Map([[region.id, scale]])
@@ -145,20 +115,15 @@ export function sharesOf(region: Region, scale = 1): Map<string, number> {
   return shares
 }
 
-/**
- * The tree with every weight re-derived from the shares named, bottom up.
- *
- * This is what makes a move rearrange without resizing. A removal renormalises
- * the pane's old neighbours and an insertion halves its new one, so the two
- * together leave every pane a different size than it started at.
- */
+/** The tree with every weight re-derived from the shares named, bottom up. What makes
+ *  a move rearrange without resizing: a removal renormalises the old neighbours and an
+ *  insertion halves the new one, so the two together would resize every pane. */
 function reshared(
   region: Region,
   shares: ReadonlyMap<string, number>,
 ): { region: Region; total: number } {
   if (region.kind === 'pane') {
-    // No share named means a pane that did not exist before this, and its own
-    // weight is the only answer available.
+    // A pane with no share named is new, so its own weight is the only answer.
     return { region, total: shares.get(region.id) ?? region.weight }
   }
 
@@ -177,31 +142,22 @@ function reshared(
   }
 }
 
-/**
- * The tree with every weight re-derived from the shares named. What a shared
- * link reconstructs with: a link states each pane's share of the window, which
- * is the only figure that means the same thing to the browser that opens it.
- */
+/** reshared, for a caller that wants the tree. What a shared link rebuilds with: a
+ *  share of the window is the only figure that means the same thing in the browser
+ *  that opens it. */
 export function withShares(region: Region, shares: ReadonlyMap<string, number>): Region {
   return reshared(region, shares).region
 }
 
-/**
- * How a link arranges its panes: a number is a pane, as an index into the views
- * the link carries, and an array is a split of two or more regions.
- *
- * Indices rather than ids, because a link cannot name a pane that does not exist
- * yet. No axes, because they alternate with depth, so the root's is the only one
- * there is to state. Two children at least, in the type, so the one shape that is
- * not a split cannot be built by accident.
- */
+/** How a link arranges its panes: a number is an index into the views the link carries,
+ *  an array is a split. Indices rather than ids, because a link cannot name a pane that
+ *  does not exist yet. No axes: they alternate with depth, so only the root's is
+ *  stated. Two children minimum, in the type. */
 export type Arrangement = number | readonly [Arrangement, Arrangement, ...Arrangement[]]
 
-/**
- * An arrangement turned back into a tree, taking the panes and the split ids
- * from the caller. The weights are even, and a link that wants other ones
- * restates the shares through withShares afterwards.
- */
+/** An arrangement turned back into a tree, taking the panes and the split ids from the
+ *  caller. Weights come out even; withShares afterwards restates the ones a link
+ *  carries. */
 export function regionOf(
   arrangement: Arrangement,
   axis: Orientation,
@@ -225,11 +181,8 @@ export function regionOf(
   }
 }
 
-/**
- * The split a region sits directly inside, or null for the root. Takes any
- * region id, not just a pane's: an id survives the tree being rebuilt around
- * it, and an index into a list of children does not.
- */
+/** The split a region sits directly inside, or null for the root. Takes any region id,
+ *  not just a pane's: an id survives a rebuild, a child index does not. */
 export function splitOf(region: Region, id: string): Split | null {
   if (region.kind === 'pane') {
     return null
@@ -246,8 +199,8 @@ export function splitOf(region: Region, id: string): Split | null {
   return null
 }
 
-/** Children renormalised, so the ones that are left keep their shares relative
- *  to each other rather than each growing by the same amount. */
+/** Children renormalised, so the ones left keep their shares relative to each
+ *  other rather than each growing by the same amount. */
 function shared(children: readonly Region[]): Region[] {
   const weights = normalised(children.map((child) => child.weight))
   return children.map((child, index) => ({ ...child, weight: weights[index] ?? child.weight }))
@@ -258,13 +211,9 @@ function evened(children: readonly Region[]): Region[] {
   return children.map((child, index) => ({ ...child, weight: weights[index] ?? child.weight }))
 }
 
-/**
- * A split whose child splits on its own axis is the same split written twice,
- * and would draw two separators where there is one boundary.
- *
- * One level is enough, because the invariant held before the operation that
- * called this, so at most one new same-axis adjacency can have appeared.
- */
+/** A split holding a child split on its own axis is the same split written twice, and
+ *  would draw two separators on one boundary. One level is enough: the invariant held
+ *  before the caller ran, so at most one adjacency can be new. */
 function flattened(split: Split): Split {
   const children: Region[] = []
   for (const child of split.children) {
@@ -280,18 +229,15 @@ function flattened(split: Split): Split {
   return { ...split, children }
 }
 
-/**
- * The tree with that pane renamed, or put back on its default name when the name
- * given is empty. A pane with no name of its own is named by where it is, so
- * there is always a name to fall back to.
- */
+/** The tree with that pane renamed. An empty name takes the name off, leaving the pane
+ *  named by where it sits. */
 export function renamedPane(region: Region, id: string, name: string): Region {
   if (region.kind === 'pane') {
     if (region.id !== id) {
       return region
     }
-    // Rebuilt without the field rather than set to an empty string: a shared
-    // link leaves out a name nobody chose, and absent is how that is said.
+    // Rebuilt without the field rather than set to '': a link leaves out a name
+    // nobody chose, and absent is how that is said.
     return name === ''
       ? { kind: 'pane', id: region.id, weight: region.weight }
       : { ...region, name }
@@ -299,12 +245,8 @@ export function renamedPane(region: Region, id: string, name: string): Region {
   return { ...region, children: region.children.map((child) => renamedPane(child, id, name)) }
 }
 
-/**
- * The tree without that pane, or null if it was the only one.
- *
- * A split left holding one child is not a split, so the child takes its place and
- * the share the split was holding.
- */
+/** The tree without that pane, or null if it was the only one. A split left holding one
+ *  child is not a split, so the child takes its place and its share. */
 export function withoutPane(region: Region, id: string): Region | null {
   if (region.kind === 'pane') {
     return region.id === id ? null : region
@@ -324,10 +266,8 @@ export function withoutPane(region: Region, id: string): Region | null {
   return flattened({ ...region, children: shared(kept) })
 }
 
-/**
- * `pane` put into a split beside the child at `at`, taking half of that child's
- * share so that no other region changes size.
- */
+/** `pane` put beside the child at `at`, taking half of that child's share so no
+ *  other region changes size. */
 function inserted(split: Split, pane: Leaf, at: number, before: boolean): Split {
   const slot = split.children[at]
   if (slot === undefined) {
@@ -340,21 +280,17 @@ function inserted(split: Split, pane: Leaf, at: number, before: boolean): Split 
     ...split,
     children:
       half < MIN_WEIGHT
-        ? // Halving would put the new pane and the one it came from both under
-          // the floor and hide the two of them. Evening the split out is the
-          // arrangement that needs a hand at that point anyway.
+        ? // Halving would put the new pane and its source both under the floor and
+          // hide them. Evening the split out is the best answer at that point.
           evened(added)
         : added.map((child) => (child === slot ? { ...child, weight: half } : child)),
   }
 }
 
-/**
- * `pane` placed on the named edge of `target`.
- *
- * On the axis the target's split already divides, the pane joins that split as a
- * sibling. Across it, the target's own slot becomes a split of the two. Either
- * way the pane takes half of the target's share and no other region changes size.
- */
+/** `pane` placed on the named edge of `target`. On the axis the target's split already
+ *  divides, the pane joins that split as a sibling; across it, the target's own slot
+ *  becomes a split of the two. Either way the pane takes half of the target's share and
+ *  no other region changes size. */
 export function withPane(
   region: Region,
   pane: Leaf,
@@ -368,8 +304,7 @@ export function withPane(
     if (region.id !== target) {
       return region
     }
-    // The target is a whole region with no split to join, so it becomes one,
-    // keeping whatever share it was holding above.
+    // No split to join, so the target becomes one, keeping the share it held.
     const kept: Leaf = { ...region, weight: 0.5 }
     const added: Leaf = { ...pane, weight: 0.5 }
     return {
@@ -388,22 +323,17 @@ export function withPane(
     return inserted(region, pane, at, before)
   }
 
-  // Either the target is deeper, or it is a pane in this split but the drop asks
-  // for the other axis, in which case the recursion reaches the leaf branch and
-  // that pane's slot becomes a split.
+  // Either the target is deeper, or it is a pane here and the drop asks for the other
+  // axis: the recursion reaches the leaf branch and that slot becomes a split.
   return {
     ...region,
     children: region.children.map((child) => withPane(child, pane, target, edge, splitId)),
   }
 }
 
-/**
- * The pane taken out of where it was and put on the named edge of the target,
- * which is what a drop means and what an arrow key on a grip means.
- *
- * Removal and insertion, in that order, so a pane dropped two levels away does
- * not leave a one-child split behind it.
- */
+/** The pane taken out of where it was and put on the named edge of the target. Removal
+ *  then insertion, in that order, so a pane dropped two levels away leaves no one-child
+ *  split behind it. */
 export function movedPane(
   root: Region,
   source: string,
@@ -422,9 +352,9 @@ export function movedPane(
   }
 
   // Already there, so the tree is returned untouched rather than rebuilt to the
-  // same shape. Not an optimisation: rebuilding would mint a new split id, and a
-  // split is a React key, so both panes would remount and lose their sort,
-  // filters and selection over a drop that changed nothing.
+  // same shape. Not an optimisation: a rebuild mints a new split id, which is a
+  // React key, so both panes would remount and lose their sort, filters and
+  // selection.
   const { orientation: axis, before } = placementFor(edge)
   const home = splitOf(root, target)
   if (home !== null && home.axis === axis) {
@@ -439,37 +369,31 @@ export function movedPane(
   if (rest === null) {
     return root
   }
-  // Restated against the shares from before the move, so the panes change place
-  // and nothing changes size.
+  // Restated against the shares from before the move: panes change place, not size.
   const shares = sharesOf(root)
   return reshared(withPane(rest, moving, target, edge, splitId), shares).region
 }
 
-/**
- * A pane opened from the one named, which takes half of its share and sits
- * immediately after it on its own split's axis.
- */
+/** A pane opened from the one named: half of its share, immediately after it on
+ *  that split's axis. */
 export function withDuplicate(root: Region, source: string, pane: Leaf, splitId: string): Region {
   const home = splitOf(root, source)
   const edge: Edge = (home?.axis ?? 'rows') === 'rows' ? 'bottom' : 'right'
   return withPane(root, pane, source, edge, splitId)
 }
 
-/**
- * A pane opened at the end of the workspace, along the axis the workspace is
- * already divided on. It takes half of whatever is at that end, so every pane
- * sized by hand keeps the size it was given.
- */
+/** A pane opened at the end of the workspace, on the axis it is already divided on.
+ *  Takes half of whatever is at that end, so every pane sized by hand keeps the size it
+ *  was given. */
 export function withPaneAtEnd(root: Region, pane: Leaf, splitId: string): Region {
   if (root.kind === 'pane') {
-    // No split to join yet, so the window becomes one. Stacked rather than side
-    // by side, which is the arrangement a workspace opens on.
+    // No split to join yet, so the window becomes one. Stacked, which is the
+    // arrangement a workspace opens on.
     return withPane(root, pane, root.id, 'bottom', splitId)
   }
   return inserted(root, pane, root.children.length - 1, false)
 }
 
-/** The boundary at `boundary` inside the named split, moved by `delta`. */
 export function resizedSplit(
   region: Region,
   splitId: string,

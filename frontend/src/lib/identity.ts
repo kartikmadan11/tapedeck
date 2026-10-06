@@ -10,14 +10,9 @@ const ACTOR_PARAM = 'actor'
  *  never blank. */
 export { DEFAULT_TRADER }
 
-/**
- * The name this window writes as, in order of authority: the signed-in session,
- * then the name a link handed over, then the default.
- *
- * Both are in sessionStorage, which is scoped to the window rather than the
- * browser, so two windows hold two identities. A cookie or localStorage is shared
- * across both and could only ever hold one.
- */
+/** In order of authority: signed-in session, name a link handed over, default. Both
+ *  live in sessionStorage, which is window-scoped, so two windows hold two
+ *  identities. A cookie or localStorage holds only one. */
 export function readTrader(): string {
   // The server issued this one, so it outranks anything a link asked for.
   const signedIn = readSession()
@@ -29,26 +24,18 @@ export function readTrader(): string {
     const stored = sessionStorage.getItem(STORAGE_KEY)?.trim()
     return stored === undefined || stored.length === 0 ? DEFAULT_TRADER : stored
   } catch {
-    // Storage throws when a browser has it disabled. An audit actor is not worth
-    // failing a write over.
+    // Storage throws when disabled, and an actor is not worth failing a write over.
     return DEFAULT_TRADER
   }
 }
 
-/**
- * Takes the identity the window was handed, once, before anything reads it. It
- * is a suggestion, not a grant: the sign-in form starts on this name and the
- * session that sign-in returns is what the window then writes as.
- *
- * Consumed rather than read. The parameter is taken back out of the address bar,
- * because the bar is also the workspace link: left in, it would travel to
- * whoever was sent that link and have them booking under this name.
- */
+/** A suggestion, not a grant: the sign-in form starts on this name and the returned
+ *  session is what the window writes as. Consumed rather than read, because the
+ *  address bar is also the workspace link and the name would travel with it. */
 export function adoptIdentity(): void {
   const url = new URL(window.location.href)
   const handed = url.searchParams.get(ACTOR_PARAM)
-  // Nothing handed over means nothing written, so a link that did not parse is
-  // left in the bar exactly as it was typed.
+  // A link that did not parse is left in the bar exactly as it was typed.
   if (handed === null) {
     return
   }
@@ -57,9 +44,8 @@ export function adoptIdentity(): void {
   window.history.replaceState(null, '', url)
 
   const trader = handed.trim()
-  // Bounded here because nothing between this and the event store enforces it:
-  // the header is taken as given and the column is `text`, so a longer name
-  // would be written and then fail to parse on the way back out.
+  // Bounded here because nothing downstream is: the header is taken as given and
+  // the column is `text`, so a longer name is written then fails to parse back out.
   if (trader.length === 0 || trader.length > PARTY_MAX_LENGTH) {
     return
   }
@@ -67,8 +53,7 @@ export function adoptIdentity(): void {
   try {
     sessionStorage.setItem(STORAGE_KEY, trader)
   } catch {
-    // Nothing else in the window holds the identity, deliberately: an in-memory
-    // copy here would name the trader on screen while `api.ts` stamped the
-    // default on the event.
+    // No in-memory fallback, deliberately: it would name the trader on screen
+    // while api.ts stamped the default on the event.
   }
 }

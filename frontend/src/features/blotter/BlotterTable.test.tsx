@@ -27,16 +27,15 @@ function aTrade(overrides: Record<string, unknown> = {}): Trade {
 }
 
 /**
- * One book, deliberately arranged so the netting is checkable by hand:
+ * One book, arranged so the netting is checkable by hand:
  *
  *   net quantity   10,000 - 4,000               =      6,000
  *   net filled      6,000 - 4,000               =      2,000
  *   net notional   724,650.00 - 292,400.00      = 432,250.00
  *   vwap           1,017,050 / 14,000           =    72.6464
  *
- * The buy is half executed and the sell is done, so the filled net is a figure
- * of its own rather than a copy of the booked one. The cancelled leg is 5,000 at
- * 70, which is large enough that including it would move all four.
+ * The buy is half executed and the sell is done, so the filled net is its own
+ * figure. The cancelled leg is 5,000 at 70, big enough to move all four.
  */
 const BOOK = [
   aTrade({ filledQuantity: 6_000, status: 'PARTIALLY_FILLED' }),
@@ -95,24 +94,18 @@ function tradeRow(tradeId: string): HTMLElement {
   return found
 }
 
-/**
- * Notional's place among the visible columns, with the Trade column off:
- * symbol, side, price, quantity, filled, notional, trader, book, ...
- */
+/** Notional's index with the Trade column off: symbol, side, price, quantity,
+ *  filled, notional, ... */
 const NOTIONAL = 5
 
-/**
- * Every column heading on screen. The sort marker is a child of the heading it
- * marks, and these cases are not about the order.
- */
+/** Every heading on screen, with the sort marker stripped. */
 function headers(): string[] {
   return Array.from(document.querySelectorAll('th')).map((cell) =>
     (cell.textContent ?? '').replace(/[↑↓]/, ''),
   )
 }
 
-/** The grid as it opens: every column but the trade id and the version, with
- *  the timestamp last. */
+/** The grid as it opens: every column but the trade id and the version. */
 const UNGROUPED = [
   'Symbol',
   'Side',
@@ -133,11 +126,8 @@ const NETTED = ['Price', 'Quantity', 'Filled', 'Notional']
 /** The pane itself, which is what carries its own menu. */
 const paneRegion = (): HTMLElement => screen.getByRole('region', { name: 'Trades' })
 
-/**
- * A pane's own controls, behind its right-click. Pointer down first, because that
- * is the order a browser fires the two in and it is what closes a menu already
- * open.
- */
+/** Pointer down first, as a browser fires them: that is what closes a menu which
+ *  is already open. */
 function choose(item: string): void {
   const region = paneRegion()
   fireEvent.pointerDown(region)
@@ -147,10 +137,8 @@ function choose(item: string): void {
 
 const openConfig = (): void => choose('Config')
 
-/**
- * Writes a control, whichever of the two kinds it is. A picklist is a button and
- * a list of its own rather than a native select, so setting one is two presses.
- */
+/** Writes either kind of control. A picklist is a button and a list rather than a
+ *  native select, so setting one is two presses. */
 function set(label: string, value: string): void {
   const control = screen.getByLabelText(label)
   if (control.getAttribute('role') !== 'combobox') {
@@ -182,7 +170,7 @@ function groupRow(name: string): HTMLElement {
   return row
 }
 
-/** Every cell of a row, in column order, so one assertion covers the whole row. */
+/** Every cell of a row, in column order. */
 function cells(row: HTMLElement): string[] {
   return Array.from(row.querySelectorAll('td')).map((cell) => cell.textContent ?? '')
 }
@@ -205,8 +193,7 @@ describe('grouping and aggregation', () => {
     openConfig()
     set('Group by', 'symbol')
 
-    // A group of forty trades has no one counterparty and no one timestamp, so
-    // seven of the eleven would be an empty cell on every group row.
+    // A group has no one counterparty and no one timestamp to show.
     expect(headers()).toEqual(['Symbol', ...NETTED])
   })
 
@@ -215,10 +202,8 @@ describe('grouping and aggregation', () => {
     openConfig()
     set('Group by', 'symbol')
 
-    // The whole row in one assertion, so the figures are read in the places they
-    // occupy.
     expect(cells(groupRow('VOD, 2 trades'))).toEqual([
-      // The label, the expander and the active leaf count, on the grouped column.
+      // Label, expander and active leaf count, all on the grouped column.
       '▸VOD(2)',
       '72.6464',
       '6,000',
@@ -233,8 +218,7 @@ describe('grouping and aggregation', () => {
     set('Group by', 'symbol')
     set('Group by', '')
 
-    // Derived from the grouping rather than written into the trader's own choice,
-    // so there is nothing left behind to undo by hand.
+    // Derived from the grouping, so there is nothing left behind to undo.
     expect(headers()).toEqual(UNGROUPED)
   })
 
@@ -247,9 +231,9 @@ describe('grouping and aggregation', () => {
     set('Group by', 'symbol')
     expect(headers()).toEqual(['Symbol', ...NETTED])
 
-    // What goes in a shared link is the column the trader asked for, not the eight
-    // the grouping took away: resolving the panel's updater against the state the
-    // table was given would bake those eight in and outlive the grouping.
+    // The shared link carries the column the trader asked for, not the eight the
+    // grouping took away, which resolving the updater against table state would
+    // bake in.
     expect(reported.at(-1)?.columnVisibility).toEqual({ tradeId: true, version: false })
 
     set('Group by', '')
@@ -264,8 +248,7 @@ describe('grouping and aggregation', () => {
 
     set('Group by', 'book')
 
-    // It carries the label and the expander, so left hidden the grouping would
-    // produce groups that can be neither read nor opened.
+    // It carries the label and the expander, so hidden groups could not be opened.
     expect(screen.getByRole('button', { name: 'EQ-LDN-01, 2 trades' })).toBeInTheDocument()
     expect(headers()).toEqual(['Book', ...NETTED])
   })
@@ -279,9 +262,8 @@ describe('grouping and aggregation', () => {
     openConfig()
     set('Group by', 'symbol')
 
-    // The column is hidden rather than taken out of the table, because TanStack
-    // silently skips a filter whose column it cannot resolve, and this figure
-    // would quietly become everybody's flow.
+    // Hidden, not taken out of the table: TanStack silently skips a filter whose
+    // column it cannot resolve, and this figure would become everybody's flow.
     expect(headers()).toEqual(['Symbol', ...NETTED])
     expect(cells(groupRow('VOD, 1 trades'))[2]).toBe('10,000')
   })
@@ -291,8 +273,7 @@ describe('grouping and aggregation', () => {
     openConfig()
     set('Group by', 'symbol')
 
-    // Three VOD trades sit under the group and two of them happened. Netting the
-    // cancelled 5,000 at 70 in would move the count to 3 and every figure with it.
+    // Netting the cancelled 5,000 at 70 would move the count to 3 and every figure.
     fireEvent.click(screen.getByRole('button', { name: 'VOD, 2 trades' }))
     expect(row('TRD-100003')).not.toBeNull()
     expect(cells(groupRow('VOD, 2 trades'))[2]).toBe('6,000')
@@ -316,8 +297,7 @@ describe('grouping and aggregation', () => {
     openConfig()
     set('Group by', 'symbol')
 
-    // A dash, not 0.0000: a zero average price is a claim about where the book
-    // traded.
+    // A dash, not 0.0000: a zero average is a claim about where the book traded.
     expect(cells(groupRow('VOD, 0 trades'))[1]).toBe('-')
   })
 
@@ -327,8 +307,7 @@ describe('grouping and aggregation', () => {
     set('Group by', 'symbol')
     fireEvent.click(screen.getByRole('button', { name: 'VOD, 2 trades' }))
 
-    // The symbol is on the group row above, so repeating it down every row
-    // beneath would be a column of the same word.
+    // The symbol is on the group row above, so repeating it is a column of one word.
     const leaf = tradeRow('TRD-100001')
     expect(cells(leaf)[0]).toBe('')
     expect(cells(leaf)[2]).toBe('10,000')
@@ -347,9 +326,8 @@ describe('a split pivots the measures across the grid', () => {
     renderBlotter()
     splitBySide()
 
-    // Two bands: the values across the top, the measures repeated under each.
-    // The first cell of the top band is empty because Symbol's heading belongs
-    // on the band with the measures rather than above them.
+    // Two bands. The first cell of the top band is empty: Symbol's heading belongs
+    // on the band with the measures.
     expect(headers()).toEqual(['', 'BUY', 'SELL', 'Symbol', ...NETTED, ...NETTED])
     expect(document.querySelectorAll('colgroup col')).toHaveLength(9)
   })
@@ -358,8 +336,7 @@ describe('a split pivots the measures across the grid', () => {
     renderBlotter()
     splitBySide()
 
-    // Without the colSpan the heading sits over the first of its four measures
-    // and reads as a figure about that one column.
+    // Without the colSpan the heading reads as a figure about one column.
     expect(screen.getByRole('columnheader', { name: 'BUY' })).toHaveAttribute('colspan', '4')
   })
 
@@ -367,9 +344,8 @@ describe('a split pivots the measures across the grid', () => {
     renderBlotter()
     splitBySide()
 
-    // The buy block is the half-executed 10,000 and the sell block the done
-    // 4,000, rather than the 6,000 the two read as together. The cancelled buy
-    // is out of both, as it is out of the plain grouping.
+    // Each block alone, not the 6,000 the two read as together. The cancelled buy
+    // is out of both.
     expect(cells(groupRow('VOD, 2 trades'))).toEqual([
       '▸VOD(2)',
       '72.4650',
@@ -388,8 +364,7 @@ describe('a split pivots the measures across the grid', () => {
     splitBySide()
     fireEvent.click(screen.getByRole('button', { name: 'VOD, 2 trades' }))
 
-    // A buy reports under BUY and says nothing under SELL, so a leaf reads along
-    // the same blocks its group row does.
+    // A buy reports under BUY and says nothing under SELL.
     expect(cells(tradeRow('TRD-100001'))).toEqual([
       '',
       '72.4650',
@@ -408,9 +383,8 @@ describe('a split pivots the measures across the grid', () => {
     splitBySide()
     set('Filter by side', 'BUY')
 
-    // Read off the rows a filter left, a keystroke would take columns out from
-    // under the cursor. The block stays and reports nothing: no average price to
-    // give, and a flat zero either side of it.
+    // Off the filtered rows, a keystroke would take columns out from under the
+    // cursor. The block stays and reports nothing.
     expect(headers().slice(1, 3)).toEqual(['BUY', 'SELL'])
     expect(cells(groupRow('VOD, 1 trades')).slice(-4)).toEqual(['-', '0', '0', '0.00'])
   })
@@ -425,10 +399,8 @@ describe('a split pivots the measures across the grid', () => {
     set('Group by', 'symbol')
     set('Split by', 'counterparty')
 
-    // Every value is a whole block of measures, so ten names would be forty
-    // columns. Capped in the sorted order rather than in arrival order, so the
-    // two left out are the same two on every frame of the feed. Symbol is the
-    // next band starting, which is what says the cap held.
+    // Ten names would be forty columns. Capped in sorted order, so the two left
+    // out are the same two on every frame. Symbol trailing is what says it held.
     expect(headers().slice(1, 10)).toEqual([
       'BNP Paribas',
       'Barclays',
@@ -446,8 +418,7 @@ describe('a split pivots the measures across the grid', () => {
     renderBlotter()
     splitBySide()
 
-    // A heading is a button only where its column can be sorted, and sorting the
-    // buy block would reorder rows the sell block also describes.
+    // Sorting the buy block would reorder rows the sell block also describes.
     expect(screen.queryAllByRole('button', { name: 'Price' })).toHaveLength(0)
   })
 
@@ -455,8 +426,7 @@ describe('a split pivots the measures across the grid', () => {
     renderBlotter()
     splitBySide()
 
-    // Two groups under two bands. Numbered off the band count, or a split would
-    // put the first group on top of a header row.
+    // Numbered off the band count, or a split puts a group on top of a header row.
     expect(screen.getByRole('grid')).toHaveAttribute('aria-rowcount', '4')
     expect(groupRow('VOD, 2 trades')).toHaveAttribute('aria-rowindex', '3')
   })
@@ -464,9 +434,8 @@ describe('a split pivots the measures across the grid', () => {
   it('ignores a split on a column that cannot divide the tape', () => {
     renderBlotter(BOOK, { ...DEFAULT_VIEW, grouping: ['symbol', 'price'] })
 
-    // Only a hand-edited link can ask for this, because the panel offers the
-    // groupable columns alone. A block per price is a block per trade, so the
-    // grid falls back to the plain grouping rather than to one column per cell.
+    // Only a hand-edited link can ask for this. A block per price is a block per
+    // trade, so the grid falls back to the plain grouping.
     expect(headers()).toEqual(['Symbol', ...NETTED])
   })
 })
@@ -480,8 +449,8 @@ describe('a group row is not a trade', () => {
     const row = groupRow('VOD, 2 trades')
     fireEvent.click(row)
 
-    // TanStack builds a group row out of its first leaf trade, so a selectable
-    // group header would hand the bar a real trade and offer to amend it.
+    // TanStack builds a group row from its first leaf, so a selectable header
+    // would hand the bar a real trade and offer to amend it.
     expect(readback()).toBeEmptyDOMElement()
     // The click was not swallowed, it opened the group.
     expect(screen.getByRole('button', { name: 'VOD, 2 trades' })).toHaveAttribute(
@@ -509,16 +478,14 @@ describe('a group row is not a trade', () => {
 
     const grid = screen.getByRole('grid')
 
-    // Everything is closed, so there is no trade to move to and the selection
-    // must not settle on a group.
+    // Everything is closed, so there is no trade to move to.
     fireEvent.keyDown(grid, { key: 'ArrowDown' })
     expect(readback()).toBeEmptyDOMElement()
 
     fireEvent.click(screen.getByRole('button', { name: 'VOD, 2 trades' }))
     fireEvent.keyDown(grid, { key: 'ArrowDown' })
 
-    // The first row on screen is the VOD group; the first trade under it is the
-    // newest, which the default order puts at the top.
+    // The first trade under the VOD group is the newest, by the default order.
     expect(readback()).toHaveTextContent('TRD-100003')
   })
 })
@@ -535,8 +502,7 @@ describe('virtualisation', () => {
   it('draws the rows that fit rather than the whole tape', () => {
     renderBlotter(TAPE)
 
-    // The header band plus the twenty that fit in the shimmed 640px and the
-    // overscan either side. Far from 501, which is the point.
+    // The header, the twenty that fit in the shimmed 640px, and the overscan.
     expect(screen.getAllByRole('row').length).toBeLessThan(60)
   })
 
@@ -558,8 +524,7 @@ describe('virtualisation', () => {
     renderBlotter()
     openConfig()
 
-    // Fixed layout takes the widths from here, so a colgroup that disagreed
-    // with the body would shift every column after the hidden one.
+    // Fixed layout takes the widths from here, so a stale colgroup shifts columns.
     const widths = (): number => document.querySelectorAll('colgroup col').length
     expect(widths()).toBe(11)
 
@@ -585,8 +550,7 @@ describe('magnitude bars', () => {
   it('rescales with the filter, so the bars measure what is on screen', () => {
     renderBlotter(TWO_SIZES)
 
-    // Scaled against the whole book, a tape filtered down to small trades would
-    // show nothing but bars too short to read.
+    // Scaled against the whole book, a filtered tape shows only unreadable bars.
     fireEvent.change(screen.getByLabelText('Filter by symbol'), { target: { value: 'BARC' } })
     expect(bar('TRD-100002')).toHaveStyle({ width: '100%' })
   })
@@ -594,8 +558,8 @@ describe('magnitude bars', () => {
   it('keeps the figure legible on top of the bar', () => {
     renderBlotter(TWO_SIZES)
 
-    // The bar is an overlay on a transparent cell rather than a background on it,
-    // which is what leaves hover, selection and the row flash able to reach it.
+    // An overlay on a transparent cell, not a background: that is what leaves
+    // hover, the selection and the row flash able to reach it.
     const cell = tradeRow('TRD-100001').querySelectorAll('td')[NOTIONAL]
     expect(cell).toHaveTextContent('100,000.00')
     expect(cell?.className).not.toMatch(/\bbg-/)
@@ -606,8 +570,7 @@ describe('the configuration panel', () => {
   it('keeps its controls out of the tab order while it is closed', () => {
     renderBlotter()
 
-    // A zero-width panel still holds real form controls, so without inert the
-    // next Tab out of the grid lands in an invisible select.
+    // Without inert, Tab out of the grid lands in an invisible select.
     expect(screen.getByLabelText('Group by').closest('[inert]')).not.toBeNull()
 
     openConfig()
@@ -622,8 +585,7 @@ describe('the configuration panel', () => {
     set('Group by', 'symbol')
     expect(screen.getByLabelText('Split by')).toBeEnabled()
 
-    // A block per symbol inside a group per symbol is one block, so it is not
-    // on the list.
+    // A block per symbol inside a group per symbol is one block.
     fireEvent.click(screen.getByLabelText('Split by'))
     const offered = within(screen.getByRole('listbox', { name: 'Split by' })).getAllByRole('option')
     expect(offered.map((row) => row.getAttribute('data-value'))).not.toContain('symbol')
@@ -636,8 +598,7 @@ describe('the configuration panel', () => {
     set('Split by', 'book')
     set('Group by', '')
 
-    // A split is blocks of netted columns across a group row, so with nothing
-    // grouped there is nothing left for it to lie across.
+    // A split is blocks laid across a group row, so it needs one to lie across.
     expect(screen.getByLabelText('Split by')).toHaveAttribute('data-value', '')
     expect(row('TRD-100001')).not.toBeNull()
   })
@@ -646,8 +607,7 @@ describe('the configuration panel', () => {
     renderBlotter()
     openConfig()
 
-    // The header starts the grid on time, newest first, so the panel has to say so
-    // rather than reporting its own idea of the order.
+    // The grid opens sorted on time, so the panel has to say so.
     expect(screen.getByLabelText('Order by')).toHaveAttribute('data-value', 'tradeTimestamp')
     expect(screen.getByRole('button', { name: 'Desc' })).toBeInTheDocument()
 
@@ -662,8 +622,7 @@ describe('the configuration panel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Desc' }))
     expect(screen.getByRole('button', { name: 'Asc' })).toBeInTheDocument()
 
-    // Snapping back to descending here would reorder the tape for a reason the
-    // trader did not ask for.
+    // Snapping back to descending would reorder the tape unasked.
     set('Order by', 'quantity')
     expect(screen.getByRole('button', { name: 'Asc' })).toBeInTheDocument()
   })
@@ -680,8 +639,7 @@ describe('the configuration panel', () => {
     renderBlotter()
     openConfig()
 
-    // The row is on the tape; its id is not on screen. Turning the column on
-    // puts it back at the front, where it is pinned.
+    // The row is on the tape, its id is not on screen. Turning it on pins it first.
     expect(row('TRD-100001')).not.toBeNull()
     expect(screen.queryByText('TRD-100001')).toBeNull()
 
@@ -722,8 +680,8 @@ describe('the configuration panel', () => {
     openConfig()
     set('Group by', 'symbol')
 
-    // Unticked and unavailable rather than tickable: the grid reads these boxes
-    // through the grouping's override, so a tick would do nothing.
+    // The grid reads these boxes through the grouping's override, so a tick would
+    // do nothing.
     const book = screen.getByRole('checkbox', { name: 'Book' })
     expect(book).toBeDisabled()
     expect(book).not.toBeChecked()
@@ -750,8 +708,7 @@ describe('the configuration panel', () => {
       'Counterparty',
       'Time (UTC)',
     ])
-    // Written out in full, not as the one pair that moved: a partial order reads
-    // the columns it leaves out as last.
+    // Written out in full: a partial order reads the columns it leaves out as last.
     expect(reported.at(-1)?.columnOrder).toEqual([
       'tradeId',
       'symbol',
@@ -781,8 +738,7 @@ describe('the configuration panel', () => {
     renderBlotter()
     openConfig()
 
-    // Ver is off by default and still listed, so it can be placed before it is
-    // ever seen.
+    // Ver is off by default and still listed, so it can be placed unseen.
     fireEvent.click(screen.getByRole('button', { name: 'Move Ver up' }))
     fireEvent.click(screen.getByRole('checkbox', { name: 'Ver' }))
 
@@ -795,8 +751,7 @@ describe('the configuration panel', () => {
       columnOrder: ['status', 'symbol'],
     })
 
-    // Named first, then the rest in definition order, which is how the table
-    // reads a partial order.
+    // Named first, then the rest in definition order.
     expect(headers().slice(0, 3)).toEqual(['Status', 'Symbol', 'Side'])
   })
 
@@ -805,8 +760,7 @@ describe('the configuration panel', () => {
     openConfig()
     set('Group by', 'symbol')
 
-    // The group label and the expander ride the grouped column, so it has to be
-    // the first one on the row.
+    // The label and the expander ride the grouped column, so it leads the row.
     expect(headers()).toEqual(['Symbol', 'Notional', 'Price', 'Quantity', 'Filled'])
   })
 
@@ -818,8 +772,7 @@ describe('the configuration panel', () => {
     expect(row('TRD-100001')).not.toBeNull()
     expect(row('TRD-100004')).toBeNull()
 
-    // Half typed is not zero. A bound that emptied the grid mid-keystroke would
-    // read as no matches rather than as not finished.
+    // Half typed is not zero: an emptied grid would read as no matches.
     set('Minimum quantity', '')
     expect(row('TRD-100004')).not.toBeNull()
   })
@@ -828,8 +781,7 @@ describe('the configuration panel', () => {
     renderBlotter()
     openConfig()
 
-    // 2,500.00 against 724,650.00: as text the smaller one sorts and compares
-    // first, which is the trap the exact decimal comparison avoids.
+    // As text, 2,500.00 compares above 724,650.00, which is the trap here.
     set('Minimum notional', '3000')
     expect(row('TRD-100001')).not.toBeNull()
     expect(row('TRD-100004')).toBeNull()
@@ -874,8 +826,7 @@ describe('the filters suggest what is on the tape', () => {
   it('leaves the box free text, so a part of a value still filters', () => {
     renderBlotter()
 
-    // The reason these are a datalist and not a select: LDN-02 is nobody's book
-    // and it is how a trader finds the one book that ends that way.
+    // Why a datalist and not a select: LDN-02 is nobody's book.
     fireEvent.change(screen.getByLabelText('Filter by book'), { target: { value: 'LDN-02' } })
 
     expect(row('TRD-100004')).not.toBeNull()
@@ -889,27 +840,24 @@ describe('the filters suggest what is on the tape', () => {
     const ids = screen.getAllByLabelText('Filter by symbol').map((box) => box.getAttribute('list'))
 
     expect(new Set(ids).size).toBe(2)
-    // The second pane's box reads the second pane's tape, which is the bug a
-    // shared id would hide: both boxes would offer the first pane's symbols.
+    // A shared id would have both boxes offering the first pane's symbols.
     expect(ids.map((id) => document.getElementById(id ?? '')?.children.length)).toEqual([2, 1])
   })
 })
 
 describe("a pane's own menu", () => {
-  /** The positioned sheet, which is the menu's parent rather than the menu: the
-   *  coordinates are set on it, so the menu's children are all items. */
+  /** The positioned sheet, which is the menu's parent: the coordinates are set on
+   *  it, so the menu's own children are all items. */
   const sheet = (): HTMLElement | null => screen.queryByRole('menu')?.parentElement ?? null
 
-  /** Returns false when the event was cancelled, which is the preventDefault
-   *  itself rather than its effect. */
+  /** Returns false when the event was cancelled, which is the preventDefault. */
   const rightClick = (init: object = {}): boolean => fireEvent.contextMenu(paneRegion(), init)
 
   it('opens where the pointer was rather than where the pane is', () => {
     renderBlotter()
     rightClick({ clientX: 420, clientY: 160 })
 
-    // Unclamped, because the clamp that keeps a sheet inside the viewport needs
-    // a measured box and jsdom has no layout to measure.
+    // Unclamped: the clamp needs a measured box and jsdom has no layout.
     expect(sheet()).toHaveStyle({ left: '420px', top: '160px' })
   })
 
@@ -918,8 +866,7 @@ describe("a pane's own menu", () => {
     const region = paneRegion()
     region.getBoundingClientRect = (): DOMRect => ({ ...new DOMRect(), left: 240, top: 300 })
 
-    // Shift+F10 and the menu key both raise a contextmenu event carrying no
-    // coordinates, and the top left of the window is the wrong place for it.
+    // Shift-F10 and the menu key raise a contextmenu carrying no coordinates.
     rightClick()
     expect(sheet()).toHaveStyle({ left: '248px', top: '308px' })
   })
@@ -927,8 +874,7 @@ describe("a pane's own menu", () => {
   it('leaves the browser its own menu when shift is held', () => {
     renderBlotter()
 
-    // A grid that takes over right-click with nothing held back takes away view
-    // source, inspect and the spell checker.
+    // Otherwise the grid takes away view source, inspect and the spell checker.
     expect(rightClick({ shiftKey: true })).toBe(true)
     expect(sheet()).toBeNull()
 
@@ -939,8 +885,7 @@ describe("a pane's own menu", () => {
   it('leaves a box someone is typing in its own menu', () => {
     renderBlotter()
 
-    // Cut, copy and paste belong to the field, and the filters and the config
-    // panel are full of boxes.
+    // Cut, copy and paste belong to the field.
     const box = screen.getByLabelText('Filter by symbol')
     expect(fireEvent.contextMenu(box)).toBe(true)
     expect(sheet()).toBeNull()
@@ -950,17 +895,14 @@ describe("a pane's own menu", () => {
     renderBlotter()
     rightClick()
 
-    // A blotter with no workspace around it can open, duplicate, share and close
-    // nothing, and a right-click off a row has no trade to act on, so seven of
-    // the nine are refused and the keyboard skips them.
+    // With no workspace and no row picked, seven of the nine items are refused.
     const menu = screen.getByRole('menu')
     expect(screen.getByRole('menuitem', { name: 'Config' })).toHaveFocus()
 
     fireEvent.keyDown(menu, { key: 'ArrowDown' })
     expect(screen.getByRole('menuitem', { name: 'Reset' })).toHaveFocus()
 
-    // Down from the last item offered wraps past Close, the three trade items and
-    // then New pane and Duplicate rather than stopping on any of them.
+    // Wraps past the seven refused rather than stopping on one.
     fireEvent.keyDown(menu, { key: 'ArrowDown' })
     expect(screen.getByRole('menuitem', { name: 'Config' })).toHaveFocus()
   })
@@ -971,8 +913,7 @@ describe("a pane's own menu", () => {
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
 
     expect(sheet()).toBeNull()
-    // The panel is mounted either way, so this asks the question a screen reader
-    // asks: inert and aria-hidden, or reachable.
+    // Mounted either way, so the question is whether it is reachable.
     expect(screen.queryByRole('combobox', { name: 'Group by' })).toBeNull()
   })
 
@@ -989,13 +930,11 @@ describe("a pane's own menu", () => {
     openConfig()
     rightClick()
 
-    // The menu closes on the press, so the item is the only thing that can carry
-    // it.
+    // The menu closes on the press, so the item is what carries it.
     const item = screen.getByRole('menuitem', { name: 'Hide config' })
     expect(item).toHaveAttribute('aria-expanded', 'true')
 
-    // And says which thing is open, since the sheet is portaled to the body and
-    // the panel is nowhere near it in the tree.
+    // And which thing, since the sheet is portaled away from the panel.
     const controlled = document.getElementById(item.getAttribute('aria-controls') ?? '')
     expect(controlled).toContainElement(screen.getByRole('combobox', { name: 'Group by' }))
   })
@@ -1011,8 +950,7 @@ describe("a pane's own menu", () => {
 
     choose('Reset')
 
-    // All four at once: a Reset that cleared three is worse than none, because the
-    // one left behind is the one nobody thinks to look for.
+    // All four at once: a Reset that cleared three is worse than none.
     expect(headers()).toEqual(UNGROUPED)
     expect(row('TRD-100004')).not.toBeNull()
     expect(screen.getByLabelText('Order by')).toHaveAttribute('data-value', 'tradeTimestamp')
@@ -1024,8 +962,7 @@ describe("a pane's own menu", () => {
 })
 
 describe("a trade's own items in the menu", () => {
-  /** The same order a browser fires the two in, raised on a row rather than on
-   *  the pane, so the menu has a trade to be about. */
+  /** Raised on a row, so the menu has a trade to be about. */
   function rightClickRow(tradeId: string): void {
     const node = tradeRow(tradeId)
     fireEvent.pointerDown(node)
@@ -1049,8 +986,7 @@ describe("a trade's own items in the menu", () => {
     renderBlotter()
     rightClickRow('TRD-100004')
 
-    // On the item rather than in its label, so the shortcut is announced as a
-    // property of the item and not read as part of its name.
+    // On the item, not in its label, so it is not read as part of the name.
     expect(item('Amend trade')).toHaveAttribute('aria-keyshortcuts', 'a')
     expect(item('Cancel trade')).toHaveAttribute('aria-keyshortcuts', 'c')
     expect(item('Trade history')).toHaveAttribute('aria-keyshortcuts', 'h')
@@ -1060,8 +996,7 @@ describe("a trade's own items in the menu", () => {
     renderBlotter()
     fireEvent.contextMenu(paneRegion())
 
-    // Offered and refused rather than left out, so the pane's own items do not
-    // move under a pointer going on muscle memory.
+    // Refused, not left out, so the pane's own items below do not move.
     expect(item('Amend trade')).toBeDisabled()
     expect(item('Cancel trade')).toBeDisabled()
     expect(item('Trade history')).toBeDisabled()
@@ -1071,8 +1006,7 @@ describe("a trade's own items in the menu", () => {
     renderBlotter()
     rightClickRow('TRD-100003')
 
-    // The same rule the chips and the keys enforce: a menu item that did what a
-    // disabled chip refuses would be a third answer to one question.
+    // The same canWrite rule the chips and the keys enforce.
     expect(item('Amend trade')).toBeDisabled()
     expect(item('Cancel trade')).toBeDisabled()
     expect(item('Trade history')).toBeEnabled()
@@ -1108,9 +1042,7 @@ describe('the rail under the tape', () => {
     openConfig()
     set('Group by', 'symbol')
 
-    // Two groups over four trades. A count that read the rows on screen would
-    // say two, and the rail would be reporting the grouping back to the trader
-    // who just set it.
+    // Two groups over four trades: a count of the rows on screen would say two.
     expect(screen.getByText(/^4 trades/)).toBeVisible()
   })
 
@@ -1130,9 +1062,8 @@ describe('the rail under the tape', () => {
   it('calls a full window the latest, not a count of the book', () => {
     renderBlotter(FULL)
 
-    // Booking a trade cannot move this figure: the new row arrives at the top
-    // and the oldest leaves the bottom. '500 trades' read as a book that had
-    // stopped growing, which is the one thing it does not mean.
+    // Booking a trade cannot move this figure: a row arrives at the top and the
+    // oldest leaves the bottom. '500 trades' would read as a book that stopped.
     expect(screen.getByText(`latest ${BLOTTER_LIMIT} trades`)).toBeVisible()
   })
 
@@ -1145,8 +1076,7 @@ describe('the rail under the tape', () => {
 })
 
 describe('a pointer down away from the pane', () => {
-  /** Picked for the three tests below, and writable, so Amend is the thing that
-   *  says whether the pane still holds a selection. */
+  /** Picks a writable row, so Amend says whether the selection is still held. */
   function pick(): void {
     renderBlotter()
     fireEvent.click(tradeRow('TRD-100004'))
@@ -1175,8 +1105,7 @@ describe('a pointer down away from the pane', () => {
     fireEvent.contextMenu(paneRegion())
 
     // The sheet portals to the body, so it is outside the pane in the tree while
-    // being about the row that is selected. Reaching for Amend through the menu
-    // must not take the selection away on the way.
+    // being about the selected row.
     fireEvent.pointerDown(screen.getByRole('menuitem', { name: 'Config' }))
 
     expect(held()).toBe(true)

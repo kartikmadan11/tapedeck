@@ -9,8 +9,8 @@ import {
   signatureOf,
 } from './guards.js'
 
-/** 1,000 at 72.50 is 72,500, which is under the limit, so nothing fires by
- *  default and each test turns on the one thing it is about. */
+/** 1,000 at 72.50 is 72,500, under the limit, so nothing fires by default and each
+ *  test turns on the one thing it is about. */
 const TICKET: CreateTradeInput = {
   symbol: 'VOD',
   side: 'BUY',
@@ -36,8 +36,7 @@ describe('the ticket signature', () => {
     },
   )
 
-  // The trader is the window's identity, not a term of the trade: including it
-  // would let one window's booking silence another window's duplicate warning.
+  // Including it would let one window's booking silence another's warning.
   it('ignores the trader', () => {
     expect(signatureOf({ ...TICKET, trader: 'j.okonkwo' })).toBe(signatureOf(TICKET))
   })
@@ -54,8 +53,8 @@ describe('the duplicate guard', () => {
     expect(guard?.message).toBe('Identical to TRD-100001, booked 1.4s ago')
   })
 
-  // The boundary in both directions, because an off-by-one here either nags a
-  // trader working an order in clips or lets a double-click through.
+  // Both directions: an off-by-one either nags a trader working an order in clips
+  // or lets a double-click through.
   it('holds at the last millisecond inside the window', () => {
     expect(guardFor(TICKET, booked(), NOW + DUPLICATE_WINDOW_MS - 1)?.kind).toBe('duplicate')
   })
@@ -84,11 +83,8 @@ describe('the size guard', () => {
     expect(guardFor(TICKET, null, NOW)).toBeNull()
   })
 
-  /**
-   * The boundary is one minor unit wide because the comparison runs in minor units
-   * rather than on the decimal strings. Strictly over, so a ticket landing exactly
-   * on the limit books.
-   */
+  /** The boundary is one minor unit wide, since the comparison runs in minor units
+   *  rather than on the strings. Strictly over, so exactly on the limit books. */
   it.each([
     ['exactly on the limit', '250000.000000', null],
     ['one minor unit over', '250000.000001', 'size'],
@@ -107,8 +103,8 @@ describe('the size guard', () => {
 })
 
 describe('precedence', () => {
-  // An oversized ticket was confirmed for its size on the first booking, so on a
-  // repeat the repeat is the new information.
+  // The size was already confirmed on the first booking, so the repeat is the
+  // new information.
   it('reports the duplicate rather than the size when a ticket is both', () => {
     const big = { ...TICKET, quantity: 10_000 }
     const guard = guardFor(big, booked({ signature: signatureOf(big) }), NOW + 100)

@@ -20,28 +20,23 @@ import { and, asc, desc, eq, sql } from 'drizzle-orm'
 // Advisory lock key. Arbitrary but must be stable across processes.
 const WRITE_LOCK_KEY = 8_427_301
 
-/**
- * Serialises every mutation, which is what makes max(seq) a valid high-water
- * mark. bigserial allocates before commit, so without this seq 7 can commit
- * before seq 6 and a reader can observe max(seq) = 7 while 6 is uncommitted; a
- * reconnecting client's drain filter then asks `6 > 7` and discards it.
- * Releases at commit or rollback.
- */
+/** Serialises every mutation, which is what makes max(seq) a valid high-water mark.
+ * bigserial allocates before commit, so without this seq 7 can commit before 6 and a
+ * reader sees max(seq) = 7 while 6 is uncommitted; a reconnecting client's drain then
+ * asks `6 > 7` and discards it. Releases at commit or rollback. */
 async function acquireWriteLock(tx: Queryable): Promise<void> {
   await tx.execute(sql`select pg_advisory_xact_lock(${WRITE_LOCK_KEY})`)
 }
 
-/** The result of a mutation: the new state plus the seq the event was written at. */
+/** The new state, with the seq its event was written at. */
 export interface MutationResult {
   trade: Trade
   seq: number
   eventType: TradeEventType
 }
 
-/**
- * A union rather than a MutationResult with a `replayed` flag: a replay wrote
- * no event, so there is no seq to carry on that branch.
- */
+/** A union rather than a `replayed` flag: a replay wrote no event, so there is no
+ * seq to carry on that branch. */
 export type CreateResult =
   | { replayed: false; result: MutationResult }
   | { replayed: true; trade: Trade }
@@ -59,16 +54,13 @@ export class TradeRepository {
     this.db = db
   }
 
-  /**
-   * Trades, positions and the high-water seq in one repeatable-read
-   * transaction: trades at seq 100 beside positions at seq 103 is a panel that
-   * disagrees with its own blotter.
-   */
+  /** One repeatable-read transaction: trades at seq 100 beside positions at seq 103
+   * is a panel that disagrees with its own blotter. */
   async readSnapshot(query: TradeQuery = {}): Promise<ConsistentSnapshot> {
     return this.db.transaction(
       async (tx) => {
         // Sequential, not Promise.all: a transaction is one connection, so pg
-        // would queue the queries anyway and warns about the overlap.
+        // queues the queries anyway and warns about the overlap.
         const seq = await readHighWaterSeq(tx)
         const tradeRows = await selectTrades(tx, query)
         const positionRows = await selectPositions(tx)
@@ -103,7 +95,7 @@ export class TradeRepository {
     return row ? toTrade(row) : null
   }
 
-  /** The audit trail for one trade, oldest first. 404 if it does not exist. */
+  /** Oldest first. 404 if the trade does not exist. */
   async listEvents(tradeId: string): Promise<TradeEvent[]> {
     const trade = await this.findTrade(tradeId)
     if (!trade) {
@@ -119,15 +111,10 @@ export class TradeRepository {
     return rows.map(toTradeEvent)
   }
 
-  /**
-   * Books a trade, or returns the one an earlier request with the same
-   * clientTradeId already booked.
-   *
-   * Reads rather than relying on the unique index to raise: a constraint
-   * violation aborts the transaction, and the earlier trade has to be returned
-   * anyway. Not a check-then-act race because the write lock is already held,
-   * so no insert can land between this read and the insert below.
-   */
+  /** Books a trade, or returns the one an earlier request with the same clientTradeId
+   * already booked. Reads rather than letting the unique index raise: a violation
+   * aborts the transaction, and the earlier trade has to be returned anyway. Not
+   * check-then-act, because the write lock is held. */
   async createTrade(input: CreateTradeInput, actor: string): Promise<CreateResult> {
     return this.db.transaction(async (tx) => {
       await acquireWriteLock(tx)
@@ -150,8 +137,8 @@ export class TradeRepository {
           book: input.book,
           counterparty: input.counterparty,
           tradeTimestamp: new Date(input.tradeTimestamp ?? Date.now()),
-          // ?? null rather than the bare value: the column is nullable and
-          // exactOptionalPropertyTypes means undefined is not assignable to it.
+          // ?? null, because exactOptionalPropertyTypes makes undefined
+          // unassignable to the nullable column.
           clientTradeId: input.clientTradeId ?? null,
         })
         .returning()
@@ -166,11 +153,9 @@ export class TradeRepository {
     })
   }
 
-  /**
-   * Diagnoses the three-way outcome inside the lock rather than by interpreting
-   * a zero-row UPDATE: a follow-up read after a failed UPDATE is not atomic with
-   * it under READ COMMITTED, so the currentVersion it reported could be stale.
-   */
+  /** Diagnoses the outcome inside the lock rather than from a zero-row UPDATE: a
+   * follow-up read is not atomic with a failed UPDATE under READ COMMITTED, so the
+   * currentVersion it reported could be stale. */
   async amendTrade(
     tradeId: string,
     input: AmendTradeInput,
@@ -187,13 +172,9 @@ export class TradeRepository {
         throw versionConflict(tradeId, input.version, current.version)
       }
 
-      /**
-       * An amendment moves the booked quantity, so the fill has to be read
-       * against the new one. Amending above what has executed re-opens the
-       * remainder; amending below it is a correction to an over-recorded
-       * execution and clamps the fill down with it, because a status and a fill
-       * that disagree is a row the database refuses.
-       */
+      /** The fill has to be read against the new booked quantity. Amending above what
+       * executed re-opens the remainder; amending below it clamps the fill down, since
+       * the database refuses a status and fill that disagree. */
       const filledQuantity = Math.min(current.filledQuantity, input.quantity)
 
       const [row] = await tx
@@ -219,15 +200,10 @@ export class TradeRepository {
     })
   }
 
-  /**
-   * Applies an execution report. The cumulative quantity has to advance and
-   * cannot pass what was booked, so a report that arrives twice is refused
-   * rather than filling twice, and an overfill is refused rather than clamped:
-   * a venue reporting more than was booked is a reconciliation break, not
-   * something to round off quietly.
-   *
-   * Status is derived here, never taken from the caller.
-   */
+  /** The cumulative quantity has to advance and cannot pass what was booked, so a
+   * duplicate report is refused rather than filling twice, and an overfill is refused
+   * rather than clamped: a venue reporting more than was booked is a reconciliation
+   * break. Status is derived here, never taken from the caller. */
   async fillTrade(tradeId: string, input: FillTradeInput, actor: string): Promise<MutationResult> {
     return this.db.transaction(async (tx) => {
       await acquireWriteLock(tx)
@@ -275,7 +251,7 @@ export class TradeRepository {
     })
   }
 
-  /** Cancelling a cancelled trade is an explicit INVALID_STATE, not a silent success. */
+  /** Cancelling a cancelled trade is INVALID_STATE, not a silent success. */
   async cancelTrade(tradeId: string, version: number, actor: string): Promise<MutationResult> {
     return this.db.transaction(async (tx) => {
       await acquireWriteLock(tx)
@@ -327,10 +303,8 @@ async function requireTrade(tx: Queryable, tradeId: string): Promise<Trade> {
   return toTrade(row)
 }
 
-/**
- * Appends one event and returns its seq, which becomes the frame's cursor.
- * Exactly one event per mutation, which is what makes version == count(events).
- */
+/** Returns the event's seq, which becomes the frame's cursor. Exactly one event per
+ * mutation, which is what makes version == count(events). */
 async function appendEvent(
   tx: Queryable,
   eventType: TradeEventType,
@@ -349,10 +323,8 @@ async function appendEvent(
   return event.seq
 }
 
-/**
- * Returns 0 for an empty database, which is why a snapshot may carry cursor 0
- * and a delta may not: no event can ever be numbered 0.
- */
+/** Returns 0 for an empty database, which is why a snapshot may carry cursor 0 and
+ * a delta may not: no event is ever numbered 0. */
 async function readHighWaterSeq(tx: Queryable): Promise<number> {
   const result = await tx.execute<{ seq: number }>(
     sql`select coalesce(max(seq), 0)::int as seq from ${tradeEvents}`,
@@ -375,23 +347,17 @@ function selectTrades(tx: Queryable, query: TradeQuery): Promise<Trade[]> {
     .where(filters.length > 0 ? and(...filters) : undefined)
     .orderBy(desc(trades.tradeTimestamp), desc(trades.tradeId))
 
-  // trades_timestamp_idx is on (tradeTimestamp desc, tradeId desc), the same
-  // order this asks for, so the limit is a truncated index scan rather than a
-  // sort of the whole table.
+  // trades_timestamp_idx is on (tradeTimestamp desc, tradeId desc), the order this
+  // asks for, so the limit is a truncated index scan, not a whole-table sort.
   return (query.limit === undefined ? ordered : ordered.limit(query.limit)).then((rows) =>
     rows.map(toTrade),
   )
 }
 
-/**
- * Aggregated in numeric by Postgres, never summed on the client: two clients
- * adding floats in a different order can disagree in the last place. Cancelled
- * trades are excluded, not netted out.
- *
- * Booked quantity, not filled: this is the exposure the desk has committed to,
- * which is the figure a trader is asked about and the one a pre-trade limit is
- * checked against. Executed exposure is a second figure, argued in DECISIONS.
- */
+/** Aggregated in numeric by Postgres, never summed on the client: two clients adding
+ * floats in a different order can disagree in the last place. Cancelled trades are
+ * excluded, not netted out. Booked quantity, not filled: the exposure the desk has
+ * committed to, which a pre-trade limit is checked against. Argued in DECISIONS. */
 async function selectPositions(tx: Queryable): Promise<Position[]> {
   const result = await tx.execute<{
     symbol: string

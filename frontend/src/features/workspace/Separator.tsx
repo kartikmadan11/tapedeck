@@ -6,10 +6,8 @@ import { resized } from './layout.js'
 
 type Props = {
   label: string
-  /**
-   * How far the boundary moved, in the same units as the weights. Which boundary
-   * of which split is closed over by whoever placed this.
-   */
+  /** How far the boundary moved, in weight units. Which boundary of which split
+   *  is closed over by whoever placed this. */
   onResize: (delta: number) => void
   orientation: Orientation
   weightBefore: number
@@ -30,19 +28,11 @@ type Drag = {
   delta: number
 }
 
-/**
- * The draggable boundary between two panes.
- *
- * While the pointer is down this writes `flex-grow` straight onto the two
- * neighbouring pane elements and commits once, on release: a pane is a
- * virtualised grid of 500 trades, and putting a resize through React would
- * re-render both of them on every pointer move. The committed value is the one
- * that was written, so there is no frame where the two disagree.
- *
- * The neighbours are read off the DOM as siblings rather than threaded in as
- * refs, which holds because the markup that places a separator guarantees a pane
- * on each side of it.
- */
+/** The draggable boundary between two panes. While the pointer is down it writes
+ *  `flex-grow` onto the two neighbouring pane elements and commits once on release: a
+ *  resize through React would re-render both virtualised grids on every pointer move.
+ *  Neighbours come off the DOM as siblings, which holds because the markup always puts
+ *  a pane on each side. */
 export function Separator({
   label,
   onResize,
@@ -65,15 +55,13 @@ export function Separator({
       ? before.getBoundingClientRect().height + after.getBoundingClientRect().height
       : before.getBoundingClientRect().width + after.getBoundingClientRect().width
 
-    // Nothing to drag against: a surface that has not been laid out, or jsdom,
-    // which reports every rect as empty. Returning here leaves the keyboard
-    // path, which needs no geometry at all.
+    // Nothing laid out to drag against, jsdom included: it reports every rect as
+    // empty. The keyboard path needs no geometry, so it still works.
     if (span <= 0) {
       return
     }
 
-    // Capture, so a pointer that outruns the handle keeps driving it. Without it
-    // a fast drag leaves the separator behind and the resize stops halfway.
+    // Capture, or a pointer that outruns the handle stops driving it mid-drag.
     handle.setPointerCapture(event.pointerId)
     drag.current = {
       from: rows ? event.clientY : event.clientX,
@@ -90,9 +78,7 @@ export function Separator({
       return
     }
 
-    // Against the pair's own length and the pair's own weights, so the pointer
-    // tracks the handle exactly whatever the other panes and the separators are
-    // taking up.
+    // Against the pair's own length and weights, so the handle tracks the pointer.
     const travelled = (rows ? event.clientY : event.clientX) - current.from
     const share = weightBefore + weightAfter
     const [next, following] = resized(
@@ -118,21 +104,17 @@ export function Separator({
   }
 
   return (
-    // An hr, which carries role="separator" already, and with a tabindex is the
-    // window splitter that role describes. border-0 because its default border
-    // is the line, and this one draws its own so it can change colour.
+    // An hr already carries role="separator"; with a tabindex it is the window
+    // splitter. border-0 because it draws its own line, to control the colour.
     <hr
       aria-label={label}
       aria-orientation={rows ? 'horizontal' : 'vertical'}
-      // The leading pane's share of the pair, which is what the handle moves.
-      // Not its share of the workspace: the other panes do not move with it.
+      // Share of the pair, not of the workspace: the other panes do not move.
       aria-valuenow={Math.round((weightBefore / (weightBefore + weightAfter)) * 100)}
-      // touch-none, so a drag on a touch screen moves the boundary rather than
-      // scrolling the page out from under it.
+      // touch-none, or a drag on a touch screen scrolls the page instead.
       className={`${rows ? HANDLE_ROW : HANDLE_COLUMN} ${HANDLE}`}
       onKeyDown={(event) => {
-        // Axis-appropriate keys only. In a stacked workspace the boundary moves
-        // up and down, and Left on it would be a guess at what was meant.
+        // Axis-appropriate keys only; the other axis is a guess at what was meant.
         const keys = rows ? ['ArrowUp', 'ArrowDown'] : ['ArrowLeft', 'ArrowRight']
         const direction = keys.indexOf(event.key)
         if (direction < 0) {

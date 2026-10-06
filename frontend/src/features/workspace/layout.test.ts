@@ -50,7 +50,6 @@ function shares(region: Region): Record<string, number> {
 const THIRD = 0.3333
 const SIXTH = 0.1667
 
-/** Three panes stacked, evenly. */
 const STACK = split('s1', 'rows', [pane('a', 1 / 3), pane('b', 1 / 3), pane('c', 1 / 3)])
 
 describe('what an edge means', () => {
@@ -71,8 +70,7 @@ describe('shares', () => {
       pane('c', 0.5),
     ])
 
-    // a is half of a half: its weight says 0.5 and its share of the window is a
-    // quarter.
+    // a is half of a half: weight 0.5, a quarter of the window.
     expect(shares(nested)).toEqual({ a: 0.25, b: 0.25, c: 0.5 })
   })
 
@@ -101,8 +99,7 @@ describe('moving a boundary', () => {
       pane('c', 0.5),
     ])
 
-    // The inner boundary moves and the outer one does not, which is why a
-    // separator names its split rather than an index into a flat list.
+    // Only the inner boundary moves: a separator names its split, not an index.
     expect(shares(resizedSplit(nested, 's2', 0, 0.2))).toEqual({ a: 0.35, b: 0.15, c: 0.5 })
     expect(shares(resizedSplit(nested, 's1', 0, 0.2))).toEqual({ a: 0.35, b: 0.35, c: 0.3 })
   })
@@ -120,8 +117,7 @@ describe('standing one pane beside another', () => {
     const next = movedPane(STACK, 'c', 'a', 'right', 's2')
 
     // A removal renormalises the old neighbours and an insertion halves the new
-    // one, so without restating the shares afterwards a drop that was only
-    // supposed to rearrange would resize all three.
+    // one, so without restating the shares all three would change size.
     expect(shares(next)).toEqual({ a: THIRD, b: THIRD, c: THIRD })
     expect(sharesOf(next).get('b')).toBeCloseTo(1 / 3, 10)
   })
@@ -129,8 +125,7 @@ describe('standing one pane beside another', () => {
   it('joins the split it is already on rather than nesting inside it', () => {
     const next = movedPane(STACK, 'a', 'c', 'bottom', 's2')
 
-    // Both ask for rows and the split is already rows, so there is one boundary
-    // between them and no reason to draw two.
+    // Both ask for rows and the split is rows, so one boundary, not two.
     expect(shape(next)).toBe('rows(b c a)')
     expect(shares(next)).toEqual({ a: THIRD, b: THIRD, c: THIRD })
   })
@@ -147,16 +142,15 @@ describe('standing one pane beside another', () => {
     const beside = movedPane(STACK, 'c', 'a', 'right', 's2')
     const next = movedPane(beside, 'b', 'c', 'bottom', 's3')
 
-    // b leaves the outer rows split holding one child, so the columns split is
-    // promoted to the root, and c's own slot divides to take b.
+    // b leaves the outer split holding one child, so the columns split is
+    // promoted to the root and c's slot divides to take b.
     expect(shape(next)).toBe('columns(a rows(c b))')
     expect(shares(next)).toEqual({ a: THIRD, b: THIRD, c: THIRD })
   })
 
   it('does nothing when the pane is already against that boundary', () => {
-    // Returned as-is rather than rebuilt to the same shape. Not an optimisation:
-    // a rebuild mints a new split id, a split id is a React key, and both panes
-    // would remount and lose their sort and selection.
+    // Returned as-is rather than rebuilt to the same shape: a rebuild mints a new
+    // split id, which is a React key, so both panes would remount.
     expect(movedPane(STACK, 'b', 'a', 'bottom', 's2')).toBe(STACK)
     expect(movedPane(STACK, 'b', 'c', 'top', 's2')).toBe(STACK)
     expect(movedPane(STACK, 'a', 'a', 'right', 's2')).toBe(STACK)
@@ -173,8 +167,7 @@ describe('opening a pane', () => {
     const next = withDuplicate(STACK, 'b', pane('d'), 's2')
 
     expect(shape(next)).toBe('rows(a b d c)')
-    // Out of its source rather than out of everyone, so the panes sized by hand
-    // keep the size they were given.
+    // Out of its source, not out of everyone, so hand-sized panes keep their size.
     expect(shares(next)).toEqual({ a: THIRD, b: SIXTH, d: SIXTH, c: THIRD })
   })
 
@@ -185,8 +178,7 @@ describe('opening a pane', () => {
   it('puts one opened from nothing in particular at the end, on the axis there is', () => {
     const beside = movedPane(STACK, 'c', 'a', 'right', 's2')
 
-    // The end of the workspace rather than the end of a slot inside it, so where
-    // the new pane turns up does not depend on which pane happens to be last.
+    // The end of the workspace, not of whichever slot happens to be last.
     expect(shape(withPaneAtEnd(STACK, pane('d'), 's9'))).toBe('rows(a b c d)')
     expect(shape(withPaneAtEnd(beside, pane('d'), 's9'))).toBe('rows(columns(a c) b d)')
   })
@@ -203,8 +195,7 @@ describe('opening a pane', () => {
   })
 
   it('evens the split out rather than halving under the floor', () => {
-    // Five even panes, so halving one would leave it and its duplicate at a tenth
-    // each and hide the rows of both.
+    // Five even panes, so halving one would hide it and its duplicate.
     const five = split(
       's1',
       'rows',
@@ -250,8 +241,7 @@ describe('closing a pane', () => {
     ])
     const next = withoutPane(nested, 'a')
 
-    // Removing a leaves s2 holding only s3, which is a rows split promoted into a
-    // rows split: two separators for one boundary, unless they merge.
+    // Removing a promotes s3 into s1's axis: two separators for one boundary.
     expect(shape(next ?? pane('gone'))).toBe('rows(b c d)')
     expect(shares(next ?? pane('gone'))).toEqual({ b: 0.25, c: 0.25, d: 0.5 })
   })
@@ -274,9 +264,7 @@ describe('naming a pane', () => {
   })
 
   it('carries the name with the pane when it moves', () => {
-    // The reason a name is a field on the leaf rather than a map beside the tree:
-    // a move takes the pane out and puts it back two levels away, through four
-    // functions that know nothing about names.
+    // Why a name is a field on the leaf: a move rebuilds the pane two levels away.
     const moved = movedPane(renamedPane(STACK, 'c', 'EU Flow'), 'c', 'a', 'right', 's2')
 
     expect(shape(moved)).toBe('rows(columns(a c) b)')
@@ -286,8 +274,7 @@ describe('naming a pane', () => {
   it('takes the name off again, rather than setting an empty one', () => {
     const cleared = renamedPane(renamedPane(STACK, 'b', 'EU Flow'), 'b', '')
 
-    // Absent, not empty: a shared link leaves out a name nobody chose, so the two
-    // states have to be different states.
+    // Absent, not empty: a link leaves out a name nobody chose.
     expect(Object.keys(panesOf(cleared)[1] ?? {})).not.toContain('name')
   })
 
@@ -300,8 +287,7 @@ describe('the form an arrangement travels in', () => {
   const BESIDE = movedPane(STACK, 'c', 'a', 'right', 's2')
 
   it('states each pane as the child index at every level down to it', () => {
-    // What a link carries: a path says where a pane sits without naming a split,
-    // and a split id is minted on a drop and means nothing to whoever opens it.
+    // What a link carries: a split id means nothing to whoever opens it.
     expect(Object.fromEntries(pathsOf(BESIDE))).toEqual({ a: [0, 0], c: [0, 1], b: [1] })
     expect(Object.fromEntries(pathsOf(pane('a')))).toEqual({ a: [] })
   })
@@ -318,14 +304,12 @@ describe('the form an arrangement travels in', () => {
       },
     )
 
-    // Only the root axis is stated, because no split holds a split on its own
-    // axis, so every axis below it follows from how deep it sits.
+    // Only the root axis is stated: no split holds a split on its own axis.
     expect(shape(rebuilt)).toBe(shape(BESIDE))
   })
 
   it('restates the shares a link carries as the weights that produce them', () => {
-    // A weight means something only beside its siblings, so a link states shares
-    // of the window and the weights at every depth fall out of the arrangement.
+    // A weight means something only beside its siblings, so a link states shares.
     const sized = withShares(
       regionOf(
         [[0, 1], 2],

@@ -79,8 +79,8 @@ describe('AmendDialog', () => {
 
     const [url, init] = amendCall() ?? ['', {}]
     expect(url).toBe('/api/trades/TRD-100001')
-    // toEqual and not toMatchObject: the absence of counterparty is the
-    // assertion, since a stray key here would be a 400 from the strictObject.
+    // toEqual, not toMatchObject: the absence of counterparty is the assertion,
+    // since a stray key is a 400 from the strictObject.
     expect(JSON.parse(String(init.body))).toEqual({
       quantity: 5_000,
       price: '72.465000',
@@ -102,8 +102,7 @@ describe('AmendDialog', () => {
   it('shows the counterparty without offering a field for it', () => {
     renderDialog()
 
-    // Not a control, because changing the counterparty is a cancel and a rebooking
-    // rather than an amendment.
+    // Not a control: changing the counterparty is a cancel and a rebooking.
     expect(screen.getByText('GSIL')).toBeInTheDocument()
     expect(screen.queryByLabelText('Counterparty')).toBeNull()
   })

@@ -17,28 +17,17 @@ const STEP = 16
 type Drag = {
   /** Where the pointer went down on the x axis. */
   from: number
-  /**
-   * The width it went down on. Every move is measured against this rather than
-   * accumulating a delta per move, which would drift once the clamp starts
-   * discarding travel at either end.
-   */
+  /** The width it went down on. Measured against, rather than accumulating a delta
+   *  per move, which drifts once the clamp starts discarding travel at the ends. */
   opening: number
   panel: HTMLElement
   /** The last width written to the DOM, committed on release. */
   width: number
 }
 
-/**
- * The boundary between the blotter and the fixed-width panel beside it.
- *
- * Pixels rather than the share-of-the-axis model the panes use between
- * themselves: the panel needs a floor that does not move when the window does,
- * and the tape takes whatever is left.
- *
- * Writes `width` straight to the panel during the drag and commits once on
- * release, for the same reason Separator does: the sibling it is taking the
- * space from is a virtualised grid of 500 trades.
- */
+/** Pixels rather than the panes' share-of-the-axis model: the panel needs a floor
+ *  that does not move when the window does. Writes `width` straight to the panel
+ *  during the drag and commits once on release, the sibling being a 500-row grid. */
 export function PanelSeparator({ label, width, min, max, onResize }: Props): ReactElement {
   const drag = useRef<Drag | null>(null)
   const clamp = (value: number): number => Math.min(Math.max(value, min), max)
@@ -50,8 +39,8 @@ export function PanelSeparator({ label, width, min, max, onResize }: Props): Rea
       return
     }
 
-    // Capture, so a pointer that outruns the handle keeps driving it. Without it
-    // a fast drag leaves the separator behind and the resize stops halfway.
+    // Capture, so a pointer outrunning the handle keeps driving it. Without it a
+    // fast drag leaves the separator behind and the resize stops halfway.
     handle.setPointerCapture(event.pointerId)
     drag.current = { from: event.clientX, opening: width, panel, width }
   }
@@ -62,9 +51,8 @@ export function PanelSeparator({ label, width, min, max, onResize }: Props): Rea
       return
     }
 
-    // Subtracted, because the panel is on the far side of the handle: dragging
-    // left widens it. No measurement of either region is involved, so this path
-    // needs no layout.
+    // Subtracted, because the panel is on the far side of the handle: dragging left
+    // widens it. Nothing is measured, so this path needs no layout.
     const next = clamp(current.opening - (event.clientX - current.from))
     current.width = next
     current.panel.style.width = `${next}px`
@@ -86,14 +74,12 @@ export function PanelSeparator({ label, width, min, max, onResize }: Props): Rea
       aria-orientation="vertical"
       aria-valuemax={max}
       aria-valuemin={min}
-      // The panel's width, which is the unambiguous half to report: the blotter's
-      // own width is whatever is left and is never held as a number.
+      // The panel's width: the blotter's is whatever is left, never held as a number.
       aria-valuenow={width}
       aria-valuetext={`${width} pixels`}
       className={`${HANDLE_COLUMN} ${HANDLE}`}
       onKeyDown={(event) => {
-        // Left and Right only. This boundary is vertical, so Up on it would be a
-        // guess at what was meant.
+        // Left and Right only: this boundary is vertical, so Up would be a guess.
         const keys = ['ArrowLeft', 'ArrowRight']
         const direction = keys.indexOf(event.key)
         if (direction < 0) {

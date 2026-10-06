@@ -6,14 +6,9 @@ import type {
   VisibilityState,
 } from '@tanstack/react-table'
 
-/**
- * A pane's view of the tape: how it is ordered, filtered, grouped and which
- * columns it shows.
- *
- * Its own module rather than a type on BlotterTable, because the workspace
- * composes panes and a pane must not import the workspace back. Expanded state
- * is deliberately not here: which groups are open is a reading position.
- */
+/** A pane's view of the tape: order, filters, grouping, column visibility. Its own
+ *  module to keep BlotterTable from importing the workspace back. Expanded state is
+ *  excluded: which groups are open is a reading position, not a view. */
 export type PaneConfig = {
   sorting: SortingState
   columnFilters: ColumnFiltersState
@@ -25,32 +20,22 @@ export type PaneConfig = {
 /** What the server orders by, so the first paint does not reshuffle. */
 const DEFAULT_SORT: SortingState = [{ id: 'tradeTimestamp', desc: true }]
 
-/**
- * The view a pane opens on when nobody has configured it. Here with the type
- * rather than on the grid, because the workspace wants a real PaneConfig for a
- * pane it has not heard from yet and the link format writes against it.
- *
- * Stated rather than left as an empty object: an empty sorting is no order, not
- * the default order.
- */
+/** The view a pane opens on. Lives here because the workspace needs a real PaneConfig
+ *  for a pane it has not heard from, and the link format writes against it. Stated
+ *  rather than empty: an empty sorting is no order, not the default. */
 export const DEFAULT_VIEW: PaneConfig = {
   sorting: DEFAULT_SORT,
   columnFilters: [],
   grouping: [],
-  // Both off by default: a trade id is a reference key and a version number is
-  // an audit detail, and neither is read while scanning the tape. In the view,
-  // not on the column, so a link carries them.
+  // A reference key and an audit detail, neither read while scanning. In the
+  // view rather than on the column, so a link carries them.
   columnVisibility: { tradeId: false, version: false },
-  // Empty is the order the column definitions are in, which is the table's own
-  // reading of it. Listing them here would be a second order to keep in step.
+  // Empty means definition order; listing them would be a second order to keep.
   columnOrder: [],
 }
 
-/**
- * Whether a column is on in the view a pane opens on. Visibility is read per
- * column as columnVisibility[id] ?? true, so a record that says nothing about a
- * column still means something about it.
- */
+/** Whether a column is on in the view a pane opens on. Read as
+ *  columnVisibility[id] ?? true, so an absent key still means visible. */
 export function showsByDefault(id: string): boolean {
   return DEFAULT_VIEW.columnVisibility[id] ?? true
 }

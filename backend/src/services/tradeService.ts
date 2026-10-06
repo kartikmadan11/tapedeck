@@ -22,10 +22,10 @@ const FRAME_TYPE: Record<TradeEventType, TradeDeltaFrame['type']> = {
 }
 
 /**
- * Mutate, then publish, strictly after commit. Publishing inside the
- * transaction makes a frame visible before the row is durable, so a rollback
- * leaves clients showing a trade that does not exist. The repository serialises
- * writes, so frames reach the bus in commit order.
+ * Mutate, then publish, strictly after commit: publishing inside the transaction
+ * makes a frame visible before the row is durable, so a rollback leaves clients
+ * showing a trade that never existed. Writes serialise, so frames reach the bus in
+ * commit order.
  */
 export class TradeService {
   private readonly repository: TradeRepository
@@ -56,11 +56,8 @@ export class TradeService {
     return this.repository.listEvents(tradeId)
   }
 
-  /**
-   * Reports whether anything was booked, so the route can answer 201 for a new
-   * trade and 200 for a replay. A replay publishes nothing: the repository wrote
-   * no event for it, so there is no seq to put on a frame.
-   */
+  /** Reports whether anything was booked, so the route can answer 201 or 200. A replay
+   * publishes nothing: no event was written, so there is no seq to put on a frame. */
   async createTrade(
     input: CreateTradeInput,
     actor: string,
@@ -84,10 +81,8 @@ export class TradeService {
     return this.publish(await this.repository.cancelTrade(tradeId, input.version, actor))
   }
 
-  /**
-   * Two frames per mutation, and only the delta carries a cursor. Positions are
-   * re-read rather than adjusted in memory.
-   */
+  /** Two frames per mutation, only the delta carrying a cursor. Positions are re-read,
+   * not adjusted in memory. */
   private async publish(result: MutationResult): Promise<Trade> {
     const delta: ServerFrame = {
       type: FRAME_TYPE[result.eventType],

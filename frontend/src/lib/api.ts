@@ -25,10 +25,8 @@ import { z } from 'zod'
 import { readTrader } from './identity.js'
 import { readSession } from './session.js'
 
-/**
- * Carries the server's typed error payload rather than just a status, so a
- * caller can read `currentVersion` off a VERSION_CONFLICT without a cast.
- */
+/** Carries the server's typed payload, not just a status, so a caller can read
+ *  `currentVersion` off a VERSION_CONFLICT without a cast. */
 export class ApiRequestError extends Error {
   readonly status: number
   readonly payload: ApiError
@@ -41,11 +39,8 @@ export class ApiRequestError extends Error {
   }
 }
 
-/**
- * A failure that did not come from the API itself: the network dropped, or a
- * proxy answered with HTML. Kept inside the same error type so every caller has
- * one shape to handle.
- */
+/** A failure from outside the API: a dropped network, or a proxy answering HTML.
+ *  Shaped as an ApiError so every caller has one shape to handle. */
 function opaqueFailure(status: number, body: string): ApiError {
   return {
     code: 'INTERNAL',
@@ -58,7 +53,7 @@ function opaqueFailure(status: number, body: string): ApiError {
 }
 
 /** Sent on every request, so the one route that checks it gets it without each
- *  caller remembering to. Absent until someone signs in. */
+ *  caller remembering. Absent until someone signs in. */
 function bearer(): Record<string, string> {
   const current = readSession()
   return current === null ? {} : { authorization: `Bearer ${current.token}` }
@@ -69,9 +64,8 @@ async function request<T>(path: string, schema: z.ZodType<T>, init?: RequestInit
     ...init,
     headers: {
       accept: 'application/json',
-      // The actor the server writes into the audit trail. Still asserted by the
-      // caller rather than read off the token, because the trade routes are not
-      // behind the session: see the README's assumptions.
+      // The actor the server writes into the audit trail, asserted rather than read
+      // off the token: the trade routes are not behind the session. See the README.
       'x-tapedeck-actor': readTrader(),
       ...bearer(),
       ...(init?.body === undefined ? {} : { 'content-type': 'application/json' }),
@@ -89,8 +83,8 @@ async function request<T>(path: string, schema: z.ZodType<T>, init?: RequestInit
     )
   }
 
-  // Parsed against the shared schema, so a contract drift shows up here rather
-  // than as an undefined three components deep.
+  // Parsed against the shared schema, so contract drift surfaces here rather than
+  // as an undefined three components deep.
   return schema.parse(safeJson(text))
 }
 
@@ -113,26 +107,15 @@ export function login(input: Credentials): Promise<Session> {
   return request('/api/auth/login', session, { method: 'POST', body: JSON.stringify(input) })
 }
 
-/**
- * Told to the server so the token stops working there too, and deliberately not
- * awaited by the caller: the window is signed out the moment its stored session
- * is gone, whether or not the network agreed.
- */
+/** Told to the server so the token stops working there too, and deliberately not
+ *  awaited: the window is signed out once its stored session is gone. */
 export function logout(): Promise<void> {
   return request('/api/auth/logout', z.unknown(), { method: 'POST' }).then(() => undefined)
 }
 
-/**
- * Deliberately unfiltered but deliberately windowed.
- *
- * Unfiltered, because the cache holds every trade it is given and the table
- * filters what it renders, so an incoming frame never has to be tested against a
- * server-side predicate to know whether it belongs in the cache.
- *
- * Windowed, because the book only ever grows: cancelled trades stay on the tape.
- * The limit is sent rather than left to the server's default, so the window the
- * cache trims itself to is the window it asked for.
- */
+/** Unfiltered, so a frame never has to be tested against a server-side predicate to
+ *  know whether it belongs in the cache. Windowed because cancelled trades stay on
+ *  the tape, and the limit is sent so the cache trims to the window it asked for. */
 export function fetchTrades(): Promise<TradesResponse> {
   return request(`/api/trades?limit=${BLOTTER_LIMIT}`, tradesResponse)
 }
@@ -170,10 +153,7 @@ export function fetchSimulation(): Promise<SimulationState> {
   return request('/api/simulation', simulationState)
 }
 
-/**
- * Only `running` is sent. The cadence is the server's, so the UI reports it
- * rather than offering it.
- */
+/** Only `running` is sent: the cadence is the server's to set. */
 export function setSimulation(running: boolean): Promise<SimulationState> {
   return request('/api/simulation', simulationState, {
     method: 'POST',
@@ -181,11 +161,8 @@ export function setSimulation(running: boolean): Promise<SimulationState> {
   })
 }
 
-/**
- * Derived from the page rather than configured, because in production the API
- * serves this page. In development Vite proxies /ws to the API, so the same
- * derivation works there too with no environment variable.
- */
+/** Derived from the page, not configured: in production the API serves this page,
+ *  and in development Vite proxies /ws to it. No environment variable either way. */
 export function websocketUrl(): string {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   return `${protocol}//${window.location.host}/ws`

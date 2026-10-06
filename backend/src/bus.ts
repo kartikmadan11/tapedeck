@@ -9,12 +9,10 @@ export interface Bus {
 }
 
 /**
- * In-process pub/sub for server frames. Created inside buildApp() and reached
- * via app.decorate, not a module singleton: buildApp() is called more than once
- * per process, and a shared bus would let two app instances cross-talk.
- *
- * A throwing listener is isolated. The mutation that published the frame has
- * already committed and must not fail because a subscriber did.
+ * In-process pub/sub, reached via app.decorate rather than a module singleton:
+ * buildApp() is called more than once per process, and a shared bus would let two
+ * app instances cross-talk. A throwing listener is isolated, because the mutation
+ * that published the frame has committed and must not fail because a subscriber did.
  */
 export function createBus(onListenerError?: (error: unknown) => void): Bus {
   const listeners = new Set<FrameListener>()

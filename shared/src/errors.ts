@@ -144,12 +144,9 @@ export function invalidState(id: string, status: z.infer<typeof tradeStatus>): D
   })
 }
 
-/**
- * A fill the trade's own quantities refuse: one that does not advance the
- * cumulative total, or one that goes past what was booked. The same code as
- * invalidState, because it is the same kind of refusal, but the reason is the
- * fill rather than the status and the message has to say which.
- */
+/** A fill the trade's own quantities refuse: one that does not advance the cumulative
+ * total, or one past what was booked. invalidState's code, since it is the same kind of
+ * refusal, but the message has to say the fill is the reason. */
 export function invalidFill(
   id: string,
   status: z.infer<typeof tradeStatus>,

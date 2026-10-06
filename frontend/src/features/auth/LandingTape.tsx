@@ -10,11 +10,8 @@ interface Print {
   price: string
 }
 
-/**
- * Decorative prints, deliberately not the instrument master: nothing on this
- * screen is booked, and the frontend does not depend on the reference data the
- * seed books from.
- */
+/** Decorative, deliberately not the instrument master: nothing here is booked, and
+ *  the frontend does not depend on the data the seed books from. */
 const PRINTS: readonly Print[] = [
   { side: 'BUY', symbol: 'VOD', quantity: 50_000, price: '68.4200' },
   { side: 'SELL', symbol: 'BARC', quantity: 25_000, price: '192.3500' },
@@ -31,8 +28,8 @@ const PRINTS: readonly Print[] = [
 /** As many as read as a tape without the tape becoming the page. */
 const ROWS = 7
 
-/** Faster than the simulator's two seconds. A landing page has a few seconds of
- *  attention, and a two-second gap reads as a screenshot. */
+/** Faster than the simulator's two seconds: at that gap the tape reads as a
+ *  screenshot. */
 const PRINT_MS = 1_100
 
 interface Row extends Print {
@@ -48,23 +45,19 @@ function initialRows(): Row[] {
   return PRINTS.slice(0, ROWS).map((print, index) => ({
     ...print,
     key: index,
-    // Backdated a print apart, so this reads as the last few seconds rather than
-    // as seven trades at one instant.
+    // Backdated a print apart, or it reads as seven trades at one instant.
     at: new Date(now - index * PRINT_MS).toISOString(),
   }))
 }
 
-/**
- * The product's one trick, shown before anyone has signed in: trades arriving on
- * their own. It is the only thing on the page that moves.
- */
+/** Trades arriving on their own, shown before anyone has signed in. */
 export function LandingTape(): ReactElement {
   const [rows, setRows] = useState<Row[]>(initialRows)
   const cursor = useRef(ROWS)
 
   useEffect(() => {
-    // The page is legible without it, so nothing starts rather than something
-    // stopping: the seeded rows above are already the whole static fallback.
+    // Nothing starts rather than something stopping: the seeded rows above are
+    // already the whole static fallback.
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       return
     }
@@ -86,13 +79,12 @@ export function LandingTape(): ReactElement {
   }, [])
 
   return (
-    // No stated height: the row count never changes, because a print arriving
-    // drops the oldest in the same update, so the box cannot move what is under it.
+    // No stated height: a print arriving drops the oldest in the same update, so
+    // the row count never changes and the box cannot move what is under it.
     <ul aria-label="Live trade prints" className="border-y border-tape-line py-1">
       {rows.map((row, index) => (
         <li
-          // Only the newest flashes, and only once: tape-flash lands on a fresh
-          // key, so the rows below it keep whatever they already had.
+          // Only the newest, and only once: tape-flash lands on a fresh key.
           className={`flex gap-3 tabular-nums ${index === 0 ? 'tape-flash' : ''}`}
           key={row.key}
         >

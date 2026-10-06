@@ -5,8 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SelectOption } from './Select.js'
 import { Select } from './Select.js'
 
-/** Four, so stepping off either end is testable. Labels unlike their values, so
- *  a test cannot pass by reading the wrong one. */
+/** Four, so stepping off either end is testable. Labels unlike their values, so a
+ *  test cannot pass by reading the wrong one. */
 const OPTIONS: SelectOption[] = [
   { value: 'BARC', label: 'Barclays' },
   { value: 'VOD', label: 'Vodafone' },
@@ -16,8 +16,7 @@ const OPTIONS: SelectOption[] = [
 
 const taken = vi.fn()
 
-/** State is held here rather than mocked, so a test sees what a commit leaves on
- *  screen as well as what it reported. */
+/** Real state, not a mock, so a test sees what a commit leaves on screen. */
 function Harness(): ReactElement {
   const [value, setValue] = useState('VOD')
   return (
@@ -79,8 +78,8 @@ describe('a select whose list is ours to draw', () => {
 
     open()
     expect(control()).toHaveAttribute('aria-controls', list().id)
-    // On the body rather than in the control's own tree: every one of these sits
-    // inside something that clips, starting with the scrolling config panel.
+    // On the body, not in the control's tree: every one of these sits inside
+    // something that clips.
     expect(list().parentElement).toBe(document.body)
   })
 
@@ -110,8 +109,7 @@ describe('a select whose list is ours to draw', () => {
     open()
     fireEvent.click(row('VOD'))
 
-    // A filter re-set to what it already was would rebuild the row model for no
-    // change, which on a live tape is a frame of work nobody asked for.
+    // A filter re-set to what it was rebuilds the row model for no change.
     expect(taken).not.toHaveBeenCalled()
     expect(screen.queryByRole('listbox')).toBeNull()
   })
@@ -130,8 +128,7 @@ describe('a select whose list is ours to draw', () => {
     render(<Harness />)
     open()
 
-    // Wrapping would send a held arrow key from the last line back to the first,
-    // past the row the hand was aiming at.
+    // Wrapping sends a held arrow key past the row the hand was aiming at.
     press('Home')
     expect(onKeys()).toBe('BARC')
     press('ArrowUp')

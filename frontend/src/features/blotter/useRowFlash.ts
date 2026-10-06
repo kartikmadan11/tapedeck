@@ -4,15 +4,9 @@ import { useEffect, useRef, useState } from 'react'
 /** Matches the tape-flash animation in index.css. */
 const FLASH_MS = 900
 
-/**
- * The trades that changed since the last render, so the table can flash them.
- *
- * `updatedAt` is the change detector rather than `version`, because it also moves
- * when nothing else visible did.
- *
- * The first batch is recorded without flashing, otherwise every seeded row
- * flashes on load.
- */
+/** Trade ids that changed since the last render, for the row flash. Keyed on
+ *  `updatedAt`, not `version`: it moves even when nothing visible did. The first
+ *  batch is recorded without flashing, or every seeded row flashes on load. */
 export function useRowFlash(trades: Trade[]): ReadonlySet<string> {
   const seen = useRef(new Map<string, string>())
   const primed = useRef(false)

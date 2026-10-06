@@ -4,8 +4,8 @@ import { clearSession, readSession, writeSession } from './session.js'
 const STORAGE_KEY = 'tapedeck.session'
 
 beforeEach(() => {
-  // jsdom keeps storage for the whole file, so without this one case's session
-  // would decide the next one's.
+  // jsdom keeps storage for the whole file, so one case's session would
+  // otherwise decide the next one's.
   sessionStorage.clear()
 })
 
@@ -28,8 +28,7 @@ describe('the session a window holds', () => {
   })
 
   it('reads a hand-edited entry as signed out rather than trusting it', () => {
-    // The entry is reachable from the console, so what it says has to be parsed
-    // and not merely cast on the way out.
+    // The entry is reachable from the console, so it is parsed, not cast.
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ trader: 'j.okonkwo' }))
 
     expect(readSession()).toBeNull()

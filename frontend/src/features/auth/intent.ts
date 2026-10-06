@@ -1,8 +1,5 @@
-/**
- * Which of the two things the form is doing. One component serves both, because
- * they take the same two fields and differ only in what the server does with
- * them, and two near-identical forms would drift.
- */
+/** Which of the two things the form is doing. One component serves both: the same
+ *  two fields, and two near-identical forms would drift. */
 export type Intent = 'login' | 'register'
 
 export const INTENT_TITLE: Record<Intent, string> = {

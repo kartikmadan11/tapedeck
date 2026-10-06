@@ -1,8 +1,7 @@
 /**
  * The instruments a trade may be booked against, at indicative levels. In the
- * contract because the booking schema, the form, the seed and the feed all read
- * it. `as const` so z.enum gets the literal union, which makes a mistyped ticker
- * a compile error rather than a 400.
+ * contract because the booking schema, the form, the seed and the feed all read it.
+ * `as const` so z.enum gets the literal union: a mistyped ticker is a compile error.
  */
 export const INSTRUMENTS = [
   { symbol: 'VOD', name: 'Vodafone Group', referencePrice: '68.420000', lotSize: 50_000 },

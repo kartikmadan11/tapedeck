@@ -2,10 +2,8 @@ import type { ReactElement } from 'react'
 import { CHIP } from '../../lib/ui.js'
 import { useSimulation } from './useSimulation.js'
 
-/**
- * Stops and starts the generated trade feed. Renders nothing until the state is
- * known, rather than guessing a label and correcting it a moment later.
- */
+/** Renders nothing until the state is known, rather than guessing a label and
+ *  correcting it a moment later. */
 export function SimulationToggle(): ReactElement | null {
   const { state, toggle, pending } = useSimulation()
 

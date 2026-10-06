@@ -8,11 +8,8 @@ const MIN = 216
 const MAX = 560
 const OPENING = 288
 
-/**
- * The handle and the element it resizes, which it finds as its own next sibling.
- * State is held here rather than in a mock, so a test sees what a committed drag
- * leaves on screen.
- */
+/** The handle and the element it resizes, which it finds as its next sibling. Real
+ *  state, not a mock, so a test sees what a committed drag leaves on screen. */
 function Harness({ opening = OPENING }: { opening?: number }): ReactElement {
   const [width, setWidth] = useState(opening)
   return (
@@ -34,8 +31,8 @@ const handle = (): HTMLElement =>
 
 const panel = (): HTMLElement => screen.getByTestId('panel')
 
-/** The width the panel is actually drawn at, which during a drag is written to
- *  the DOM directly and only afterwards comes back through React. */
+/** The width drawn, which during a drag is written to the DOM directly and only
+ *  afterwards comes back through React. */
 const drawn = (): string => panel().style.width
 
 /** A whole drag, from where the pointer went down to where it was let go. */
@@ -51,8 +48,7 @@ describe('resizing the panel beside the blotter', () => {
   it('reports the width it opens on, and the range it may be taken over', () => {
     render(<Harness />)
 
-    // A splitter with no stated range is one a screen reader can only describe as
-    // moved, not as nearly closed.
+    // Without a stated range a screen reader can say moved but not nearly closed.
     expect(handle()).toHaveAttribute('aria-valuenow', String(OPENING))
     expect(handle()).toHaveAttribute('aria-valuemin', String(MIN))
     expect(handle()).toHaveAttribute('aria-valuemax', String(MAX))
@@ -63,8 +59,7 @@ describe('resizing the panel beside the blotter', () => {
     render(<Harness />)
     dragTo(900)
 
-    // The panel is on the far side of the handle, so left is bigger. 100px of
-    // travel is 100px of panel, with no scaling.
+    // The panel is on the far side, so left is bigger, and 100px is 100px.
     expect(drawn()).toBe('388px')
     expect(handle()).toHaveAttribute('aria-valuenow', '388')
   })
@@ -90,9 +85,8 @@ describe('resizing the panel beside the blotter', () => {
   it('measures every move against where the drag began', () => {
     render(<Harness />)
 
-    // Dragged out past the ceiling and then all the way back. A handle that
-    // accumulated a delta per move would discard the travel the clamp ate on the
-    // way out and come back to the wrong place.
+    // Out past the ceiling and back. A per-move delta would lose the travel the
+    // clamp ate on the way out and land in the wrong place.
     dragTo(0, 1000)
 
     expect(drawn()).toBe('288px')
@@ -103,8 +97,7 @@ describe('resizing the panel beside the blotter', () => {
     fireEvent.pointerDown(handle(), { clientX: 1000, pointerId: 1 })
     fireEvent.pointerUp(handle(), { pointerId: 1 })
 
-    // A click on the boundary is not a resize. Committing one would re-render
-    // the virtualised grid beside it for no change.
+    // Committing one re-renders the virtualised grid beside it for no change.
     expect(drawn()).toBe('320px')
   })
 
@@ -121,8 +114,7 @@ describe('resizing the panel beside the blotter', () => {
     fireEvent.pointerMove(handle(), { clientX: 900, pointerId: 1 })
     fireEvent.pointerCancel(handle(), { pointerId: 1 })
 
-    // Cancel commits what was reached rather than reverting it, the same as a
-    // release: the width is already on screen.
+    // Cancel commits rather than reverts: the width is already on screen.
     expect(handle()).toHaveAttribute('aria-valuenow', '388')
 
     // And the drag is over, so a further move cannot still be driving it.

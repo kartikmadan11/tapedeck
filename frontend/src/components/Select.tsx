@@ -5,7 +5,6 @@ import { createPortal } from 'react-dom'
 export type SelectOption = { value: string; label: string }
 
 type Props = {
-  /** Names the control and the list under it, which are one thing to a reader. */
   label: string
   value: string
   options: readonly SelectOption[]
@@ -22,20 +21,13 @@ const GAP = 2
 /** Keeps the list off the edge when the control is near one. */
 const PAD = 4
 
-/** Where the list is, which is also whether it is open: one piece of state
- *  rather than a flag and a position that can disagree. */
+/** Where the list is, and so whether it is open: one piece of state rather than a
+ *  flag and a position that can disagree. */
 type Box = { left: number; top: number; minWidth: number }
 
-/**
- * A select whose list is ours to draw.
- *
- * A native `select` renders its popup outside the page, so `option` takes a
- * colour at the browser's discretion and nothing else: not the font, not the row
- * height, not the border. On a terminal palette that popup is the one surface
- * that looks like somebody else's application, which is the whole reason this
- * exists. It is the ARIA select-only combobox: focus stays on the button and
- * `aria-activedescendant` says which row the keys are on.
- */
+/** The list is drawn here because a native `select` renders its popup outside the
+ *  page, where `option` takes a colour and nothing else. ARIA select-only combobox:
+ *  focus stays on the button and aria-activedescendant names the row. */
 export function Select({
   label,
   value,
@@ -53,8 +45,8 @@ export function Select({
   const [box, setBox] = useState<Box | null>(null)
   const open = box !== null
 
-  /** Which row the keys are on while the list is up. Not the selection: moving
-   *  through a list does not change the value until it is taken. */
+  /** Which row the keys are on, not the selection: stepping through the list does
+   *  not change the value until a row is taken. */
   const [active, setActive] = useState(0)
 
   const chosen = options.findIndex((option) => option.value === value)
@@ -78,10 +70,8 @@ export function Select({
     }
   }
 
-  // Placed under the control and corrected once, rather than measured before it
-  // is drawn: the first position is already right in every case but the one this
-  // fixes, a list opened from the bottom of the ticket with no room beneath it.
-  // jsdom reports no height, which is the case this leaves where it put it.
+  // Placed and corrected once rather than measured first: the only wrong case is a
+  // list with no room beneath it. jsdom reports no height, so there it stays put.
   useLayoutEffect(() => {
     if (box === null) {
       return
@@ -101,8 +91,7 @@ export function Select({
     }
   }, [box])
 
-  // Through the rows rather than the window, so walking a twelve-line instrument
-  // master with the keys brings each line into the list's own scroll.
+  // Through the rows, so the keys scroll the list and not the page behind it.
   useEffect(() => {
     rows.current[active]?.scrollIntoView({ block: 'nearest' })
   }, [active])
@@ -123,8 +112,8 @@ export function Select({
       close()
     }
 
-    // Capture on scroll, because what scrolls is the panel the control sits in
-    // rather than the page: a list left behind would point at a box that moved.
+    // Capture on scroll: what scrolls is the panel the control sits in, so a list
+    // left behind would point at a box that moved.
     document.addEventListener('pointerdown', outside, true)
     document.addEventListener('scroll', close, true)
     window.addEventListener('resize', close)
@@ -145,8 +134,8 @@ export function Select({
       return
     }
 
-    // Let focus leave, and take the list with it. Everything else below is the
-    // list's, so none of it reaches the grid behind the control.
+    // Let focus leave, and take the list with it. Every other key below belongs
+    // to the list, so none reach the grid behind the control.
     if (event.key === 'Tab') {
       setBox(null)
       return
@@ -154,8 +143,8 @@ export function Select({
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End', 'Enter', ' ', 'Escape'].includes(event.key)) {
       return
     }
-    // Including Enter and Space: without this the button's activation would fire
-    // a click as well and close the list over the top of the commit.
+    // Enter and Space included, or the button's activation also fires a click and
+    // closes the list over the top of the commit.
     event.preventDefault()
 
     if (event.key === 'Escape') {
@@ -187,8 +176,7 @@ export function Select({
         aria-haspopup="listbox"
         aria-label={label}
         className={`flex cursor-pointer items-center justify-between gap-1 text-left ${className}`}
-        // The value, for a test and for anyone reading the DOM to find out what
-        // a control is actually holding. A button has none of its own.
+        // A button carries no value of its own, so the DOM says what it holds.
         data-value={value}
         disabled={disabled}
         id={id}
@@ -199,15 +187,14 @@ export function Select({
         type="button"
       >
         {/* truncate, so a long counterparty shortens rather than widening the
-            control and pushing the row it sits in onto a second line. */}
+            control and pushing its row onto a second line. */}
         <span className="truncate">{options[chosen]?.label ?? ''}</span>
         <span aria-hidden="true" className="shrink-0 text-tape-muted">
           ▾
         </span>
       </button>
 
-      {/* Portaled, because every one of these sits inside something that clips:
-        a scrolling config panel, a pane, the window. */}
+      {/* Portaled: every one of these sits inside something that clips. */}
       {box === null
         ? null
         : createPortal(
@@ -215,8 +202,7 @@ export function Select({
               aria-label={label}
               className="tape-scroll fixed z-50 max-h-64 overflow-y-auto rounded-xs border border-tape-line bg-tape-panel py-1 shadow-lg"
               id={listId}
-              // Keeps focus on the button, which is where the keys are bound and
-              // where it has to return to when the list closes.
+              // Keeps focus on the button, where the keys are bound.
               onMouseDown={(event) => event.preventDefault()}
               ref={sheet}
               role="listbox"
@@ -234,16 +220,15 @@ export function Select({
                   id={`${listId}-${index}`}
                   key={option.value}
                   onClick={() => commit(index)}
-                  // Follows the pointer, so a click never lands on a row other
-                  // than the one under it.
+                  // Follows the pointer, so a click lands on the row under it.
                   onMouseEnter={() => setActive(index)}
                   ref={(node) => {
                     rows.current[index] = node
                   }}
                   role="option"
                 >
-                  {/* A fixed cell for the tick, which a monospace face lines up
-                      for free, so the labels do not shift as the value moves. */}
+                  {/* A fixed cell for the tick, so labels do not shift as the
+                      value moves. */}
                   <span aria-hidden="true" className="inline-block w-3">
                     {option.value === value ? '✓' : ''}
                   </span>

@@ -22,20 +22,12 @@ import { useBlotter, usePendingTradeIds, useRefreshBlotter } from './features/tr
 import { Workspace } from './features/workspace/Workspace.js'
 import { CHIP, HANDLE_PX } from './lib/ui.js'
 
-/**
- * Optional, so the existing tests can render the blotter on its own without
- * standing a session up first. The Gate always passes it.
- */
+/** Optional so a test can render the blotter without standing a session up. The
+ *  Gate always passes it. */
 type Props = { onSignOut?: (() => void) | undefined }
 
-/**
- * The panel's own control, in the corner of the panel's own header band.
- *
- * Laid over the frame rather than placed in it: a column of its own was a full
- * screen height of nothing holding one arrow. Outside the drawer, because it is
- * the only way back once the panel has gone, and in the same corner in both
- * states, so the arrow that sends the panel away is the arrow that returns it.
- */
+/** Laid over the frame rather than given a column. Outside the drawer, because it
+ *  is the only way back once the panel has gone. */
 const TAB =
   'absolute top-1.5 right-1.5 z-20 flex h-5 w-5 cursor-pointer items-center justify-center rounded-xs border border-tape-line bg-tape-panel text-tape-muted transition-colors duration-100 hover:border-tape-accent hover:text-tape-accent focus-visible:border-tape-focus focus-visible:outline-none'
 
@@ -52,11 +44,8 @@ export function App({ onSignOut }: Props = {}): ReactElement {
 
   const trades = blotter.data?.trades ?? []
 
-  /**
-   * Held as ids, not as rows, so a dialog always renders the cache's current
-   * version of the trade. A held copy would confirm against a version that no
-   * longer exists after someone else amended the same trade.
-   */
+  /** Held as ids, not rows, so a dialog renders the cache's current version. A held
+   *  copy would confirm against a version someone else's amend has replaced. */
   const amending = useMemo(
     () => trades.find((trade) => trade.tradeId === amendingId) ?? null,
     [trades, amendingId],
@@ -71,22 +60,19 @@ export function App({ onSignOut }: Props = {}): ReactElement {
     () => ({
       onAmend: (trade) => setAmendingId(trade.tradeId),
       onHistory: (trade) => setHistoryId(trade.tradeId),
-      // Opens the confirmation rather than writing. The mutation lives in the
-      // dialog, which is also where its error belongs.
+      // Opens the confirmation rather than writing: the mutation and its error
+      // both live in the dialog.
       onCancel: (trade) => setCancellingId(trade.tradeId),
     }),
     [],
   )
 
-  /**
-   * How much of the width the positions panel is holding. Here rather than in
-   * the panel, because the blotter beside it is the other half of the same
-   * boundary and takes whatever this leaves. Deliberately not persisted.
-   */
+  /** Here rather than in the panel: the blotter beside it takes whatever this
+   *  leaves. Deliberately not persisted. */
   const [panelWidth, setPanelWidth] = useState(PANEL_WIDTH)
 
-  /** On by default: net exposure is the reason to keep a blotter open, so hiding
-   *  it is the deliberate act. Not persisted, so a reload gives it back. */
+  /** On by default: hiding exposure is the deliberate act. Not persisted, so a
+   *  reload gives it back. */
   const [positionsOpen, setPositionsOpen] = useState(true)
   const positionsId = useId()
 
@@ -96,14 +82,12 @@ export function App({ onSignOut }: Props = {}): ReactElement {
   const closeHistory = useCallback(() => setHistoryId(null), [])
 
   return (
-    // A blotter owns the viewport: the panes scroll, the page does not. Both
-    // dialogs are position:fixed with no transformed ancestor, so clamping here
-    // cannot clip them.
+    // The panes scroll, the page does not. Both dialogs are position:fixed with no
+    // transformed ancestor, so clamping here cannot clip them.
     <div className="flex h-screen flex-col gap-2 overflow-hidden bg-tape-bg p-3 text-tape-text">
       <header className="flex items-baseline gap-3 border-b border-tape-line pb-2">
-        {/* The wordmark is the way back to a clean start: a reload keeps the
-          address bar, so the workspace comes back and the socket, the cache and
-          the panes are rebuilt from it. */}
+        {/* The way back to a clean start: a reload keeps the address bar, so the
+          workspace comes back and everything else is rebuilt from it. */}
         <h1 className="text-sm font-semibold uppercase tracking-[0.2em]">
           <button
             className="cursor-pointer tracking-[0.2em] hover:text-tape-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-tape-focus"
@@ -130,31 +114,21 @@ export function App({ onSignOut }: Props = {}): ReactElement {
 
       {blotter.error ? <ErrorNotice error={blotter.error} /> : null}
 
-      {/* overflow-hidden is what the panel slides out into. No gap between the
-        tape and the panel: the handle between them is the gap, so the boundary a
-        pointer aims at is the line that divides the two. relative for the tab
-        below, which is laid over this corner rather than given a column. */}
+      {/* overflow-hidden is what the panel slides out into. No gap: the handle
+        between the tape and the panel is the gap. relative for the tab below. */}
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         <Workspace
           trades={trades}
           pendingIds={pendingIds}
           actions={actions}
-          // A reset is a clean start, and the panel is part of the frame the
-          // panes sit in rather than one of the panes, so nothing inside the
-          // workspace could put it back.
+          // The panel is part of the frame the panes sit in, so nothing inside the
+          // workspace could put it back on a reset.
           onReset={showPositions}
         />
 
-        {/*
-         * The handle travels with the panel: it resizes its own next sibling, so
-         * one left behind would drag whatever took the panel's place.
-         *
-         * Mounted in both states and moved rather than narrowed. A drag writes
-         * the panel's width on every pointer move, so a width transition here
-         * would make the panel chase the pointer; the margin gives the space
-         * back to the tape and the drag never touches it. inert and aria-hidden
-         * while it is off screen, because it still holds a handle and a scroller.
-         */}
+        {/* The handle travels with the panel and resizes its own next sibling. Moved
+          rather than narrowed: a drag writes width on every pointer move, so a width
+          transition would chase the pointer. inert off screen: it holds a scroller. */}
         <div
           aria-hidden={!positionsOpen}
           className="tape-drawer flex shrink-0"

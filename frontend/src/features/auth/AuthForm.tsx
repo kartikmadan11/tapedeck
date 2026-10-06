@@ -19,19 +19,16 @@ type Props = {
 /** Lighter than the canvas it sits on, like the blotter's filter bar. */
 const INPUT = `${CONTROL} w-full bg-tape-panel`
 
-/**
- * Both ways in. The mark is unfilled here, because the submit button is this
- * screen's one accent fill.
- */
+/** Both ways in. The mark is unfilled, because the submit button is this screen's
+ *  one accent fill. */
 export function AuthForm({ intent, onSignedIn, onBack }: Props): ReactElement {
   const auth = useAuth(intent, onSignedIn)
 
   const form = useForm<Credentials>({
-    // The server parses the same schema, so a rejected username is rejected the
-    // same way on both sides of the wire.
+    // The server parses the same schema, so the client cannot drift from it.
     resolver: zodResolver(credentials),
-    // The name a handoff link asked for, so the second window of the demo starts
-    // on the trader it was sent as.
+    // The name a handoff link asked for, so the demo's second window starts on
+    // the trader it was sent as.
     defaultValues: { username: readTrader(), password: '' },
   })
 
@@ -41,8 +38,8 @@ export function AuthForm({ intent, onSignedIn, onBack }: Props): ReactElement {
     <main className="mx-auto flex min-h-screen w-full max-w-[42ch] flex-col justify-center gap-6 px-6 py-12">
       <Wordmark className="self-start text-3xl" filled={false} />
 
-      {/* Wrapped, not passed: handleSubmit calls its handler with the event as a
-          second argument, which mutate would read as its options. */}
+      {/* Wrapped, not passed: handleSubmit hands its handler the event as a second
+          argument, which mutate would read as its options. */}
       <form
         className="flex flex-col gap-3"
         noValidate
@@ -92,8 +89,7 @@ export function AuthForm({ intent, onSignedIn, onBack }: Props): ReactElement {
           </button>
         </div>
 
-        {/* Repeated from the landing page, because the person who needs it is
-            looking at this form rather than at that one. */}
+        {/* Repeated from the landing page: whoever needs it is looking here. */}
         <p className="text-[11px] text-tape-muted">
           {intent === 'login'
             ? `Accounts are mocked. Every seeded trader's password is ${DEMO_PASSWORD}.`

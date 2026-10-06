@@ -2,10 +2,7 @@ import { sql } from 'drizzle-orm'
 import type { FastifyInstance } from 'fastify'
 
 export function registerHealthRoutes(app: FastifyInstance): void {
-  /**
-   * Checks the database, not just the process. The compose healthcheck gates the
-   * container on this.
-   */
+  /** Checks the database, not just the process. The compose healthcheck gates on it. */
   app.get('/api/health', async (_request, reply) => {
     try {
       await app.db.execute(sql`select 1`)

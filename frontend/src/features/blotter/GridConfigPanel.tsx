@@ -15,11 +15,8 @@ type Props = {
   /** The names the Counterparty box offers, taken off the tape. */
   counterparties: readonly string[]
 
-  /**
-   * The pane's own grouping: the level the rows are cut by, then the column the
-   * measures are pivoted across. A prop rather than table state, because the
-   * table is only ever told the first of the two.
-   */
+  /** Row level, then the column the measures are pivoted across. A prop, not
+   *  table state: the table is only ever told the first of the two. */
   grouping: readonly string[]
 
   /** Whether the split took, which decides what the Columns note says. */
@@ -27,9 +24,8 @@ type Props = {
 
   onGrouping: (next: string[]) => void
 
-  /** Closes the panel from inside it, so the right-click menu is not the only
-   *  way back out. Expected to move focus, since the panel it was pressed in
-   *  becomes inert. */
+  /** Closes the panel from inside it. Expected to move focus, since the panel it
+   *  was pressed in goes inert. */
   onHide: () => void
 }
 
@@ -40,13 +36,8 @@ const PANEL_CONTROL = `${CONTROL} w-full bg-tape-bg`
 const NUDGE =
   'shrink-0 cursor-pointer px-1 text-tape-muted hover:text-tape-accent disabled:cursor-not-allowed disabled:opacity-25'
 
-/**
- * One per grid instance, because two panes are configured independently.
- *
- * It holds no state. Every control reads and writes the table's own state, so
- * the panel cannot drift from the grid it describes: a header click shows up in
- * Order By because both are looking at `sorting`.
- */
+/** One per grid. Holds no state: every control reads and writes the table's own
+ *  state, so a header click shows up in Order By without being wired to it. */
 export function GridConfigPanel({
   table,
   open,
@@ -65,17 +56,12 @@ export function GridConfigPanel({
   const groupable = table.getAllLeafColumns().filter((column) => column.getCanGroup())
   const sortable = table.getAllLeafColumns().filter((column) => column.getCanSort())
 
-  /**
-   * Read from the same function the grid lays over its own state, so the boxes
-   * below cannot disagree with the columns on screen.
-   */
+  /** The same override the grid lays over its own state, so the two agree. */
   const grouped = groupedVisibility(groupBy, pivoted)
 
-  /**
-   * The trader's own order, not the table's: a grouping hoists its column to the
-   * front, and reading that back would bake the hoist in on the first nudge.
-   * Hidden columns stay listed, so turning one on puts it back where it was.
-   */
+  /** The trader's own order, not the table's: a grouping hoists its column to
+   *  the front, and reading that back would bake the hoist in on the first
+   *  nudge. Hidden columns stay listed, so turning one on puts it back. */
   const ordered = orderedColumnIds(columnOrder)
 
   const move = (from: number, by: number): void => {
@@ -91,21 +77,18 @@ export function GridConfigPanel({
   }
 
   return (
-    // Shrinks the grid rather than covering it. inert and aria-hidden when
-    // closed, because a zero-width panel still holds real form controls:
-    // without them the next Tab out of the grid lands in an invisible select.
+    // inert and aria-hidden when closed: a zero-width panel still holds real
+    // form controls, so Tab out of the grid would land in an invisible select.
     <div
       aria-hidden={!open}
       className={`tape-slide shrink-0 overflow-hidden ${open ? 'w-72' : 'w-0'}`}
       id={id}
       inert={!open}
     >
-      {/* A stated width, not a derived one, so nothing in here relays out as
-          the wrapper animates. */}
+      {/* A stated width, so nothing in here relays out as the wrapper animates. */}
       <div className="tape-scroll ml-2 flex h-full w-70 flex-col gap-3 overflow-y-auto rounded-sm border border-tape-line bg-tape-panel p-2">
-        {/* The panel's own way out. Config is reachable only from the pane's
-            right-click menu, so without this the one way to close it is a
-            gesture nothing on screen mentions. */}
+        {/* The panel's own way out: Config is otherwise reachable only from the
+            pane's right-click menu. */}
         <div className="flex items-center justify-between">
           <h2 className={MICRO_LABEL}>Config</h2>
           <button className={CHIP} onClick={onHide} type="button">
@@ -118,9 +101,8 @@ export function GridConfigPanel({
             className={PANEL_CONTROL}
             label="Group by"
             onChange={(next) => {
-              // Clearing Group By clears Split By with it. A split is blocks of
-              // netted columns across a group row, so with nothing grouped there
-              // is nothing for it to lie across.
+              // Clearing Group By clears Split By: a split is blocks of netted
+              // columns across a group row, so it needs one to lie across.
               if (next === '') {
                 onGrouping([])
                 return
@@ -135,9 +117,9 @@ export function GridConfigPanel({
         <Section title="Split by">
           <Select
             className={PANEL_CONTROL}
-            // Nothing to split across until there are group rows to lay the
-            // blocks across. The choice taken above is excluded below: a block
-            // per symbol inside a group per symbol is one block.
+            // Nothing to split until there are group rows. Group By's own choice
+            // is excluded below: a block per symbol inside a group per symbol is
+            // one block.
             disabled={groupBy === undefined}
             label="Split by"
             onChange={(next) => {
@@ -155,15 +137,13 @@ export function GridConfigPanel({
         </Section>
 
         <Section title="Order by">
-          {/* The same state the column headers write, so the two cannot
-              disagree about what the grid is sorted by. */}
+          {/* The same state the column headers write. */}
           <div className="flex gap-2">
             <Select
               className={PANEL_CONTROL}
               label="Order by"
               onChange={(next) => {
-                // Carries the direction across a change of column rather than
-                // snapping back to ascending.
+                // Carries the direction across a change of column.
                 table.setSorting(next === '' ? [] : [{ id: next, desc: order?.desc ?? true }])
               }}
               options={[{ value: '', label: 'Unsorted' }, ...choices(sortable)]}
@@ -203,7 +183,6 @@ export function GridConfigPanel({
         </Section>
 
         <Section title="Columns">
-          {/* The list is the order, so the arrows need no second explanation. */}
           <p className="text-tape-muted">Top to bottom is left to right.</p>
 
           {/* Says why most of them are unavailable. */}
@@ -221,16 +200,14 @@ export function GridConfigPanel({
               return null
             }
 
-            // Grouped by it, so hiding it would take the group label and the
-            // expander with it. Or the last one standing, which would leave a
-            // grid with no columns and no way back but this panel.
+            // Grouped by it, so hiding it loses the label and the expander. Or
+            // the last one standing, which would leave a grid with no columns.
             const locked =
               column.getIsGrouped() ||
               (column.getIsVisible() && table.getVisibleLeafColumns().length === 1)
 
-            // Nothing a group row could put in it, so the grouping has taken it
-            // off the grid. The grid reads this box through the grouping's own
-            // override, so a tick would be a control that does nothing.
+            // Taken off the grid by the grouping. The grid reads this box through
+            // that override, so a tick would do nothing.
             const dropped = grouped[id] === false
             const name = headerText(column)
 
@@ -247,8 +224,7 @@ export function GridConfigPanel({
                   <span className="truncate">{name}</span>
                 </label>
 
-                {/* Buttons, not a drag: a nudge is operable from the keyboard
-                    and needs no pointer precision in a 280px panel. Outside the
+                {/* Buttons, not a drag: operable from the keyboard. Outside the
                     label, or pressing one would toggle the column. */}
                 <button
                   aria-label={`Move ${name} up`}
@@ -277,10 +253,7 @@ export function GridConfigPanel({
   )
 }
 
-/**
- * The column's own header text. Every header in this grid is a plain string, so
- * there is no element to render here.
- */
+/** Every header in this grid is a plain string, so there is no element to render. */
 function headerText(column: Column<Trade, unknown>): string {
   return String(column.columnDef.header)
 }
@@ -307,10 +280,8 @@ type WhereProps = {
   suggest?: { id: string; values: readonly string[] } | undefined
 }
 
-/**
- * One filter box. The column is looked up by id, so it is typed as possibly
- * absent: an id that stops existing drops its control rather than throwing.
- */
+/** One filter box. The column is looked up by id, so an id that stops existing
+ *  drops its control rather than throwing. */
 function Where({ column, label, placeholder, suggest }: WhereProps): ReactElement | null {
   if (column === undefined) {
     return null

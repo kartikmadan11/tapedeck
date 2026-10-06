@@ -9,27 +9,19 @@ import { Rng } from './rng.js'
 import { tradeEvents, trades } from './schema.js'
 import { partialFill, ticketSize, walkPrice } from './ticket.js'
 
-// Deterministic, so the blotter matches the counts quoted in the README.
-// Changing SEED invalidates those counts.
+// Deterministic: changing SEED invalidates the counts quoted in the README.
 const SEED = 20_261_002
 
-// Under BLOTTER_LIMIT, not equal to it. At 500 the seeded book filled the
-// 500-row window exactly, so the generated feed's first booking pushed the
-// oldest trade out of it and the group rows stopped equalling the positions
-// panel two seconds after boot. The headroom is what makes that check
-// reproducible for as long as it takes to open the app and pause the feed.
+// Under BLOTTER_LIMIT, not equal to it. At 500 the window was full, so the feed's
+// first booking pushed a trade out and the group rows stopped matching positions.
 const TRADE_COUNT = 400
 
 /** Fraction of trades later amended, and separately, later cancelled. */
 const AMEND_RATE = 0.18
 const CANCEL_RATE = 0.075
 
-/**
- * How the book stands when the blotter opens: mostly executed, with a slice
- * still working. Without the working slice the three live statuses would all
- * read FILLED on a fresh database and the column would look like the binary one
- * it replaced.
- */
+/** How the book stands when the blotter opens: mostly executed, with a slice still
+ * working. Without it every row would read FILLED on a fresh database. */
 const UNFILLED_RATE = 0.08
 const PARTIAL_RATE = 0.14
 
@@ -39,22 +31,16 @@ const WINDOW_HOURS = 9
 export interface SeedSummary {
   trades: number
   amended: number
-  /**
-   * How many were filled in full, and how many only in part. Counts of what the
-   * seed did, as amended and cancelled are, so a trade filled and then struck
-   * is counted here and in cancelled both.
-   */
+  /** Counts of what the seed did, so a trade filled and then struck is counted
+   * here and in cancelled both. */
   filled: number
   partiallyFilled: number
   cancelled: number
   events: number
 }
 
-/**
- * Amendments and cancellations use the same shape of write as the API: read,
- * bump version, write, append an event. That is what makes
- * `version == count(events)` hold for every row.
- */
+/** Amendments and cancellations use the same write shape as the API: read, bump
+ * version, write, append an event. That is what makes `version == count(events)`. */
 export async function seed(handle: DatabaseHandle): Promise<SeedSummary> {
   const { db } = handle
   const rng = new Rng(SEED)
@@ -136,9 +122,8 @@ export async function seed(handle: DatabaseHandle): Promise<SeedSummary> {
         amended += 1
       }
 
-      // Executed, after any amendment, so a fill is never left above the
-      // quantity an amendment moved. One fill event per trade: a live feed
-      // produces the multi-fill histories.
+      // After any amendment, so a fill is never left above the quantity an
+      // amendment moved. One fill event per trade; the live feed makes multi-fills.
       const working = rng.next()
       if (working >= UNFILLED_RATE) {
         const before = toTrade(current)
@@ -152,8 +137,7 @@ export async function seed(handle: DatabaseHandle): Promise<SeedSummary> {
           .update(trades)
           .set({
             filledQuantity: cumulative,
-            // Derived, never chosen: the database refuses a status that
-            // disagrees with the fill it describes.
+            // Derived, never chosen: the database refuses a disagreeing status.
             status: fillStatus(cumulative, current.quantity),
             version: current.version + 1,
             updatedAt: filledAt,
@@ -183,9 +167,8 @@ export async function seed(handle: DatabaseHandle): Promise<SeedSummary> {
         }
       }
 
-      // Struck from the blotter but never deleted. Applied after any amendment
-      // or fill, so a cancelled trade can carry a four-event history and keeps
-      // the record of whatever had executed.
+      // Struck but never deleted. After any amendment or fill, so a cancelled trade
+      // can carry a four-event history and keeps what had executed.
       if (rng.chance(CANCEL_RATE)) {
         const before = toTrade(current)
         const cancelledAt = new Date(current.updatedAt.getTime() + rng.int(1, 30) * 60_000)

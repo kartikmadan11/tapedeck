@@ -1,7 +1,5 @@
-/**
- * UTC, stated rather than left to the viewer's timezone, because the wire is UTC
- * and two traders in two offices have to read the same instant.
- */
+/** UTC, stated rather than left to the viewer's timezone: the wire is UTC and two
+ *  traders in two offices have to read the same instant. */
 const UTC_DATE_TIME = new Intl.DateTimeFormat('en-GB', {
   timeZone: 'UTC',
   day: '2-digit',

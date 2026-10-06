@@ -47,11 +47,8 @@ function renderWorkspace(): void {
   )
 }
 
-/**
- * Every pane carries the same controls under the same names, so an unscoped
- * query would find two of each the moment a second pane exists. Panes are
- * addressed by the region label Workspace assigns them.
- */
+/** Every pane carries the same controls under the same names, so an unscoped
+ *  query would find two of each. Panes are addressed by their region label. */
 function pane(name: string) {
   return within(screen.getByRole('region', { name }))
 }
@@ -69,11 +66,8 @@ function row(paneName: string, tradeId: string): HTMLElement | null {
 
 const panes = (): HTMLElement[] => screen.getAllByRole('grid')
 
-/**
- * A picklist in one pane. The control is a button and a list of its own rather
- * than a native select, and the list is portaled to the body, so the rows are
- * outside the pane the button sits in.
- */
+/** A picklist in one pane. Not a native select, and the list is portaled to the
+ *  body, so its rows sit outside the pane the button is in. */
 function pick(paneName: string, label: string, value: string): void {
   fireEvent.click(pane(paneName).getByLabelText(label))
   const found = screen
@@ -86,12 +80,9 @@ function pick(paneName: string, label: string, value: string): void {
 }
 
 /**
- * A pane's own controls, which are behind its right-click rather than on its
- * bar. Portaled to the body, so the menu is not inside the region it belongs to
- * and has to be addressed on its own.
- *
- * Pointer down before the right-click, because that is the order a browser fires
- * the two in, and it is what closes a menu left open on another pane.
+ * A pane's own controls, behind its right-click. Portaled to the body, so the menu
+ * is not inside the region it belongs to. Pointer down before the right-click,
+ * which is the order a browser fires them and what closes a menu on another pane.
  */
 function menu(paneName: string) {
   const region = screen.getByRole('region', { name: paneName })
@@ -105,11 +96,8 @@ function choose(paneName: string, item: string): void {
   fireEvent.click(menu(paneName).getByRole('menuitem', { name: item }))
 }
 
-/**
- * The application's own menu, raised from outside every pane. The body stands in
- * for the header, the ticket and the positions panel, which are all the same
- * thing to the listener: a right-click no pane claimed.
- */
+/** The application's own menu, raised from outside every pane. The body stands in
+ *  for the header and the ticket: all a right-click no pane claimed. */
 function appMenu() {
   fireEvent.pointerDown(document.body)
   fireEvent.contextMenu(document.body)
@@ -120,8 +108,7 @@ function appMenu() {
 const nameplate = (paneName: string): HTMLElement =>
   pane(paneName).getByRole('button', { name: `Rename ${paneName}` })
 
-/** The box the nameplate turns into, under the same name: one control in two
- *  modes is one thing to address. */
+/** The box the nameplate turns into, under the same name: one control, two modes. */
 const nameBox = (paneName: string): HTMLElement =>
   screen.getByRole('textbox', { name: `Rename ${paneName}` })
 
@@ -163,9 +150,8 @@ describe('the workspace', () => {
   it('never offers to close the only pane', () => {
     renderWorkspace()
 
-    // Offered and refused rather than missing, which is the one thing the menu
-    // changed: an item that disappears is an item the one below it moves up
-    // into, and a workspace still cannot be emptied by any route a user has.
+    // Offered and refused rather than missing: an item that disappears is an
+    // item the one below it moves up into, and no route can empty a workspace.
     const items = menu('Trades')
     expect(items.getByRole('menuitem', { name: 'Close' })).toBeDisabled()
     expect(items.getByRole('menuitem', { name: 'Duplicate' })).toBeEnabled()
@@ -175,10 +161,8 @@ describe('the workspace', () => {
     renderWorkspace()
     choose('Trades', 'Duplicate')
 
-    // Not "the first pane is permanent". Which pane is first is a position, and
-    // a position changes when panes are moved, so that rule would hand the Close
-    // button to whichever pane happened to be drawn first. One pane minimum is
-    // the invariant that means something.
+    // Not "the first pane is permanent": which pane is first is a position, and
+    // positions change, so the invariant is one pane minimum.
     expect(menu('Trades').getByRole('menuitem', { name: 'Close' })).toBeEnabled()
     expect(menu('Trades, pane 2').getByRole('menuitem', { name: 'Close' })).toBeEnabled()
   })
@@ -202,8 +186,7 @@ describe('the workspace', () => {
     expect(items.getByRole('menuitem', { name: 'Reset workspace' })).toBeEnabled()
     expect(items.getByRole('menuitem', { name: 'Share workspace' })).toBeEnabled()
 
-    // The four that are about the pane you clicked are not offered here, since
-    // there is no pane to be about.
+    // The four that are about a pane you clicked are not offered: no pane here.
     expect(items.queryByRole('menuitem', { name: 'Close' })).toBeNull()
     expect(items.queryByRole('menuitem', { name: 'Duplicate' })).toBeNull()
     expect(items.queryByRole('menuitem', { name: 'Config' })).toBeNull()
@@ -212,8 +195,7 @@ describe('the workspace', () => {
   it('leaves a right-click over a pane to the pane', () => {
     renderWorkspace()
 
-    // One menu, and the longer one. The pane's handler runs first and takes the
-    // event, which is what the application-wide listener reads to stand down.
+    // One menu, the longer one: the pane's handler runs first and takes the event.
     const items = menu('Trades')
     expect(screen.getAllByRole('menu')).toHaveLength(1)
     expect(items.getByRole('menuitem', { name: 'Duplicate' })).toBeInTheDocument()
@@ -233,8 +215,7 @@ describe('the workspace', () => {
 
     fireEvent.click(appMenu().getByRole('menuitem', { name: 'Reset workspace' }))
 
-    // The arrangement, the views and the names all go: a reset that kept the
-    // names would leave a pane called Risk on the default view.
+    // Names go too: a reset that kept them would leave Risk on the default view.
     expect(panes()).toHaveLength(1)
     expect(screen.getByRole('region', { name: 'Trades' })).toBeInTheDocument()
   })
@@ -244,9 +225,7 @@ describe('the workspace', () => {
     renderWorkspace()
 
     // Refused rather than missing. The link numbers its panes p1 to p8, so a
-    // ninth would be a workspace that cannot be shared. One pane's menu rather
-    // than all eight, since the items come off the same two props for every pane
-    // and only one menu is open at a time.
+    // ninth is a workspace that cannot be shared.
     expect(panes()).toHaveLength(8)
     const items = menu('Trades')
     expect(items.getByRole('menuitem', { name: 'Duplicate' })).toBeDisabled()
@@ -257,8 +236,7 @@ describe('the workspace', () => {
   it('opens the duplicate on the view it was duplicated from', () => {
     renderWorkspace()
 
-    // A duplicate that arrived on the defaults would make the button useless:
-    // the whole point is to branch off the arrangement in front of you.
+    // The point of Duplicate is to branch off the arrangement in front of you.
     choose('Trades', 'Config')
     pick('Trades', 'Group by', 'symbol')
     choose('Trades', 'Duplicate')
@@ -271,8 +249,7 @@ describe('the workspace', () => {
     renderWorkspace()
     choose('Trades', 'Duplicate')
 
-    // Filtering one pane must not reach the other. The panes share the single
-    // cache entry they read from, and that is all they share.
+    // Filtering one pane must not reach the other: the cache entry is all they share.
     fireEvent.change(second().getByLabelText('Filter by symbol'), { target: { value: 'BARC' } })
 
     expect(row('Trades, pane 2', 'TRD-100002')).not.toBeNull()
@@ -287,10 +264,8 @@ describe('the workspace', () => {
     fireEvent.click(row('Trades', 'TRD-100001') as HTMLElement)
     choose('Trades', 'Duplicate')
 
-    // Which row someone had selected is where they were, not how they were
-    // looking, so the duplicate starts with nothing selected and the pane that
-    // was duplicated keeps its selection. The second pane arriving must not
-    // remount the first one, which is what would clear it.
+    // A selection is where somebody was, not how they were looking, so the
+    // duplicate starts with none and the pane it came from must not remount.
     expect(first().getByRole('status')).toHaveTextContent('TRD-100001')
     expect(second().getByRole('status')).toBeEmptyDOMElement()
   })
@@ -314,8 +289,7 @@ describe('naming a pane', () => {
 
     rename('Trades', 'EU Flow')
 
-    // One name wherever the pane is named: the title on its bar, the region a
-    // screen reader and these tests address it by, and the grid's own label.
+    // One name everywhere: the title on its bar, the region label, the grid's label.
     expect(nameplate('EU Flow')).toBeInTheDocument()
     expect(screen.getByRole('grid')).toHaveAttribute(
       'aria-label',
@@ -327,8 +301,7 @@ describe('naming a pane', () => {
     renderWorkspace()
     fireEvent.click(nameplate('Trades'))
 
-    // Clicking a name is asking to type one, so the commonest rename of all,
-    // replacing the default outright, takes no further aim.
+    // Clicking a name is asking to type one, so replacing it outright takes no aim.
     expect(document.activeElement).toBe(nameBox('Trades'))
   })
 
@@ -347,8 +320,7 @@ describe('naming a pane', () => {
     fireEvent.change(nameBox('Trades'), { target: { value: 'EU Flow' } })
     fireEvent.blur(nameBox('Trades'))
 
-    // Someone who types a name and goes back to the tape has said what they
-    // wanted. Escape is how to leave without saying it.
+    // Typing a name and going back to the tape has said it. Escape is how not to.
     expect(nameplate('EU Flow')).toBeInTheDocument()
   })
 
@@ -357,8 +329,7 @@ describe('naming a pane', () => {
     rename('Trades', 'EU Flow')
     rename('EU Flow', '  ')
 
-    // Clearing the box is how a name comes off, and what is left is the name the
-    // pane had before anyone typed one rather than a pane with no title.
+    // Clearing the box is how a name comes off, and the position's name is left.
     expect(nameplate('Trades')).toBeInTheDocument()
   })
 
@@ -367,8 +338,7 @@ describe('naming a pane', () => {
     rename('Trades', 'EU Flow')
     choose('EU Flow', 'Duplicate')
 
-    // The view is handed over and the name is not. Two panes with one name
-    // between them are two panes nobody can tell apart.
+    // The view is handed over and the name is not: one name on two panes is useless.
     expect(panes()).toHaveLength(2)
     expect(screen.getByRole('region', { name: 'Trades, pane 2' })).toBeInTheDocument()
   })
@@ -379,8 +349,7 @@ describe('naming a pane', () => {
     rename('Trades, pane 2', 'Cancels')
     choose('Trades', 'Share workspace')
 
-    // The second pane was named and the first was not, so the link states one
-    // name. A name a position gives a pane is not a decision to carry.
+    // Only the pane that was named states one: a position's name is not a decision.
     expect(window.location.search).toContain('p2.name=Cancels')
     expect(window.location.search).not.toContain('p1.name')
 
@@ -420,13 +389,10 @@ describe('opening a pane', () => {
 
 describe('arranging the panes', () => {
   /**
-   * The arrangement, read back off the DOM: a pane carries its own id and a
-   * split carries its axis, so what is rendered can be asserted as the same
-   * expression layout.test.ts uses. Shares are the flex-grow the layout actually
-   * renders, multiplied down the tree, which is the only form in which two panes
-   * at different depths are comparable.
-   *
-   * `data-ghost` is the same tree, drawn for a drop preview.
+   * The arrangement, read back off the DOM: a pane carries its id and a split its
+   * axis, so what is rendered is asserted as the expression layout.test.ts uses.
+   * Shares are the rendered flex-grow multiplied down the tree, the only form
+   * comparable across depths. `data-ghost` is the same tree, drawn as a preview.
    */
   function tree(attribute = 'data-region'): { shape: string; shares: Record<string, number> } {
     const root = document.querySelector(`[${attribute}]`)
@@ -444,9 +410,8 @@ describe('arranging the panes', () => {
       if (only === undefined) {
         return name(node)
       }
-      // The container is a split of one while there is a single pane in it,
-      // which the tree itself has no way to say. Collapsed, so these read the
-      // way the tree reads.
+      // The container is a split of one while a single pane is in it, which the
+      // tree has no way to say. Collapsed, so these read the way the tree does.
       return kids.length === 1 ? shape(only) : `${name(node)}(${kids.map(shape).join(' ')})`
     }
 
@@ -470,11 +435,9 @@ describe('arranging the panes', () => {
   const grip = (name: string) =>
     pane(name).getByRole('button', { name: `Move ${name}. Use the arrow keys.` })
 
-  /**
-   * Starts a drag on a pane's handle. jsdom implements no DataTransfer, so the
-   * one the browser always supplies is stubbed here: the handle writes to it
-   * because Firefox will not start a drag without it.
-   */
+  /** Starts a drag on a pane's handle. jsdom implements no DataTransfer, so the one
+   *  a browser always supplies is stubbed: the handle writes to it because Firefox
+   *  will not start a drag without it. */
   function drag(name: string): void {
     fireEvent.dragStart(grip(name), {
       dataTransfer: { effectAllowed: '', setData: () => undefined },
@@ -496,8 +459,7 @@ describe('arranging the panes', () => {
     choose('Trades', 'Duplicate')
   }
 
-  /** Three even panes, which is the arrangement the nesting defect was found in
-   *  and the smallest one where a move has a bystander to leave alone. */
+  /** Three even panes, the smallest arrangement where a move has a bystander. */
   function three(): void {
     address('?panes=3')
     renderWorkspace()
@@ -523,9 +485,8 @@ describe('arranging the panes', () => {
     fireEvent.drop(zone(1, 'right'))
     openPane('EU Flow')
 
-    // Side by side, so the third pane stands beside the other two rather than
-    // under the one that happens to be last, and it takes its half out of the
-    // end: the pane at the other end keeps the width it was given.
+    // Side by side, so the third stands beside the other two rather than under
+    // whichever is last, and its half comes out of the end.
     expect(tree().shape).toBe('columns(pane-1 pane-2 pane-3)')
     expect(tree().shares).toEqual({ 'pane-1': 0.5, 'pane-2': 0.25, 'pane-3': 0.25 })
   })
@@ -535,8 +496,7 @@ describe('arranging the panes', () => {
     choose('Trades', 'Duplicate')
     choose('Trades', 'Duplicate')
 
-    // Opening twice off the first pane leaves it a quarter, so closing the
-    // middle pane has to leave the other two one to two, not evened out.
+    // Closing the middle pane leaves the other two one to two, not evened out.
     expect(tree().shares).toEqual({ 'pane-1': 0.25, 'pane-3': 0.25, 'pane-2': 0.5 })
 
     choose('Trades, pane 2', 'Close')
@@ -546,8 +506,7 @@ describe('arranging the panes', () => {
   it('resizes from the keyboard, which is the path that needs no geometry', () => {
     two()
 
-    // jsdom lays nothing out, so a pointer drag has nothing to measure. The
-    // separator is a real splitter either way: arrow keys move the boundary.
+    // jsdom lays nothing out, so a pointer drag has nothing to measure; keys do.
     const separator = screen.getByRole('separator', {
       name: 'Resize Trades against Trades, pane 2',
     })
@@ -568,8 +527,7 @@ describe('arranging the panes', () => {
       name: 'Resize Trades against Trades, pane 2',
     })
 
-    // Forty presses is far more travel than there is. A pane that can be
-    // reduced to nothing is a pane you cannot get back without closing it.
+    // Forty presses is more travel than there is. A pane at nothing is unrecoverable.
     for (let press = 0; press < 40; press += 1) {
       fireEvent.keyDown(separator, { key: 'ArrowDown' })
     }
@@ -583,8 +541,7 @@ describe('arranging the panes', () => {
       name: 'Resize Trades against Trades, pane 2',
     })
 
-    // The boundary of a stack moves up and down. Left on it is not a smaller
-    // version of the same request, it is a different one, so it does nothing.
+    // A stack's boundary moves up and down, so Left is a different request.
     fireEvent.keyDown(separator, { key: 'ArrowLeft' })
     expect(tree().shares).toEqual({ 'pane-1': 0.5, 'pane-2': 0.5 })
   })
@@ -596,10 +553,8 @@ describe('arranging the panes', () => {
     drag('Trades, pane 3')
     fireEvent.drop(zone(1, 'right'))
 
-    // The whole reason the arrangement is a tree. One axis for the workspace made
-    // sideways a property of the workspace, so standing one pane beside another
-    // turned the third sideways with it. pane-3 lands inside pane-1's own slot,
-    // and pane-2 is still stacked under both of them.
+    // Why the arrangement is a tree: one axis for the whole workspace would turn
+    // the third pane sideways too. pane-3 lands inside pane-1's own slot.
     expect(tree().shape).toBe('rows(columns(pane-1 pane-3) pane-2)')
   })
 
@@ -609,10 +564,8 @@ describe('arranging the panes', () => {
     drag('Trades, pane 3')
     fireEvent.drop(zone(1, 'right'))
 
-    // Every pane keeps the third of the window it had. Taking a pane out
-    // renormalises its old neighbours and putting it back halves its new one, so
-    // without restating the shares afterwards a drop that was meant to rearrange
-    // would have resized all three.
+    // Every pane keeps its third. A removal renormalises the old neighbours and
+    // an insertion halves the new one, so the shares are restated afterwards.
     expect(tree().shares).toEqual({ 'pane-1': 0.3333, 'pane-2': 0.3333, 'pane-3': 0.3333 })
   })
 
@@ -625,10 +578,8 @@ describe('arranging the panes', () => {
     drag('Trades, pane 3')
     fireEvent.drop(zone(1, 'right'))
 
-    // Standing a pane beside another reparents it into a new split, which React
-    // can only do by remounting it. The view each pane reports out is the view it
-    // is mounted back on, so the filter survives a move the component does not.
-    // The names follow the position, so the pane that moved is now the second.
+    // Standing a pane beside another reparents it, which React can only do by
+    // remounting, so a pane comes back on the view it reported, not its defaults.
     expect(pane('Trades, pane 2').getByLabelText('Filter by symbol')).toHaveValue('BARC')
     expect(pane('Trades, pane 3').getByLabelText('Filter by symbol')).toHaveValue('')
   })
@@ -640,9 +591,8 @@ describe('arranging the panes', () => {
     drag('EU Flow')
     fireEvent.drop(zone(1, 'right'))
 
-    // The pane that moved is drawn second now, so a name from its position would
-    // have become "Trades, pane 2" on the way. A name is a thing a trader gave
-    // this pane, so it goes where the pane goes.
+    // The pane that moved is drawn second now, so a position's name would have
+    // become "Trades, pane 2". A name a trader gave the pane goes with it.
     expect(tree().shape).toBe('rows(columns(pane-1 pane-3) pane-2)')
     expect(screen.getByRole('region', { name: 'EU Flow' })).toBeInTheDocument()
     // And it is what the boundary that arrived with the move is described by.
@@ -656,9 +606,8 @@ describe('arranging the panes', () => {
     drag('Trades, pane 3')
     fireEvent.drop(zone(1, 'right'))
 
-    // Two boundaries now, and they are not interchangeable. The inner one stands
-    // between the panes that are side by side, so it takes from one and gives to
-    // the other; the pane underneath both is in the outer split and does not move.
+    // Two boundaries, not interchangeable: the inner one is between the panes
+    // side by side, and the pane under both is in the outer split.
     const inner = screen.getByRole('separator', { name: 'Resize Trades against Trades, pane 2' })
     expect(inner).toHaveAttribute('aria-orientation', 'vertical')
     expect(
@@ -674,17 +623,14 @@ describe('arranging the panes', () => {
 
   it('stands the workspace up sideways when a pane is dropped on a left edge', () => {
     two()
-    // Filtered, so which pane ended up where is read off the view it holds
-    // rather than off a name that follows the position.
+    // Filtered, so which pane ended up where is read off its view, not its name.
     fireEvent.change(second().getByLabelText('Filter by symbol'), { target: { value: 'BARC' } })
 
     drag('Trades, pane 2')
     fireEvent.dragOver(zone(1, 'left'))
     fireEvent.drop(zone(1, 'left'))
 
-    // Dropped to the left of the only other pane, so there is nothing left to
-    // nest inside and the whole workspace turns. The drop is the only thing that
-    // turns it.
+    // Nothing left to nest inside, so the whole workspace turns.
     expect(tree().shape).toBe('columns(pane-2 pane-1)')
     expect(first().getByLabelText('Filter by symbol')).toHaveValue('BARC')
     expect(second().getByLabelText('Filter by symbol')).toHaveValue('')
@@ -703,8 +649,7 @@ describe('arranging the panes', () => {
     drag('Trades, pane 2')
     fireEvent.drop(zone(1, 'top'))
 
-    // The small pane was the top one and is now the bottom one, still small. A
-    // share is something a trader set for a view, not for a slot.
+    // Still small: a share is something a trader set for a view, not for a slot.
     expect(tree().shape).toBe('rows(pane-2 pane-1)')
     expect(tree().shares).toEqual({ 'pane-1': 0.3, 'pane-2': 0.7 })
   })
@@ -717,13 +662,11 @@ describe('arranging the panes', () => {
     handle.focus()
     fireEvent.keyDown(handle, { key: 'ArrowUp' })
 
-    // Up is the same request a drop on a top edge makes, so the pane that was
-    // second is now first and its filter went with it. Still stacked: up and down
-    // are the axis it is already on.
+    // Up is the same request a drop on a top edge makes, so the pane and its
+    // filter move together. Still stacked: up and down are the axis it is on.
     expect(tree().shape).toBe('rows(pane-2 pane-1)')
     expect(first().getByLabelText('Filter by symbol')).toHaveValue('BARC')
-    // The same element, moved rather than rebuilt, so the key can be held down
-    // and walk the pane along the split.
+    // The same element, moved rather than rebuilt, so the key can be held down.
     expect(document.activeElement).toBe(grip('Trades'))
   })
 
@@ -731,10 +674,8 @@ describe('arranging the panes', () => {
     two()
     fireEvent.change(second().getByLabelText('Filter by symbol'), { target: { value: 'BARC' } })
 
-    // Right on the last pane of a stack. There is no neighbour to its right, so
-    // the request is read against the one beside it: stand to the right of that,
-    // which turns the axis and leaves the order alone. Reaching sideways any
-    // other way would have to swap the two panes over to do it.
+    // Right on the last pane of a stack: no neighbour that way, so it reads as
+    // "stand to the right of the one beside me", which turns the axis.
     fireEvent.keyDown(grip('Trades, pane 2'), { key: 'ArrowRight' })
 
     expect(tree().shape).toBe('columns(pane-1 pane-2)')
@@ -744,10 +685,8 @@ describe('arranging the panes', () => {
   it('does nothing for a pane already against the edge it is sent to', () => {
     two()
 
-    // Down on the bottom pane of a stack. It is already there, so the tree is
-    // left alone rather than rebuilt to the same shape: a rebuild mints a new
-    // split id, which is a React key, and both panes would remount and lose
-    // their selection over a keypress that changed nothing.
+    // Already there, so the tree is left alone rather than rebuilt: a rebuild
+    // mints a new split id, a React key, and both panes would remount.
     fireEvent.click(row('Trades, pane 2', 'TRD-100001') as HTMLElement)
     fireEvent.keyDown(grip('Trades, pane 2'), { key: 'ArrowDown' })
 
@@ -756,9 +695,7 @@ describe('arranging the panes', () => {
   })
 
   it('opens on the arrangement in the link, and not on a stack of whatever it holds', () => {
-    // The report this came from: a link carried the views and lost the shape, so
-    // sending a colleague one pane standing beside another sent them three
-    // stacked panes instead.
+    // A link carrying the views but not the shape would open as three stacked panes.
     address('?panes=3&p1.at=0.0&p2.at=0.1&p3.at=1')
     renderWorkspace()
 
@@ -769,21 +706,17 @@ describe('arranging the panes', () => {
     address('?panes=3&p1.size=0.5&p2.size=0.3&p3.size=0.2')
     renderWorkspace()
 
-    // Shares of the window on the way in, weights relative to siblings on the
-    // way out, and the point of carrying the first is that it survives the
-    // second at any depth.
+    // Shares in, weights out: a share survives at any depth and a weight does not.
     expect(tree().shares).toEqual({ 'pane-1': 0.5, 'pane-2': 0.3, 'pane-3': 0.2 })
   })
 
   it('carries the arrangement back out again', () => {
-    // The round trip that matters, driven through the UI rather than through the
-    // encoder: nest a pane, move the boundary it arrived on, share, and open
-    // what was shared in a workspace that knows nothing about the first one.
+    // The round trip that matters, through the UI rather than the encoder: nest a
+    // pane, move the boundary it arrived on, share, and open it fresh.
     three()
     drag('Trades, pane 3')
     fireEvent.drop(zone(1, 'right'))
-    // The inner boundary, which only exists because of the drop: pane-3 is the
-    // second pane in drawing order now, so it is the one called pane 2.
+    // The inner boundary exists only because of the drop; pane-3 is drawn second.
     fireEvent.keyDown(
       screen.getByRole('separator', { name: 'Resize Trades against Trades, pane 2' }),
       { key: 'ArrowRight' },
@@ -796,9 +729,8 @@ describe('arranging the panes', () => {
     renderWorkspace()
 
     expect(tree().shape).toBe('rows(columns(pane-1 pane-2) pane-3)')
-    // A weight is relative to siblings and a share is relative to the window, so
-    // only the second can be stated in a link. Both panes inside the split are
-    // back on their share of the window, not on their share of the split.
+    // A weight is relative to siblings and a share to the window, so only the
+    // second can be stated in a link. Both inner panes are back on their share.
     expect(tree().shares).toEqual({ 'pane-1': 0.3467, 'pane-2': 0.32, 'pane-3': 0.3333 })
   })
 
@@ -807,8 +739,7 @@ describe('arranging the panes', () => {
     drag('Trades, pane 2')
     fireEvent.drop(zone(1, 'right'))
 
-    // So a reload comes back side by side. The link carried the arrangement
-    // already; what is new is that nobody has to press Share for it.
+    // So a reload comes back side by side, with nobody having pressed Share.
     await waitFor(() => expect(window.location.search).toBe('?panes=2&axis=columns'))
   })
 
@@ -825,17 +756,15 @@ describe('arranging the panes', () => {
       fireEvent.dragOver(zone(1, edge))
 
       // Driven by dragover and not by :hover, which a browser stops updating
-      // once a native drag is in progress, so the hover outline this replaced
-      // never actually appeared.
+      // once a native drag is in progress.
       expect(aimed()).toBe(edge)
     },
   )
 
   it('previews the arrangement rather than the zone under the pointer', () => {
     two()
-    // Side by side, then aim at the bottom of the other pane: the drop stacks the
-    // two, so the pane lands as a full-width band and not in the bottom third of
-    // the pane being aimed at, which is only where the hit test lives.
+    // Aim at the bottom of the other pane and the drop stacks the two, so the
+    // pane lands as a full-width band: the zone is the hit test, not the result.
     fireEvent.keyDown(grip('Trades, pane 2'), { key: 'ArrowRight' })
     expect(tree().shape).toBe('columns(pane-1 pane-2)')
 
@@ -853,8 +782,7 @@ describe('arranging the panes', () => {
     drag('Trades, pane 3')
     fireEvent.dragOver(zone(1, 'right'))
 
-    // The preview is built by calling the same movedPane the drop calls, so it
-    // cannot promise one arrangement and the drop deliver another.
+    // The preview calls the same movedPane the drop does, so they cannot differ.
     expect(tree('data-ghost').shape).toBe('rows(columns(pane-1 pane-3) pane-2)')
     expect(tree('data-ghost').shares).toEqual({
       'pane-1': 0.3333,
@@ -871,8 +799,7 @@ describe('arranging the panes', () => {
     drag('Trades, pane 3')
     fireEvent.dragOver(zone(1, 'top'))
 
-    // A pane carries its share with it when it moves, so the preview has to
-    // reorder the shares rather than even them out.
+    // A pane carries its share when it moves, so the preview reorders the shares.
     expect(tree('data-ghost').shape).toBe('rows(pane-2 pane-1 pane-3)')
     expect(tree('data-ghost').shares).toEqual({
       'pane-1': 0.25,
@@ -888,8 +815,7 @@ describe('arranging the panes', () => {
     fireEvent.dragOver(zone(1, 'top'))
     fireEvent.dragOver(zone(1, 'left'))
 
-    // One preview, for the zone the pointer is in now. Two at once would be two
-    // claims about where a single drop is going.
+    // One preview: two would be two claims about where a single drop is going.
     expect(document.querySelectorAll('[data-drop-preview]')).toHaveLength(1)
     expect(aimed()).toBe('left')
   })
@@ -899,9 +825,8 @@ describe('arranging the panes', () => {
     drag('Trades, pane 2')
     fireEvent.dragOver(zone(1, 'top'))
 
-    // dragleave bubbles from the zone being left, so the naive handler clears on
-    // every crossing and the preview strobes across a pane. Leaving for another
-    // zone inside the same pane is not leaving.
+    // dragleave bubbles from the zone being left, so clearing on every crossing
+    // would strobe the preview. Leaving for another zone is not leaving.
     fireEvent.dragLeave(zone(1, 'top'), { relatedTarget: zone(1, 'left') })
 
     expect(aimed()).toBe('top')
@@ -927,8 +852,7 @@ describe('arranging the panes', () => {
 
     finish('top')
 
-    // A preview left on screen after a drag is a pane that looks like it is still
-    // moving, drawn over the arrangement that actually resulted.
+    // A preview left on screen is a pane that looks like it is still moving.
     expect(aimed()).toBeNull()
   })
 
@@ -946,12 +870,9 @@ describe('arranging the panes', () => {
 })
 
 describe('a shared workspace', () => {
-  /**
-   * Two panes that disagree about everything, so nothing can pass by accident:
-   * grouped and a column short in the first, filtered and flat in the second.
-   * The exact format is the business of the state module and its tests, so this
-   * one states the link rather than building it.
-   */
+  /** Two panes that disagree about everything, so nothing passes by accident. The
+   *  format belongs to the state module and its tests, so this states the link
+   *  rather than building it. */
   const SHARED =
     '?panes=2' +
     '&p1.group=symbol&p1.sort=-tradeTimestamp&p1.hide=book' +
@@ -970,10 +891,8 @@ describe('a shared workspace', () => {
   })
 
   it('falls back to the plain blotter on a link that has been mistyped', () => {
-    // The format is readable, so it is editable, so this is the common case
-    // rather than the corrupt-payload one. Rendering the default beats rendering
-    // nothing, and either beats putting a name that is not a column into table
-    // state and half-applying the rest.
+    // A readable format is an editable one, so this is the common case rather
+    // than a corrupt payload. The default beats half-applying a bad link.
     address('?panes=2&p1.group=pnl')
     renderWorkspace()
 
@@ -986,8 +905,7 @@ describe('a shared workspace', () => {
     renderWorkspace()
 
     // The schema's floor of one is the same invariant as the missing Close
-    // button on the only pane, enforced on the one route that does not go
-    // through the UI at all.
+    // button, enforced on the one route that does not go through the UI.
     expect(panes()).toHaveLength(1)
   })
 })
@@ -1023,8 +941,7 @@ describe('sharing a workspace', () => {
     choose('Trades', 'Share workspace')
     expect(await screen.findByText('Link copied')).toBeInTheDocument()
 
-    // Each pane reports its own view out, so the link describes both of them
-    // without the workspace ever holding either one's state.
+    // Each pane reports its own view, so the workspace holds neither one's state.
     const link = copied[0] ?? ''
     const shared = decodeWorkspace(new URL(link).searchParams)
     expect(shared?.views).toHaveLength(2)
@@ -1036,9 +953,8 @@ describe('sharing a workspace', () => {
     renderWorkspace()
     choose('Trades', 'Duplicate')
 
-    // Named in the menu, because an unqualified Share sitting in one pane's own
-    // controls could not say whether it meant that pane or all of them. What it
-    // copies is the same link the strip's button copies, both panes and all.
+    // Named in the menu, because an unqualified Share in one pane's controls
+    // could not say whether it meant that pane or all of them.
     choose('Trades', 'Share workspace')
     expect(await screen.findByText('Link copied')).toBeInTheDocument()
 
@@ -1054,15 +970,13 @@ describe('sharing a workspace', () => {
   })
 
   it('says so rather than failing quietly when the clipboard refuses', async () => {
-    // The clipboard API needs a secure context, and a copy that silently does
-    // nothing is worse than one that tells you where the link is.
+    // The clipboard API needs a secure context, so the refusal has to be visible.
     Reflect.deleteProperty(navigator, 'clipboard')
     renderWorkspace()
 
     choose('Trades', 'Share workspace')
     expect(await screen.findByText(/the link is in the address bar/)).toBeInTheDocument()
-    // Told where it is, and now able to read it when they get there, which is
-    // most of what makes that message a usable fallback rather than an apology.
+    // Told where it is, and able to read it when they get there.
     expect(window.location.search).toContain('panes=1')
   })
 })
@@ -1078,10 +992,7 @@ describe('the address bar', () => {
 
     await waitFor(() => expect(window.location.search).toBe('?panes=2&p2.name=EU+Flow'))
 
-    // The defect this answers, as a reload: a second workspace that knows
-    // nothing about the first, reading the bar the first one left. What came
-    // back before was whatever the last Share wrote, so a pane opened after it
-    // was simply gone.
+    // A reload is a second workspace reading the bar the first one left.
     cleanup()
     renderWorkspace()
 
@@ -1098,8 +1009,7 @@ describe('the address bar', () => {
     }
 
     await waitFor(() => expect(window.location.search).toBe('?panes=1&p1.where.symbol=VOD'))
-    // replaceState is rate limited by browsers, so the debounce is the reason
-    // this is safe to do on a filter box rather than a tidiness.
+    // replaceState is rate limited by browsers, so the debounce is not tidiness.
     expect(writes).toHaveBeenCalledTimes(1)
   })
 
@@ -1108,10 +1018,8 @@ describe('the address bar', () => {
     renderWorkspace()
     await settled()
 
-    // On arrival the bar is the source rather than the record. Rewriting it into
-    // the canonical form of itself would throw away the only copy of what
-    // somebody typed, which for a link that does not parse is the thing they
-    // need to be looking at.
+    // On arrival the bar is the source rather than the record: rewriting it into
+    // its canonical form would throw away the only copy of what somebody typed.
     expect(window.location.search).toBe('?panes=2&p1.group=pnl')
   })
 
@@ -1122,8 +1030,7 @@ describe('the address bar', () => {
     address('?panes=3')
     await settled()
 
-    // A write in flight outlives the component that scheduled it, and the one it
-    // would land on is whatever is on screen by then.
+    // A write in flight outlives the component, and lands on whatever is next.
     expect(window.location.search).toBe('?panes=3')
   })
 })

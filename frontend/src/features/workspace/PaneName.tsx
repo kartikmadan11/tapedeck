@@ -7,35 +7,28 @@ import { NAME_LIMIT } from './state.js'
 const NAMEPLATE =
   'h-7 max-w-48 cursor-pointer truncate rounded-xs border border-transparent px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-tape-text transition-colors duration-100 hover:border-tape-line focus-visible:border-tape-focus focus-visible:outline-none'
 
-/** Plain text while it is being typed, with none of the nameplate's tracking. */
+/** Plain text while it is being typed, without the nameplate's tracking. */
 const BOX = `${CONTROL} w-40 bg-tape-panel`
 
 type Props = {
-  /** What the pane is called now, which is its own name or the one its position
-   *  gives it. */
+  /** Its own name, or the one its position gives it. */
   name: string
 
-  /** Empty takes the name back off, which puts the pane on its position's name. */
+  /** An empty name takes the name back off, leaving the position's name. */
   onRename: (name: string) => void
 }
 
-/**
- * A pane's name, as a title that turns into a box when it is clicked.
- *
- * The draft is held here and nowhere else. A name typed straight into the
- * workspace would re-render every pane in it on every keystroke, the cost the
- * workspace keeps each pane's view in a ref to avoid. As it is, the workspace
- * hears one rename per commit.
- */
+/** A pane's name, as a title that turns into a box when it is clicked. The draft stays
+ *  local: in the workspace it would re-render every pane on every keystroke, so the
+ *  workspace hears one rename per commit. */
 export function PaneName({ name, onRename }: Props): ReactElement {
   /** The name being typed, or null while it is only being read. */
   const [draft, setDraft] = useState<string | null>(null)
   const box = useRef<HTMLInputElement>(null)
   const editing = draft !== null
 
-  // Focused on the switch rather than with autoFocus, which cannot tell a mode
-  // change from a page load. Selected as well, so replacing a default name
-  // outright is one keystroke.
+  // Not autoFocus, which cannot tell a mode change from a page load. Selected
+  // too, so replacing the default name outright is one keystroke.
   useEffect(() => {
     if (editing) {
       box.current?.focus()
@@ -44,8 +37,8 @@ export function PaneName({ name, onRename }: Props): ReactElement {
   }, [editing])
 
   const commit = (): void => {
-    // Unchanged is not a rename, or clicking the name and pressing Enter fixes a
-    // default name onto the pane and a shared link carries a name nobody chose.
+    // Unchanged is not a rename: otherwise click-then-Enter would pin the
+    // position's name onto the pane and a shared link would carry it.
     if (draft !== null && draft.trim() !== name) {
       onRename(draft.trim())
     }
@@ -54,8 +47,7 @@ export function PaneName({ name, onRename }: Props): ReactElement {
 
   if (draft === null) {
     return (
-      // Named for what pressing it does, not for what it says: a button whose
-      // whole label is "Trades" does not say that it renames anything.
+      // Named for what it does: a button labelled "Trades" does not say it renames.
       <button
         aria-label={`Rename ${name}`}
         className={NAMEPLATE}
@@ -72,8 +64,7 @@ export function PaneName({ name, onRename }: Props): ReactElement {
       aria-label={`Rename ${name}`}
       className={BOX}
       maxLength={NAME_LIMIT}
-      // Committed on the way out as well as on Enter. Escape is the way to leave
-      // without committing.
+      // Blur commits, as Enter does. Escape is the way out without committing.
       onBlur={commit}
       onChange={(event) => setDraft(event.target.value)}
       onKeyDown={(event) => {

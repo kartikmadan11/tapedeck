@@ -40,11 +40,8 @@ export interface BuiltApp {
   database: DatabaseHandle
 }
 
-/**
- * Builds a fully wired app without listening. server.ts is the only place that
- * calls listen(), so tests can use app.inject() with no port and the websocket
- * tests can bind port 0.
- */
+/** Builds a fully wired app without listening. server.ts is the only caller of
+ * listen(), so tests can use app.inject() with no port and bind port 0 for sockets. */
 export async function buildApp(config: Config): Promise<BuiltApp> {
   const app = Fastify({
     logger: { level: config.LOG_LEVEL },
@@ -59,22 +56,15 @@ export async function buildApp(config: Config): Promise<BuiltApp> {
   const repository = new TradeRepository(database.db)
   const tradeService = new TradeService(repository, bus)
 
-  /**
-   * Seeded with the desk the database seed books for, plus the actor a fresh
-   * client stamps, so every trader name visible on the tape can sign in. One
-   * password for all of them, printed on the sign-in form.
-   */
+  /** Seeded with both the desk the seed books for and the actor a fresh client stamps, so
+   * every trader on the tape can sign in. One password, printed on the sign-in form. */
   const authService = new AuthService()
   await authService.seed([...TRADERS, DEFAULT_TRADER], DEMO_PASSWORD)
 
-  /**
-   * Created here but never started here, so buildApp() stays free of side
-   * effects. Constructed before the hub, whose handshake reports its state.
-   *
-   * The write callbacks are wrappers, not bare method references: TradeService
-   * holds its repository on `this`, so passing `tradeService.createTrade`
-   * directly would unbind it and fail at runtime, not at compile time.
-   */
+  /** Created but not started, so buildApp() stays free of side effects. Constructed
+   * before the hub, whose handshake reports its state. The write callbacks are wrappers,
+   * not bare method references: TradeService holds its repository on `this`, so a method
+   * passed directly would unbind and fail at runtime. */
   const simulator = createSimulator({
     intervalMs: config.SIMULATION_INTERVAL_MS,
     maxTrades: config.SIMULATION_MAX_TRADES,
@@ -82,10 +72,9 @@ export async function buildApp(config: Config): Promise<BuiltApp> {
     rng: new Rng(Date.now()),
     log: app.log,
     bus,
-    // Unwindowed on purpose: the simulator compares what it reads against
-    // maxTrades, so a limit here would hide trades above the cap and it would
-    // book forever. Cancellations are dropped here rather than in the query,
-    // which takes one status and cannot ask for everything but one.
+    // Unwindowed: the simulator compares what it reads against maxTrades, so a
+    // limit here would hide trades above the cap and it would book forever.
+    // Cancellations are dropped here because the query takes only one status.
     listOpen: () =>
       tradeService
         .listTrades({})
@@ -101,8 +90,8 @@ export async function buildApp(config: Config): Promise<BuiltApp> {
     bus,
     log: app.log,
     pingIntervalMs: config.WS_PING_INTERVAL_MS,
-    // Windowed like the REST read: an unbounded handshake snapshot would put the
-    // whole book on the wire on every reconnect.
+    // Windowed like the REST read: unbounded would put the whole book on the wire
+    // on every reconnect.
     readSnapshot: () => repository.readSnapshot({ limit: BLOTTER_LIMIT }),
     readSimulation: () => simulator.state,
   })
@@ -128,7 +117,7 @@ export async function buildApp(config: Config): Promise<BuiltApp> {
     await app.register(fastifyStatic, { root: config.STATIC_DIR, prefix: '/' })
   }
 
-  // Ordered: stop writing, then stop broadcasting, then close the pool, so no
+  // Order matters: stop writing, then broadcasting, then close the pool, so no
   // queued tick or in-flight read outlives the connections it needs.
   app.addHook('onClose', async () => {
     simulator.stop()

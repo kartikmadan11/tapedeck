@@ -5,10 +5,7 @@ import { createDatabase } from './client.js'
 
 const MIGRATIONS_FOLDER = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'migrations')
 
-/**
- * Safe to run on every container start: drizzle records applied migrations and
- * skips them, so a second `docker compose up` is a no-op.
- */
+/** Safe on every container start: drizzle records applied migrations and skips them. */
 export async function runMigrations(connectionString: string): Promise<void> {
   const handle = createDatabase(connectionString)
   try {

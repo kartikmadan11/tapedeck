@@ -1,23 +1,15 @@
 import type { ReactElement } from 'react'
 
 type Props = {
-  /**
-   * Filled is the mark proper. Plain is for a screen that already spends its one
-   * accent fill on a button, which is the rule in lib/ui.ts.
-   */
+  /** Plain is for a screen that already spends its one accent fill on a button,
+   *  per the rule in lib/ui.ts. */
   filled: boolean
   /** The type scale, which is the only other thing that changes between uses. */
   className: string
 }
 
-/**
- * `tape` over `deck`: four characters over four, so in a monospace face the two
- * lines are exactly as wide as each other and the mark squares off on its own
- * grid. Nothing to track or align, because the font already did it.
- *
- * An h1 because it is the page's heading on both screens that use it, and
- * labelled because two block lines are otherwise announced as two words.
- */
+/** `tape` over `deck`: four characters over four, so a monospace face squares them
+ *  off with nothing to align. Labelled, or the two lines read as two words. */
 export function Wordmark({ filled, className }: Props): ReactElement {
   return (
     <h1

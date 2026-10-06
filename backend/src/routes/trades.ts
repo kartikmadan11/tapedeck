@@ -23,11 +23,8 @@ function actorOf(headers: Record<string, unknown>): string {
 const tradeIdParams = z.object({ tradeId: tradeIdSchema })
 
 export function registerTradeRoutes(app: FastifyInstance): void {
-  /**
-   * Returns `{ seq, trades }`, not a bare array, so the client can reject a
-   * response older than what its socket already applied. Windowed to the most
-   * recent BLOTTER_LIMIT unless the caller names its own limit.
-   */
+  /** `{ seq, trades }`, not a bare array, so the client can reject a response older
+   * than what its socket applied. Windowed to BLOTTER_LIMIT unless asked otherwise. */
   app.get('/api/trades', async (request) => {
     const query = tradeQuery.parse(request.query)
     // ?? rather than a spread default: an optional key can arrive present and
@@ -50,31 +47,24 @@ export function registerTradeRoutes(app: FastifyInstance): void {
     return { events: await app.tradeService.listEvents(tradeId) }
   })
 
-  /**
-   * 201 when a trade was booked, 200 when the body's clientTradeId had already
-   * booked one. The body is the trade either way.
-   */
+  /** 201 when a trade was booked, 200 when the body's clientTradeId had already
+   * booked one. The body is the trade either way. */
   app.post('/api/trades', async (request, reply) => {
     const input = createTradeInput.parse(request.body)
     const { trade, replayed } = await app.tradeService.createTrade(input, actorOf(request.headers))
     return reply.status(replayed ? 200 : 201).send(trade)
   })
 
-  /**
-   * PATCH, not PUT: a partial update of three fields, and the body cannot express
-   * the others. Amending `symbol` is a 400, not a silent no-op.
-   */
+  /** PATCH, not PUT: a partial update, and the body cannot express the other fields.
+   * Amending `symbol` is a 400, not a silent no-op. */
   app.patch('/api/trades/:tradeId', async (request) => {
     const { tradeId } = tradeIdParams.parse(request.params)
     const input = amendTradeInput.parse(request.body)
     return app.tradeService.amendTrade(tradeId, input, actorOf(request.headers))
   })
 
-  /**
-   * An execution report. A sub-resource too, and for the stronger reason: the
-   * body carries the cumulative quantity filled and the status follows from it,
-   * so there is no field here for a client to patch.
-   */
+  /** An execution report, a sub-resource: the body carries the cumulative quantity
+   * filled and status follows from it, so there is no field for a client to patch. */
   app.post('/api/trades/:tradeId/fills', async (request) => {
     const { tradeId } = tradeIdParams.parse(request.params)
     const input = fillTradeInput.parse(request.body)

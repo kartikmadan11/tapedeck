@@ -10,14 +10,9 @@ const BASE_DELAY_MS = 250
 const MAX_DELAY_MS = 10_000
 const JITTER_MS = 250
 
-/**
- * The only socket in the application. It writes frames into the blotter cache
- * through the pure reducer, so this hook holds nothing but connection lifecycle.
- *
- * There is no explicit resync request. The server answers every connection with
- * a consistent snapshot, so reconnecting is the resync, and a detected gap is
- * handled by refetching over REST.
- */
+/** The only socket. Frames reach the cache through the pure reducer, so this holds
+ *  nothing but connection lifecycle. No resync request: every connection is answered
+ *  with a snapshot, so reconnecting is the resync, and a gap refetches over REST. */
 export function useRealtime(): void {
   const queryClient = useQueryClient()
 
@@ -32,9 +27,8 @@ export function useRealtime(): void {
     }
 
     const handle = (frame: ServerFrame): void => {
-      // Not blotter state, so it is routed out before the reducer rather than
-      // given a no-op branch there. Carries no cursor, so there is nothing to
-      // guard against staleness: the latest one wins, as with positions.
+      // Not blotter state, so it is routed out before the reducer. Carries no
+      // cursor either, so the latest one wins, as with positions.
       if (frame.type === 'simulation') {
         queryClient.setQueryData<SimulationState>(queryKeys.simulation, {
           running: frame.running,
@@ -43,8 +37,8 @@ export function useRealtime(): void {
         return
       }
 
-      // Read before the write so the gap test sees the cursor the frame arrived
-      // against, and so no side effect runs inside the cache updater.
+      // Read before the write, so the gap test sees the cursor the frame arrived
+      // against and no side effect runs inside the cache updater.
       const before = queryClient.getQueryData<BlotterState>(queryKeys.blotter) ?? emptyBlotter
 
       queryClient.setQueryData<BlotterState>(queryKeys.blotter, (prev) =>
@@ -57,8 +51,7 @@ export function useRealtime(): void {
     }
 
     const schedule = (): void => {
-      // Doubling with jitter, so a browser with several tabs open does not
-      // reconnect all of them in the same millisecond after an outage.
+      // Jittered, so several tabs do not reconnect in the same millisecond.
       const delay = Math.min(MAX_DELAY_MS, BASE_DELAY_MS * 2 ** attempt) + Math.random() * JITTER_MS
       attempt += 1
       timer = setTimeout(connect, delay)
@@ -83,8 +76,8 @@ export function useRealtime(): void {
         }
         const parsed = serverFrame.safeParse(parseJson(event.data))
         if (!parsed.success) {
-          // A frame this client cannot read may have been a trade, so recover
-          // over REST rather than leave the blotter quietly wrong.
+          // An unreadable frame may have been a trade, so recover over REST
+          // rather than leave the blotter quietly wrong.
           console.warn('tapedeck: discarding an unreadable frame', parsed.error.issues)
           refetch()
           return
@@ -106,8 +99,8 @@ export function useRealtime(): void {
     return () => {
       disposed = true
       clearTimeout(timer)
-      // Closing a socket that is still opening aborts the handshake, which is the
-      // wanted behaviour under a double-invoked development effect.
+      // Closing a socket mid-handshake aborts it, which is what a double-invoked
+      // development effect wants.
       socket?.close()
     }
   }, [queryClient])

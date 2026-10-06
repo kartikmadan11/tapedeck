@@ -10,10 +10,8 @@ import { CHIP, MICRO_LABEL } from '../../lib/ui.js'
 
 type Props = { tradeId: string; onClose: () => void }
 
-/**
- * The audit trail for one trade, read on demand rather than streamed: history is
- * looked at rarely and the rows never change once written.
- */
+/** The audit trail for one trade, read on demand rather than streamed: the rows
+ *  never change once written. */
 export function HistoryDrawer({ tradeId, onClose }: Props): ReactElement {
   /** Names the drawer off its own heading, as in the two dialogs. */
   const titleId = useId()
@@ -34,8 +32,8 @@ export function HistoryDrawer({ tradeId, onClose }: Props): ReactElement {
   }, [onClose])
 
   return (
-    // A dialog rather than a region: Escape closes it, which is the behaviour a
-    // dialog's name buys. No aria-modal, since nothing underneath is inert.
+    // A dialog rather than a region, because Escape closes it. No aria-modal,
+    // since nothing underneath is inert.
     <div
       aria-labelledby={titleId}
       className="fixed inset-y-0 right-0 z-40 flex w-[32rem] max-w-full flex-col border-l border-tape-line bg-tape-panel shadow-[-24px_0_64px_-12px_rgb(0_0_0/0.9)]"
@@ -78,8 +76,7 @@ function EventCard({ event }: { event: TradeEvent }): ReactElement {
         <span className={`font-semibold tracking-[0.1em] ${EVENT_COLOUR[event.eventType] ?? ''}`}>
           {event.eventType}
         </span>
-        {/* Not MICRO_LABEL: this line carries an actor's name, which is not
-            uppercased. */}
+        {/* Not MICRO_LABEL: this line carries an actor's name, not a label. */}
         <span className="text-[10px] text-tape-muted">
           seq {event.seq} · {formatDateTime(event.at)} · {event.actor}
         </span>
@@ -93,8 +90,7 @@ function EventCard({ event }: { event: TradeEvent }): ReactElement {
       ) : (
         <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3">
           {changes.map((change) => (
-            // items-baseline because the 10px label and the 13px values sit on
-            // one line and would otherwise top-align against each other.
+            // items-baseline: the 10px label and 13px values share a line.
             <div key={change.field} className="col-span-2 flex items-baseline gap-2">
               <dt className={MICRO_LABEL}>{change.field}</dt>
               <dd>
@@ -110,10 +106,8 @@ function EventCard({ event }: { event: TradeEvent }): ReactElement {
   )
 }
 
-/**
- * The events that are not the ordinary course. The same colours the status
- * column uses, so a struck trade reads the same in both places.
- */
+/** The same colours the status column uses, so a struck trade reads the same in
+ *  both places. */
 const EVENT_COLOUR: Partial<Record<TradeEventType, string>> = {
   FILLED: 'text-tape-buy',
   CANCELLED: 'text-tape-sell',
@@ -131,10 +125,8 @@ const TRACKED = [
 
 type Change = { field: string; before: string; after: string }
 
-/**
- * Computed here rather than stored, because the events hold whole snapshots, so
- * the display can change without a migration.
- */
+/** Computed rather than stored: the events hold whole snapshots, so the display can
+ *  change without a migration. */
 function diff(before: Trade, after: Trade): Change[] {
   return TRACKED.filter((field) => before[field] !== after[field]).map((field) => ({
     field,

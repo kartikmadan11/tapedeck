@@ -9,14 +9,9 @@ export type UseSimulation = {
   pending: boolean
 }
 
-/**
- * The generated feed's control.
- *
- * Read once over REST, because a client connecting while the feed is already
- * running would otherwise show the wrong label until someone toggled it. Kept
- * current after that by the broadcast frame, which useRealtime writes straight
- * into this cache entry.
- */
+/** Read once over REST, or a client connecting while the feed is already running
+ *  shows the wrong label until someone toggles it. The broadcast frame, written by
+ *  useRealtime into this same entry, keeps it current after that. */
 export function useSimulation(): UseSimulation {
   const queryClient = useQueryClient()
 
@@ -28,9 +23,8 @@ export function useSimulation(): UseSimulation {
   const mutation = useMutation({
     mutationFn: setSimulation,
     onSuccess: (next) => {
-      // Written from the response rather than waiting for the broadcast, so the
-      // button does not sit in its old state for a round trip. The frame that
-      // follows carries the same values, so there is nothing to reconcile.
+      // From the response rather than the broadcast, so the button does not sit
+      // in its old state for a round trip. The frame carries the same values.
       queryClient.setQueryData<SimulationState>(queryKeys.simulation, next)
     },
   })

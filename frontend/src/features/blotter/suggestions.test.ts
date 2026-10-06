@@ -41,8 +41,7 @@ describe('suggestionsOf', () => {
       aTrade({ tradeId: 'TRD-100002', book: 'EQ-LDN-ARB', status: 'CANCELLED' }),
     ])
 
-    // Unlike an aggregate, which nets the cancelled leaf out. A filter is about
-    // which rows are on screen, and a cancelled row is one of them.
+    // Unlike an aggregate, which nets cancelled legs out: a cancelled row is on screen.
     expect(lists.book).toEqual(['EQ-LDN-01', 'EQ-LDN-ARB'])
   })
 

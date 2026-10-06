@@ -15,11 +15,8 @@ export type SimulationAction =
   | { kind: 'fill'; tradeId: string; input: FillTradeInput }
   | { kind: 'cancel'; tradeId: string; input: CancelTradeInput }
 
-/**
- * Bookings and executions carry the feed, with a trickle of corrections. Fills
- * outweigh amendments and cancellations together because a desk executes far
- * more than it re-books. Cancel takes the remainder.
- */
+/** Bookings and executions carry the feed. Fills outweigh amendments and cancels
+ * together, since a desk executes more than it re-books. Cancel takes the remainder. */
 const CREATE_WEIGHT = 0.46
 const FILL_WEIGHT = 0.34
 const AMEND_WEIGHT = 0.13
@@ -27,15 +24,10 @@ const AMEND_WEIGHT = 0.13
 /** How often an execution closes the ticket rather than leaving a remainder. */
 const COMPLETE_SHARE = 0.55
 
-/**
- * Chooses the next write. Pure: no clock, no database, no timers.
- *
- * `open` is every trade a write can still touch. At `maxTrades` the booking
- * band is skipped and its share goes to the three writes against trades
- * already on the tape, so the table stops growing.
- */
+/** Chooses the next write. Pure: no clock, no database, no timers. At `maxTrades` the
+ * booking band is skipped, its share going to writes against trades already on the
+ * tape, so the table stops growing. */
 export function nextAction(open: readonly Trade[], maxTrades: number, rng: Rng): SimulationAction {
-  // Nothing on the tape, so the only legal move is to book.
   if (open.length === 0) {
     return { kind: 'create', input: createInput(rng) }
   }
@@ -57,10 +49,8 @@ export function nextAction(open: readonly Trade[], maxTrades: number, rng: Rng):
   return cancelAction(open, rng)
 }
 
-/**
- * Built from the same reference data and ticket helpers as the seed.
- * tradeTimestamp is left unset: the service stamps the moment of booking.
- */
+/** Same reference data and ticket helpers as the seed. tradeTimestamp is left
+ * unset: the service stamps the moment of booking. */
 function createInput(rng: Rng): CreateTradeInput {
   const instrument = rng.pick(INSTRUMENTS)
   return {
@@ -75,19 +65,15 @@ function createInput(rng: Rng): CreateTradeInput {
   }
 }
 
-/**
- * Drifts from the trade's own price rather than the instrument reference, so a
- * second amendment moves on from the first instead of snapping back. `version`
- * is the target's current version, so a human amending the same row first wins
- * and this write is rejected as a conflict.
- */
+/** Drifts from the trade's own price, not the instrument reference, so a second
+ * amendment moves on instead of snapping back. `version` is the target's current
+ * version, so a human amending the same row first wins and this write conflicts. */
 function amendAction(active: readonly Trade[], rng: Rng): SimulationAction {
   const target = rng.pick(active)
   return {
     kind: 'amend',
     tradeId: target.tradeId,
     input: {
-      // Quantity and price only: the two fields an amendment can carry.
       quantity: resize(target, rng),
       price: walkPrice(target.price, rng),
       version: target.version,
@@ -95,7 +81,6 @@ function amendAction(active: readonly Trade[], rng: Rng): SimulationAction {
   }
 }
 
-/** Picked from the working trades only, since a filled one cannot fill again. */
 function fillAction(working: readonly Trade[], rng: Rng): SimulationAction {
   const target = rng.pick(working)
   return {
@@ -110,11 +95,9 @@ function cancelAction(open: readonly Trade[], rng: Rng): SimulationAction {
   return { kind: 'cancel', tradeId: target.tradeId, input: { version: target.version } }
 }
 
-/**
- * The cumulative total after this execution: either the rest of the ticket or a
- * whole-lot step beyond what has already filled, so a trade can report twice
- * before it completes. Always advances, which is what the write path demands.
- */
+/** The cumulative total after this execution: the rest of the ticket, or a whole-lot
+ * step beyond what has filled, so a trade can report twice. Always advances, which
+ * the write path demands. */
 function nextFill(target: Trade, rng: Rng): number {
   const remaining = target.quantity - target.filledQuantity
   const lotSize = lotSizeOf(target.symbol) ?? remaining
@@ -125,10 +108,7 @@ function nextFill(target: Trade, rng: Rng): number {
   return target.filledQuantity + lotSize * rng.int(1, lots - 1)
 }
 
-/**
- * Re-rolls the ticket against the instrument's lot size. An unknown instrument
- * keeps the existing quantity.
- */
+/** Re-rolls against the instrument's lot size. An unknown instrument keeps its quantity. */
 function resize(target: Trade, rng: Rng): number {
   const lotSize = lotSizeOf(target.symbol)
   return lotSize === undefined ? target.quantity : ticketSize(lotSize, rng)

@@ -36,12 +36,9 @@ export interface Simulator {
   runOnce: () => Promise<void>
 }
 
-/**
- * The generated trade feed. It writes through the injected service calls rather
- * than publishing frames of its own, so everything it produces inherits the
- * real write path: a gap-free `seq`, a correct `version` chain, a full event
- * history and netted positions.
- */
+/** The generated trade feed. It writes through the injected service calls rather than
+ * publishing its own frames, so it inherits the real write path: a gap-free `seq`, a
+ * correct `version` chain, a full event history, netted positions. */
 export function createSimulator(options: SimulatorOptions): Simulator {
   const { intervalMs, maxTrades, rng, log, bus } = options
 
@@ -77,17 +74,13 @@ export function createSimulator(options: SimulatorOptions): Simulator {
     }
   }
 
-  /**
-   * A re-arming timeout, not setInterval: writes serialise behind an advisory
-   * lock, so a tick slower than the interval would pile ticks up behind it.
-   * Scheduling after a tick finishes makes the interval a floor, not a deadline.
-   */
+  /** A re-arming timeout, not setInterval: writes serialise behind an advisory lock,
+   * so arming after a tick finishes makes the interval a floor, not a deadline. */
   function arm(): void {
     timer = setTimeout(() => {
       void tick()
     }, intervalMs)
-    // Without unref this timer alone keeps the event loop alive, so a process or
-    // a test run would never exit.
+    // Without unref this timer keeps the event loop alive and nothing would exit.
     timer.unref()
   }
 
@@ -95,13 +88,12 @@ export function createSimulator(options: SimulatorOptions): Simulator {
     try {
       await runOnce()
     } catch (error) {
-      // A VERSION_CONFLICT here is expected, not exceptional: two writes to the
-      // same trade in the same instant. Log and carry on.
+      // A VERSION_CONFLICT here is expected: two writes to the same trade at once.
       log.warn({ err: error }, 'simulated trade failed')
     }
 
-    // Checked after the await: stop() may have been called during the tick, and
-    // re-arming then would leave a timer running after the feed was switched off.
+    // After the await: stop() may have run during the tick, and re-arming would leave
+    // a timer running after the feed was switched off.
     if (running) {
       arm()
     }

@@ -2,14 +2,9 @@ import { type Session, session } from '@tapedeck/shared'
 
 const STORAGE_KEY = 'tapedeck.session'
 
-/**
- * Held in sessionStorage, like the trader name it supersedes, so two windows can
- * be signed in as two traders at once. That is the whole point of the handoff
- * demo, and a cookie could only ever hold one of them.
- *
- * Parsed on the way out, not trusted: a hand-edited entry must leave the app on
- * the landing page rather than put arbitrary objects into state.
- */
+/** In sessionStorage, like the trader name it supersedes, so two windows can be two
+ *  traders at once. A cookie holds only one. Parsed on the way out, so a hand-edited
+ *  entry lands on the landing page rather than an arbitrary object in state. */
 export function readSession(): Session | null {
   try {
     const stored = sessionStorage.getItem(STORAGE_KEY)
@@ -28,8 +23,8 @@ export function writeSession(value: Session): void {
   try {
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(value))
   } catch {
-    // Nothing is held in memory instead, deliberately: an in-memory copy would
-    // show the trader on screen while api.ts stamped the default on the write.
+    // No in-memory fallback, deliberately: it would show the trader on screen
+    // while api.ts stamped the default on the write.
   }
 }
 

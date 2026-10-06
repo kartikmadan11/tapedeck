@@ -4,7 +4,6 @@ import type { ReactElement } from 'react'
 import { formatQuantity } from '../../lib/format.js'
 import { CHIP, MICRO_LABEL } from '../../lib/ui.js'
 
-/** The three things that can be done to a row. */
 export type RowActions = {
   onAmend: (trade: Trade) => void
   onCancel: (trade: Trade) => void
@@ -15,38 +14,25 @@ type Props = {
   trade: Trade | null
   pending: boolean
   actions: RowActions
-  /** What the bar says while nothing is picked, so the height it holds is never
-   *  blank. The pane counts its own rows, so it supplies the figure. */
+  /** What the bar says while nothing is picked. The pane counts its own rows. */
   count: string
 }
 
-/**
- * Amending and cancelling are refused on a cancelled trade, and while one of its
- * own writes is in flight. History is always available.
- *
- * Exported because the keyboard path has to enforce the same rule as the
- * buttons: a disabled button that a hotkey bypasses is worse than neither.
- */
+/** No amend or cancel on a cancelled trade, or while its own write is in flight.
+ *  Exported so the keys and the menu enforce the same rule as the buttons. */
 export function canWrite(trade: Trade, pending: boolean): boolean {
   return trade.status !== 'CANCELLED' && !pending
 }
 
-/**
- * Reads back the selected trade and offers the actions for it, and says what the
- * pane is holding while nothing is picked.
- *
- * Always rendered, even with nothing selected, so the grid above it does not
- * resize every time a row is picked or dropped. That is why it carries the row
- * count: a bar that holds its height has to be worth the height it holds.
- */
+/** The selected trade and its actions, or the pane's row count while nothing is
+ *  picked. Always rendered, so picking a row does not resize the grid above it. */
 export function SelectionBar({ trade, pending, actions, count }: Props): ReactElement {
   if (trade === null) {
     return (
       <div className={BAR}>
-        {/* Empty, not absent. The live region has to exist before it has
-          anything to say or the first selection announces nothing, and the
-          count stays outside it: rows arrive every two seconds, and a screen
-          reader reading each new total is noise. */}
+        {/* Empty, not absent: a live region has to exist before it has anything
+          to say, or the first selection announces nothing. The count stays
+          outside it, since rows arrive every two seconds. */}
         <output />
         <span className={MICRO_LABEL}>{count}</span>
       </div>
@@ -57,9 +43,8 @@ export function SelectionBar({ trade, pending, actions, count }: Props): ReactEl
 
   return (
     <div className={BAR}>
-      {/* One live region holding the whole description, so picking a row
-          announces the trade once rather than field by field. An <output> for
-          the role=status it carries by default. */}
+      {/* One live region for the whole description, so a pick announces once
+          rather than field by field. <output> for its default role=status. */}
       <output className="flex items-center gap-2">
         <span className="text-tape-muted">{trade.tradeId}</span>
         <span className={trade.side === 'BUY' ? 'text-tape-buy' : 'text-tape-sell'}>
@@ -106,12 +91,8 @@ export function SelectionBar({ trade, pending, actions, count }: Props): ReactEl
 const BAR =
   'mt-2 flex h-8 shrink-0 items-center gap-2 rounded-sm border border-tape-line bg-tape-panel px-2'
 
-/**
- * The shortcut that reaches this button. aria-hidden is load-bearing: a hidden
- * subtree is excluded from the accessible name, so the button is still named
- * exactly `Amend` rather than `Amend a`. normal-case because the chip uppercases
- * its text.
- */
+/** The shortcut on a button. aria-hidden keeps it out of the accessible name, so
+ *  the button stays named `Amend`, not `Amend a`. */
 function Key({ children }: { children: string }): ReactElement {
   return (
     <span aria-hidden="true" className="ml-1.5 normal-case text-tape-accent">

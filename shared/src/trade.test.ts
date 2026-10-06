@@ -56,8 +56,7 @@ describe('creating a trade', () => {
     ['negative price', { price: '-1.5' }],
     ['float price', { price: 142.75 }],
     ['empty counterparty', { counterparty: '' }],
-    // The whole point of the picklist: a near miss for a real name is still a
-    // different counterparty, and length validation cannot tell them apart.
+    // A near miss for a real name is still a different counterparty.
     ['a counterparty off the list', { counterparty: 'UBSf' }],
     ['empty book', { book: '' }],
     // The near miss that was live: the form prefilled this against EQ-LDN-01.
@@ -77,15 +76,13 @@ describe('creating a trade', () => {
       expect(createTradeInput.parse({ ...validCreate, clientTradeId: KEY }).clientTradeId).toBe(KEY)
     })
 
-    // Optional on purpose: the seed and the simulator book without one, and a
-    // client that sends none still books, it just forfeits the guarantee.
+    // The seed and the simulator book without one, forfeiting the guarantee.
     it('is optional', () => {
       expect(createTradeInput.parse(validCreate).clientTradeId).toBeUndefined()
     })
 
-    // A bound on the key as well as a format. Without it the column is an
-    // arbitrary string a caller chooses, so one client could collide with
-    // another's booking by sending 'ticket-1'.
+    // A bound as well as a format. Without it the key is any string a caller picks,
+    // so two clients could collide on 'ticket-1'.
     it.each(['', 'ticket-1', KEY.slice(0, -1), `${KEY} `])('rejects %o', (value) => {
       expect(createTradeInput.safeParse({ ...validCreate, clientTradeId: value }).success).toBe(
         false,
@@ -110,12 +107,9 @@ describe('amending a trade', () => {
     expect(amendTradeInput.safeParse(withoutVersion).success).toBe(false)
   })
 
-  // These are economic terms of an executed trade: changing one is a different
-  // trade, not an amendment.
-  //
-  // counterparty is in the list for a related but separate reason, argued in the
-  // README: a mis-booking is cancelled and rebooked, and moving the exposure for
-  // real is a novation the incoming party has to agree to.
+  // Economic terms of an executed trade: changing one is a different trade, not an
+  // amendment. counterparty is listed for a separate reason, argued in the README: a
+  // mis-booking is cancelled and rebooked, and moving exposure is a novation.
   it.each([
     'symbol',
     'side',
@@ -148,10 +142,7 @@ describe('filling a trade', () => {
     expect(fillStatus(10_000, 10_000)).toBe('FILLED')
   })
 
-  /**
-   * An amendment can cut the booked quantity below what has already executed,
-   * and the row that results is filled rather than over-filled.
-   */
+  // An amendment can cut the booked quantity below what already executed.
   it('reads a fill above the booked quantity as filled, not as a fourth state', () => {
     expect(fillStatus(12_000, 10_000)).toBe('FILLED')
   })
@@ -168,8 +159,7 @@ describe('filling a trade', () => {
       filledQuantity: 4_000,
       version: 1,
     })
-    // The status follows from the number beside it, so accepting one here would
-    // be accepting a second opinion about the same fact.
+    // The status follows from the number beside it, so no second opinion.
     expect(
       fillTradeInput.safeParse({ filledQuantity: 4_000, version: 1, status: 'FILLED' }).success,
     ).toBe(false)

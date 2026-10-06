@@ -10,22 +10,17 @@ const configSchema = z.object({
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   /** Built frontend assets. Absent in development, where Vite serves them. */
   STATIC_DIR: z.string().optional(),
-  /** Interval between websocket liveness pings. */
   WS_PING_INTERVAL_MS: z.coerce.number().int().positive().default(30_000),
 
-  /**
-   * Not z.coerce.boolean(): that is `Boolean(string)`, so every non-empty value
-   * including "false" would parse as true and the off switch would not work.
-   */
+  /** Not z.coerce.boolean(): that is `Boolean(string)`, so "false" would parse as
+   * true and the off switch would not work. */
   SIMULATION_ENABLED: z
     .enum(['true', 'false'])
     .default('true')
     .transform((value) => value === 'true'),
   SIMULATION_INTERVAL_MS: z.coerce.number().int().positive().default(2_000),
-  /**
-   * The active-trade ceiling, under the 1,000 the specification allows. The feed
-   * stops booking new trades here and only amends and cancels.
-   */
+  /** The active-trade ceiling, under the 1,000 the spec allows. At this point the feed
+   * stops booking and only amends and cancels. */
   SIMULATION_MAX_TRADES: z.coerce.number().int().positive().default(900),
 })
 

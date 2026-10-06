@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { adoptIdentity, DEFAULT_TRADER, readTrader } from './identity.js'
 
 beforeEach(() => {
-  // jsdom keeps both for the whole file, so without this one case's identity, or
-  // the parameter it arrived on, would decide the next one's.
+  // jsdom keeps storage and the address bar for the whole file, so one case's
+  // identity would otherwise decide the next one's.
   sessionStorage.clear()
   window.history.replaceState(null, '', '/')
 })
@@ -19,8 +19,8 @@ describe('the identity a window trades as', () => {
     arriveOn('/?actor=j.okonkwo')
 
     expect(readTrader()).toBe('j.okonkwo')
-    // Consumed rather than read: the same bar carries the workspace link, so left
-    // in it would have whoever was sent that link booking under this name.
+    // Consumed, not read: the same bar carries the workspace link, so left in it
+    // the name would travel to whoever was sent that link.
     expect(window.location.search).toBe('')
   })
 
@@ -43,15 +43,14 @@ describe('the identity a window trades as', () => {
     window.history.replaceState(null, '', '/?panes=1&p1.group=pnl')
     adoptIdentity()
 
-    // A link that does not parse is the one somebody needs to be able to read, and
-    // the bar is the only copy of what they typed.
+    // The bar is the only copy of what was typed.
     expect(window.location.search).toBe('?panes=1&p1.group=pnl')
     expect(readTrader()).toBe(DEFAULT_TRADER)
   })
 
   it('refuses an actor the audit trail could not hold, and still consumes it', () => {
-    // Nothing between here and the event store enforces the bound, so a name
-    // this long would be written and then fail to parse on the way back out.
+    // Nothing downstream enforces the bound, so a name this long is written and
+    // then fails to parse on the way back out.
     arriveOn(`/?actor=${'k'.repeat(65)}`)
 
     expect(readTrader()).toBe(DEFAULT_TRADER)

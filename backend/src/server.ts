@@ -4,10 +4,8 @@ import { loadConfig } from './config.js'
 const config = loadConfig()
 const { app } = await buildApp(config)
 
-/**
- * Close on SIGTERM and SIGINT so a container stop is a clean shutdown: the
- * onClose hook closes websocket clients with 1001 and drains the pool.
- */
+/** Close on SIGTERM and SIGINT so a container stop is clean: the onClose hook closes
+ * websocket clients with 1001 and drains the pool. */
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.once(signal, () => {
     app.log.info({ signal }, 'shutting down')

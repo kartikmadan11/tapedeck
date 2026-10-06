@@ -2,11 +2,9 @@ import { credentials, unauthenticated } from '@tapedeck/shared'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 
 /**
- * Sign-in against the mocked account store.
- *
- * These are the only routes that read the token. The trade routes still take the
- * actor from `x-tapedeck-actor` and remain open, which is where this build stops
- * short of real authentication and is written up in the README's assumptions.
+ * Sign-in against the mocked account store, and the only routes that read the token.
+ * The trade routes still take the actor from `x-tapedeck-actor` and remain open,
+ * which is where this build stops short of real auth. Recorded in the README.
  */
 export function registerAuthRoutes(app: FastifyInstance): void {
   app.post('/api/auth/register', async (request, reply) => {

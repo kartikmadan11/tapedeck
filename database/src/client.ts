@@ -3,12 +3,10 @@ import { Pool, types } from 'pg'
 import * as schema from './schema.js'
 
 /**
- * Asserted rather than assumed: a dependency bump that registered a coercing
- * parser for numeric would silently start rounding prices.
- *
- * int8 is left alone globally. Drizzle converts it per-column via
- * mode: 'number'; a global parser would also catch bigints too large for a
- * double.
+ * Asserted rather than assumed: a dependency bump that registered a coercing parser
+ * for numeric would silently start rounding prices. int8 is left alone globally,
+ * since drizzle converts it per column via mode: 'number' and a global parser would
+ * also catch bigints too large for a double.
  */
 const NUMERIC_OID = 1700
 const numericSample = types.getTypeParser(NUMERIC_OID)('1234.567890') as unknown
@@ -21,10 +19,8 @@ if (typeof numericSample !== 'string') {
 
 export type Database = ReturnType<typeof createDatabase>['db']
 
-/**
- * A transaction handle. It is not assignable to Database, which carries the
- * pool as `$client`, so anything usable in both takes Queryable instead.
- */
+/** Not assignable to Database, which carries the pool as `$client`, so anything
+ * usable in both takes Queryable instead. */
 export type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0]
 
 export type Queryable = Database | Transaction

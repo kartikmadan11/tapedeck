@@ -7,8 +7,7 @@ describe('barScale', () => {
   })
 
   it('leaves an exact 1, 2 or 5 where it is', () => {
-    // The largest trade on the tape draws a bar that reaches the end of the cell,
-    // rather than one stopping short because the scale was rounded past it.
+    // So the largest trade's bar reaches the end of the cell.
     expect(barScale(1_000_000n)).toBe(1_000_000n)
     expect(barScale(2_000_000n)).toBe(2_000_000n)
     expect(barScale(5_000_000n)).toBe(5_000_000n)
@@ -43,8 +42,7 @@ describe('barWidth', () => {
   })
 
   it('draws nothing when there is no scale', () => {
-    // Division by zero in bigint throws rather than giving Infinity, so this is
-    // a guard and not a tidiness.
+    // bigint division by zero throws rather than giving Infinity.
     expect(barWidth(5n, 0n)).toBe(0)
   })
 })

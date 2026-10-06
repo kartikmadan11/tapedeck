@@ -47,11 +47,8 @@ function stateOf(seq: number, trades: Trade[], positions: Position[] = []): Blot
 
 const TAPE_EPOCH = Date.UTC(2026, 9, 2, 9, 0, 0)
 
-/**
- * Trade `index` of a tape, counted back from the most recent, so index 0 is the
- * newest. One second apart, so no two trades tie and the ordering under test is
- * the timestamp rather than the tiebreak.
- */
+/** Trade `index` counted back from the most recent, so 0 is the newest. One second
+ *  apart, so the ordering under test is the timestamp and not the tiebreak. */
 function aTapeTrade(index: number, overrides: Record<string, unknown> = {}): Trade {
   return aTrade({
     tradeId: `TRD-${900_000 - index}`,
@@ -258,11 +255,9 @@ describe('apply: trade deltas', () => {
   })
 })
 
-/**
- * The cache holds the window the server was asked for, not everything it has ever
- * been sent. The feed only ever adds rows, since a cancelled trade stays on the
- * tape, so untrimmed a bounded first load drifts back to unbounded.
- */
+/** The cache holds the window the server was asked for. The feed only adds rows,
+ *  since cancelled trades stay on the tape, so untrimmed a bounded first load
+ *  drifts back to unbounded. */
 describe('apply: the blotter window', () => {
   it('trims a snapshot larger than the window to the most recent BLOTTER_LIMIT', () => {
     const tape = aTape(BLOTTER_LIMIT + 40)
@@ -270,8 +265,7 @@ describe('apply: the blotter window', () => {
     const next = apply(emptyBlotter, { type: 'snapshot', seq: 9, trades: tape, positions: [] })
 
     expect(next.trades).toHaveLength(BLOTTER_LIMIT)
-    // Which end was cut is the whole assertion: trimming the other one would
-    // leave the blotter stuck in the past while the feed ran.
+    // Which end was cut: trimming the other leaves the blotter stuck in the past.
     expect(next.trades[0]?.tradeId).toBe(aTapeTrade(0).tradeId)
     expect(ids(next)).not.toContain(aTapeTrade(BLOTTER_LIMIT).tradeId)
   })
@@ -301,8 +295,7 @@ describe('apply: the blotter window', () => {
 
     expect(next.trades).toHaveLength(BLOTTER_LIMIT)
     expect(ids(next)).not.toContain('TRD-200000')
-    // The cursor still advances: leaving it behind would make the next frame look
-    // like a gap and force a refetch.
+    // The cursor still advances, or the next frame looks like a gap.
     expect(next.seq).toBe(11)
   })
 
@@ -315,8 +308,7 @@ describe('apply: the blotter window', () => {
       trade: aTapeTrade(200, { quantity: 55, version: 2 }),
     })
 
-    // A replacement is one row for one row, so trimming on this path would cost
-    // the oldest trade on every amendment.
+    // One row for one row: trimming here costs the oldest trade per amendment.
     expect(next.trades).toHaveLength(BLOTTER_LIMIT)
     expect(next.trades[200]?.quantity).toBe(55)
     expect(ids(next)).toContain(aTapeTrade(BLOTTER_LIMIT - 1).tradeId)
@@ -338,8 +330,8 @@ describe('apply: positions', () => {
       positions: [aPosition({ netQuantity: 4_000, tradeCount: 2 })],
     })
 
-    // Advancing seq here would make the client discard trade frames between the
-    // cursor and whatever the positions were computed at.
+    // Advancing seq here discards trade frames between the cursor and whatever
+    // the positions were computed at.
     expect(next.seq).toBe(7)
     expect(next.positions[0]).toMatchObject({ netQuantity: 4_000 })
   })
@@ -374,8 +366,7 @@ describe('apply: purity', () => {
       aTrade({ tradeId: 'TRD-100002', tradeTimestamp: '2026-10-02T12:00:00.000Z' }),
     ]
 
-    // Sorting in place would reorder the caller's array, which for a parsed
-    // frame is the only copy of the payload.
+    // Sorting in place reorders the caller's array, the only copy of the payload.
     apply(emptyBlotter, { type: 'snapshot', seq: 2, trades: incoming, positions: [] })
 
     expect(incoming.map((t) => t.tradeId)).toEqual(['TRD-100001', 'TRD-100002'])
@@ -461,8 +452,7 @@ describe('REST writers', () => {
 
     const next = apply(held, { type: 'simulation', running: true, intervalMs: 2_000 })
 
-    // Returning the same object is the assertion: nothing is copied, and the
-    // cursor cannot move.
+    // The same object, not an equal one: nothing copied, so the cursor cannot move.
     expect(next).toBe(held)
   })
 })

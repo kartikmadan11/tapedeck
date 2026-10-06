@@ -8,26 +8,21 @@ export type Point = { x: number; y: number }
 export type MenuItem = {
   label: string
   onSelect: () => void
-  /**
-   * Refused rather than left out, so the menu is the same list every time it
-   * opens and no item moves under a pointer going on muscle memory.
-   */
+  /** Refused, never left out: the list is the same every time it opens, so no
+   *  item moves under a pointer going on muscle memory. */
   disabled?: boolean | undefined
-  /** Draws a rule above this item, which is all the grouping the list needs. */
+  /** Draws a rule above this item. */
   separated?: boolean | undefined
-  /** The key that does the same thing from the grid, shown so the menu teaches
-   *  it. Announced through aria-keyshortcuts, so it stays out of the item's name. */
+  /** The key that does the same from the grid. Announced through
+   *  aria-keyshortcuts, so it stays out of the item's name. */
   keys?: string | undefined
-  /**
-   * For an item that opens something and leaves it open: the panel still has to
-   * be announced as open, which a plain menu item cannot say.
-   */
+  /** For an item that opens something and leaves it open after the menu closes. */
   expanded?: boolean | undefined
   controls?: string | undefined
 }
 
 type Props = {
-  /** Names the menu, which is the pane it belongs to. */
+  /** Names the menu: the pane it belongs to. */
   label: string
   at: Point
   items: readonly MenuItem[]
@@ -41,25 +36,18 @@ const OFFSET = 2
 /** Keeps the sheet off the edge when it is opened near one. */
 const PAD = 4
 
-/**
- * A pane's own controls, on the pane rather than on its bar.
- *
- * Shift falls through to the browser's own menu, which is the convention on a
- * grid that takes over right-click, and the reason the sheet says so.
- */
+/** A pane's own context menu: a portaled sheet with a roving tabindex. */
 export function PaneMenu({ label, at, items, onDismiss }: Props): ReactElement {
   const sheet = useRef<HTMLDivElement>(null)
   const buttons = useRef<(HTMLButtonElement | null)[]>([])
   const [point, setPoint] = useState<Point>(at)
 
-  /**
-   * Which item the arrow keys are on, as a roving tabindex rather than as focus
-   * following the pointer, which would lose the keyboard's place on every hover.
-   */
+  /** Which item the arrow keys are on: a roving tabindex, so a hover does not
+   *  lose the keyboard's place. */
   const [active, setActive] = useState(() => firstEnabled(items))
 
-  // Declared before the effect that takes focus, so what it reads is whatever
-  // had focus before the menu opened rather than the menu itself.
+  // Must come before the effect that takes focus, or this reads the menu itself
+  // rather than whatever had focus before it opened.
   useEffect(() => {
     const opener = document.activeElement
     return () => {
@@ -73,9 +61,8 @@ export function PaneMenu({ label, at, items, onDismiss }: Props): ReactElement {
     buttons.current[active]?.focus()
   }, [active])
 
-  // Measured rather than guessed, because the sheet's height is the number of
-  // items and a menu opened near the bottom of the window would otherwise run
-  // off it. jsdom reports no width, which is the one case this leaves alone.
+  // Measured, since the sheet's height is its item count: a menu opened near an
+  // edge would otherwise run off it. Width 0 is jsdom, which has no layout.
   useLayoutEffect(() => {
     const box = sheet.current?.getBoundingClientRect()
     if (box === undefined || box.width === 0) {
@@ -95,8 +82,8 @@ export function PaneMenu({ label, at, items, onDismiss }: Props): ReactElement {
       onDismiss()
     }
 
-    // Capture on scroll, because what scrolls is the pane's own tape rather than
-    // the page: a menu left behind would be pointing at a row that has moved.
+    // Capture on scroll: what scrolls is the pane's tape, not the page, and a
+    // menu left behind would point at a row that has moved.
     document.addEventListener('pointerdown', outside, true)
     document.addEventListener('scroll', onDismiss, true)
     window.addEventListener('resize', onDismiss)
@@ -131,8 +118,8 @@ export function PaneMenu({ label, at, items, onDismiss }: Props): ReactElement {
     setActive((from) => step(items, from, event.key === 'ArrowDown' ? 1 : -1))
   }
 
-  // Portaled to the body, because a pane is a flex item inside two levels of
-  // overflow-hidden and a sheet drawn inside one would be clipped by it.
+  // Portaled to the body: a pane sits inside two levels of overflow-hidden,
+  // which would clip the sheet.
   return createPortal(
     <div
       className="fixed z-40 min-w-44 rounded-xs border border-tape-line bg-tape-panel py-1 shadow-lg"
@@ -161,8 +148,7 @@ export function PaneMenu({ label, at, items, onDismiss }: Props): ReactElement {
               type="button"
             >
               {item.label}
-              {/* aria-hidden: the shortcut is on the button as a property of it,
-                  so reading it as text would say it twice. */}
+              {/* aria-hidden: aria-keyshortcuts above already announces it. */}
               {item.keys === undefined ? null : (
                 <span aria-hidden="true" className="ml-auto text-tape-accent">
                   {item.keys}
@@ -177,16 +163,12 @@ export function PaneMenu({ label, at, items, onDismiss }: Props): ReactElement {
   )
 }
 
-/** The first item that can be chosen, so a menu never opens with focus on a
- *  refused one. */
+/** The first item that can be chosen, so a menu never opens on a refused one. */
 function firstEnabled(items: readonly MenuItem[]): number {
   return step(items, -1, 1)
 }
 
-/**
- * The next item in a direction, skipping what cannot be chosen and wrapping at
- * either end.
- */
+/** The next choosable item in a direction, wrapping at either end. */
 function step(items: readonly MenuItem[], from: number, direction: number): number {
   for (let moved = 1; moved <= items.length; moved += 1) {
     const index = (((from + direction * moved) % items.length) + items.length) % items.length

@@ -16,15 +16,10 @@ interface Account {
   key: Buffer
 }
 
-/**
- * Mocked sign-in, kept in one class so the boundary is easy to find: accounts and
- * tokens are two Maps in this process, so a restart signs everyone out and a
- * second instance shares nothing. A real build replaces this file and its route,
- * and nothing else.
- *
- * Passwords are salted and hashed with scrypt even so, because a mock is exactly
- * what a plaintext store gets copied from.
- */
+/** Mocked sign-in in one class, so the boundary is easy to find. Accounts and tokens are
+ * two in-process Maps: a restart signs everyone out and a second instance shares nothing.
+ * A real build replaces this file and its route. Salted and scrypt-hashed even so,
+ * because a mock is what a plaintext store gets copied from. */
 export class AuthService {
   private readonly accounts = new Map<string, Account>()
 
@@ -62,8 +57,7 @@ export class AuthService {
     return this.mint(username)
   }
 
-  /** Not an error twice over: a window that has lost track of its token still
-   *  wants out. */
+  /** Not an error twice over: a window that lost track of its token still wants out. */
   logout(token: string | null): void {
     if (token !== null) {
       this.tokens.delete(token)

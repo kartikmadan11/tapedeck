@@ -54,90 +54,52 @@ type Props = {
   pendingIds: ReadonlySet<string>
   actions: RowActions
 
-  /**
-   * Names the pane. Two grids with the same accessible name are two grids a
-   * screen reader cannot tell apart.
-   */
+  /** Names the pane. Two grids with one name cannot be told apart. */
   label?: string | undefined
 
-  /**
-   * The view this pane opens on. Once mounted the pane owns its own state, which
-   * keeps a keystroke in one pane's filter box from re-rendering the other.
-   */
+  /** The view this pane opens on. Once mounted the pane owns its own state, so a
+   *  keystroke in one pane's filter box does not re-render the other. */
   initialConfig?: PaneConfig | undefined
 
-  /**
-   * Reports the view back out whenever it changes.
-   *
-   * Must be stable for the pane's life. It is a dependency of the effect that
-   * calls it, so a fresh function on every render would report on every render.
-   */
+  /** Reports the view back out. Must be stable: it is a dependency of the effect
+   *  that calls it, so a fresh function would report on every render. */
   onConfigChange?: ((config: PaneConfig) => void) | undefined
 
-  /**
-   * Opens another pane on the view this one currently holds. Omitted when there
-   * is no workspace to add it to, which is also what hides the button.
-   */
+  /** Duplicates this pane on its current view. Omitted with no workspace. */
   onDuplicate?: ((config: PaneConfig) => void) | undefined
 
-  /**
-   * Omitted on the first pane, which is permanent. Absence is the whole
-   * mechanism: there is no way to render a Close button that would empty the
-   * workspace.
-   */
+  /** Omitted on the first pane, which is permanent: absence is the mechanism. */
   onClose?: (() => void) | undefined
 
-  /**
-   * Opens another pane on the default view. Omitted when the workspace is at its
-   * ceiling, which greys the menu item rather than dropping it.
-   */
+  /** Opens a pane on the default view. Omitted at the workspace ceiling, which
+   *  greys the menu item rather than dropping it. */
   onNewPane?: (() => void) | undefined
 
   /** Copies a link to the whole workspace, not to this pane. */
   onShare?: (() => void) | undefined
 
-  /**
-   * The handle this pane is moved by, rendered at the head of its filter bar. A
-   * node rather than a callback, because what it takes to move a pane is the
-   * arranging component's business. Omitted when there is nothing to arrange.
-   */
+  /** The handle this pane is moved by, at the head of its filter bar. A node, so
+   *  moving a pane stays the arranging component's business. */
   grip?: ReactNode | undefined
 
-  /**
-   * The pane's name, shown on the bar beside the handle and edited there.
-   * `label` is the same name as a string, which is what the grid needs for its
-   * own accessible name.
-   */
+  /** The pane's name as an editable node, beside the grip. `label` is the same
+   *  name as a string, which is what the grid's accessible name needs. */
   nameplate?: ReactNode | undefined
 }
 
-/**
- * Sticks the leftmost visible column. Positional, not a named column: left-0 is
- * right for exactly one column, and which one is leftmost changes.
- *
- * The right border is drawn by the cell, which is why the table is
- * border-separate: in collapsed mode the table paints it and it scrolls away.
- */
+/** Sticks the leftmost visible column. Positional, since which column is leftmost
+ *  changes. The border is on the cell, which is why the table is border-separate. */
 const PINNED = 'sticky left-0 z-10 border-r border-tape-line'
 
-/**
- * A row's height in pixels, which is `h-8` on the tr below. The virtualiser is
- * told this rather than measuring, so the two have to be changed together or
- * the tape scrolls to the wrong place.
- */
+/** The `h-8` on the tr below, in pixels. The virtualiser is told this rather than
+ *  measuring, so the two must change together or the tape scrolls wrong. */
 const ROW_PX = 32
 
-/**
- * Divides one block of a split from the next, in the header and down the body,
- * so a row is read across in blocks rather than as one run of figures.
- */
+/** Divides one block of a split from the next, in the header and down the body. */
 const BLOCK_EDGE = 'border-l border-tape-line'
 
-/**
- * Whether a column is where a block starts: either a block's own heading, which
- * spans the measures below it, or the first of those measures. Nothing starts a
- * block while there is no split, since nothing has a parent.
- */
+/** Where a block starts: a block's own heading, or the first measure under it.
+ *  Nothing starts a block without a split, since nothing has a parent. */
 function startsBlock(column: Column<Trade, unknown>): boolean {
   const block = column.parent
   return block === undefined ? column.columns.length > 0 : block.columns[0]?.id === column.id
@@ -162,24 +124,17 @@ export function BlotterTable({
     initialConfig.columnFilters,
   )
 
-  /**
-   * Two things rather than two levels. grouping[0] cuts the rows; grouping[1] is
-   * the column the measures are pivoted across, which is columns and not a
-   * second level of rows, so the table is only ever told the first. Groups start
-   * closed.
-   */
+  /** Two things, not two levels: [0] cuts the rows, [1] is the column the
+   *  measures are pivoted across. The table is only ever told the first, since
+   *  the second is columns rather than a second level of rows. */
   const [grouping, setGrouping] = useState<GroupingState>(initialConfig.grouping)
   const [expanded, setExpanded] = useState<ExpandedState>({})
 
   const groupBy = grouping[0]
   const splitBy = grouping[1]
 
-  /**
-   * The columns the trader chose, which is not the same thing as the columns on
-   * screen: while there is a grouping, the ones a group row cannot answer for
-   * are dropped over the top of this. Held separately rather than written into,
-   * so clearing the grouping gives back exactly what they had.
-   */
+  /** The columns the trader chose, not the ones on screen: a grouping drops its
+   *  own over the top. Kept separate, so clearing the grouping gives them back. */
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
     initialConfig.columnVisibility,
   )
@@ -191,10 +146,7 @@ export function BlotterTable({
   /** One level, whatever the grouping holds. */
   const rowGrouping = useMemo(() => (groupBy === undefined ? [] : [groupBy]), [groupBy])
 
-  /**
-   * The split's blocks, which the column model below is rebuilt on. Empty when
-   * the grouping asks for no split, or for one its column cannot divide.
-   */
+  /** The split's blocks. Empty when there is no split, or none it can divide by. */
   const blocks = useMemo(() => splitBlocks(trades, splitBy), [trades, splitBy])
   const pivoted = blocks !== ''
 
@@ -203,37 +155,26 @@ export function BlotterTable({
     [columnVisibility, groupBy, pivoted],
   )
 
-  /**
-   * Resolved against the trader's own record, not against the one the table was
-   * given. TanStack hands an updater the state it is holding, so taken as given
-   * a single tick in the panel would bake every one of the grouping's drops into
-   * the trader's choice.
-   */
+  /** Resolved against the trader's own record, not the one the table holds.
+   *  TanStack hands an updater its own state, so one tick in the panel would
+   *  bake every one of the grouping's drops into the trader's choice. */
   const onVisibilityChange = useCallback((updater: Updater<VisibilityState>) => {
     setColumnVisibility((own) => (typeof updater === 'function' ? updater(own) : updater))
   }, [])
 
-  /**
-   * Which groups are open is deliberately not reported. It is a reading position
-   * rather than a view, so it is not in PaneConfig and so it cannot be shared.
-   */
+  // `expanded` is left out on purpose: a reading position, not part of the view.
   useEffect(() => {
     onConfigChange?.({ sorting, columnFilters, grouping, columnVisibility, columnOrder })
   }, [onConfigChange, sorting, columnFilters, grouping, columnVisibility, columnOrder])
 
   const [configOpen, setConfigOpen] = useState(false)
-  // Generated rather than a literal, because the panel is per grid and a second
-  // grid's toggle must not have its aria-controls pointing at this one's panel.
-  // The filter boxes hang their suggestion lists off it for the same reason.
+  // Generated, not a literal: a second grid's aria-controls must not point at
+  // this panel. The filter boxes hang their suggestion lists off it too.
   const configPanelId = useId()
 
   const suggestions = useMemo(() => suggestionsOf(trades), [trades])
 
-  /**
-   * Back to the view a pane opens on: no sort, no filters, no grouping, and the
-   * columns the default shows in the order it shows them. Not back to the
-   * trades, the name or the size.
-   */
+  /** Back to the view a pane opens on, not to its trades, name or size. */
   const reset = useCallback(() => {
     setSorting(DEFAULT_VIEW.sorting)
     setColumnFilters(DEFAULT_VIEW.columnFilters)
@@ -249,20 +190,13 @@ export function BlotterTable({
 
   const flashing = useRowFlash(trades)
 
-  /**
-   * Held as an id rather than as a row: the selected trade is re-read from the
-   * data on every render, so a frame that amends or cancels it updates the bar
-   * instead of leaving a stale copy there. An id also survives a sort, a filter
-   * and a reorder, which an index would not.
-   */
+  /** An id, not a row or an index: the trade is re-read each render, so a frame
+   *  that amends it updates the bar, and a sort or filter cannot strand it. */
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
-  /**
-   * The base columns, plus one block of measures per split value. The base
-   * measures stay in the model and go dark instead of being taken out: the Where
-   * boxes filter on them, and TanStack silently skips a filter whose column it
-   * cannot resolve.
-   */
+  /** The base columns, plus one block of measures per split value. The base
+   *  measures are hidden rather than removed: the Where boxes filter on them, and
+   *  TanStack silently skips a filter whose column it cannot resolve. */
   const columns = useMemo(
     () =>
       splitBy === undefined || blocks === ''
@@ -285,23 +219,20 @@ export function BlotterTable({
     },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
-    // No onGroupingChange. The pane's grouping holds the row level and the
-    // split, the table is told only the first, so a handler taking back what the
-    // table reports would drop the second. The config panel writes it instead.
+    // No onGroupingChange: the table is told only the row level, so taking its
+    // report back would drop the split. The config panel writes it instead.
     onExpandedChange: setExpanded,
     onColumnVisibilityChange: onVisibilityChange,
     onColumnOrderChange: setColumnOrder,
-    // Without this a sort or a filter would renumber the rows and React would
-    // reuse the wrong row for the wrong trade.
+    // Without this, a sort would renumber the rows and React would reuse the
+    // wrong row for the wrong trade.
     getRowId: (row) => row.tradeId,
-    // Moves the columns being grouped on to the front, which is where the
-    // labels belong: Book grouped and left in place would put the label after
-    // the figures it heads. Safe only because of the drop above, which takes the
-    // pinned Trade column off a grouped grid. Without that, reorder displaces it
-    // from position 0 and takes the selection marker's first cell with it.
+    // Hoists the grouped column to the front, where its label belongs. Safe only
+    // because the grouping also drops the pinned Trade column: otherwise reorder
+    // moves it off position 0 and takes the selection marker with it.
     groupedColumnMode: 'reorder',
-    // Default is on, and the feed replaces the data every two seconds, so
-    // without this every open group would snap shut on each frame.
+    // Default is on, and the feed replaces the data every two seconds, so every
+    // open group would snap shut on each frame.
     autoResetExpanded: false,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -313,14 +244,9 @@ export function BlotterTable({
   const rows = table.getRowModel().rows
   const leaves = table.getFilteredRowModel().rows
 
-  /**
-   * What the rail under the tape says while no row is picked. Leaves either way,
-   * so a grouping does not turn the count into a number of rails.
-   *
-   * A full window says `latest`, because the figure stops being a count of the
-   * book at that point and starts being the bound: a booking arrives at the top
-   * and the oldest trade leaves the bottom, so 500 holds while the tape moves.
-   */
+  /** What the rail says while no row is picked. Leaves either way, so a grouping
+   *  does not turn the count into a number of rails. A full window says `latest`:
+   *  at the bound the figure is no longer a count of the book. */
   const held =
     trades.length === BLOTTER_LIMIT ? `latest ${BLOTTER_LIMIT} trades` : `${trades.length} trades`
   const counted = leaves.length === trades.length ? held : `${leaves.length} of ${held}`
@@ -328,14 +254,9 @@ export function BlotterTable({
   /** Two bands under a split, the blocks above the measures they span. One otherwise. */
   const headerRows = table.getHeaderGroups()
 
-  /**
-   * What a full-width magnitude bar means. Taken over the filtered leaves, so
-   * the bars measure what is on screen.
-   *
-   * useMemo on the row model's identity, not on a length, because the model is
-   * replaced when the data is and the largest trade can change without the count
-   * changing.
-   */
+  /** What a full-width bar means, over the filtered leaves so the bars measure
+   *  what is on screen. Memoised on the row model's identity, not a length: the
+   *  largest trade can change without the count changing. */
   const notionalScale = useMemo(() => {
     let max = 0n
 
@@ -349,12 +270,9 @@ export function BlotterTable({
     return barScale(max)
   }, [leaves])
 
-  /**
-   * The shortcuts are bound to the table, so focus has to be on it for them to
-   * fire, and a cell is not focusable. Clicking a row therefore moves focus to
-   * the table. preventScroll because the row is already in view and the browser
-   * would otherwise jump the grid to it.
-   */
+  /** The shortcuts are bound to the table, and no cell is focusable, so clicking
+   *  a row moves focus here. preventScroll at the call site, since the row is
+   *  already in view. */
   const grid = useRef<HTMLTableElement>(null)
 
   /** The element the rows scroll inside, which the virtualiser measures. */
@@ -363,15 +281,9 @@ export function BlotterTable({
   /** The pane itself, for telling a pointer inside it from one somewhere else. */
   const pane = useRef<HTMLElement>(null)
 
-  /**
-   * estimateSize is a constant and nothing is measured, because every row is
-   * exactly ROW_PX tall by construction: the height is on the tr and no cell
-   * carries vertical padding. A group row is the same height as a trade row.
-   *
-   * No getItemKey. The virtualiser is keyed by position in the row model and
-   * React is keyed by trade id below, which is the pairing that lets a sort
-   * reorder the tape without reusing a row for the wrong trade.
-   */
+  /** estimateSize is constant: every row is exactly ROW_PX tall. No getItemKey,
+   *  so the virtualiser keys by row-model position while React keys by trade id,
+   *  which lets a sort reorder the tape without reusing a row for a wrong trade. */
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scroller.current,
@@ -382,20 +294,12 @@ export function BlotterTable({
 
   const drawn = virtualizer.getVirtualItems()
 
-  /**
-   * The gaps above and below the drawn rows, held open by two empty tr elements.
-   * A tr cannot be taken out of flow without destroying the table, which is
-   * where the row and cell semantics behind role=grid come from.
-   */
+  /** The gaps above and below the drawn rows, held open by the spacer rows. */
   const above = drawn[0]?.start ?? 0
   const below = virtualizer.getTotalSize() - (drawn.at(-1)?.end ?? 0)
 
-  /**
-   * Group rows are deliberately not selectable, as a correctness guard. TanStack
-   * builds a group row from its first leaf trade's data, so a selected group
-   * header would offer Amend and Cancel against an arbitrary row inside the
-   * group. Clicking a group row opens it instead.
-   */
+  /** Group rows are not selectable: TanStack builds one from its first leaf, so
+   *  selecting it would offer Amend against an arbitrary trade. It opens instead. */
   const select = useCallback((row: Row<Trade>) => {
     if (row.getIsGrouped()) {
       row.toggleExpanded()
@@ -406,15 +310,9 @@ export function BlotterTable({
     grid.current?.focus({ preventScroll: true })
   }, [])
 
-  /**
-   * A pointer down away from the pane drops its selection, which is what
-   * clicking off a row means. Escape already did it from the keyboard.
-   *
-   * A layer raised over the tape does not count as away: the two dialogs, the
-   * history drawer, both menus and every dropdown are opened by the pane or by
-   * the row that is selected, and they sit or portal outside it. Without that,
-   * confirming a cancel would deselect the trade it names.
-   */
+  /** A pointer down away from the pane drops the selection. A raised layer does
+   *  not count as away: dialogs, menus and dropdowns portal outside the pane, and
+   *  confirming a cancel must not deselect the trade it names. */
   useEffect(() => {
     if (selectedId === null) {
       return
@@ -432,16 +330,13 @@ export function BlotterTable({
       setSelectedId(null)
     }
 
-    // Capture, as the menus do, so a handler that stops the event on its way up
-    // cannot leave a row selected in a pane nobody is pointing at.
+    // Capture, so a handler that stops the event on its way up cannot defeat this.
     document.addEventListener('pointerdown', away, true)
     return () => document.removeEventListener('pointerdown', away, true)
   }, [selectedId])
 
-  /**
-   * Resolved from what is actually on screen. Both the buttons and the keys read
-   * these, so a hotkey cannot do what the matching disabled button refuses.
-   */
+  /** Read by the buttons and the keys alike, so a hotkey cannot do what the
+   *  matching disabled button refuses. */
   const selected = selectedId === null ? null : (rows.find((row) => row.id === selectedId) ?? null)
   const selectedTrade = selected?.original ?? null
   const writable =
@@ -456,8 +351,7 @@ export function BlotterTable({
         return
       }
 
-      // Steps through the sorted, filtered and grouped order, which is the order
-      // on screen.
+      // The sorted, filtered and grouped order, which is the order on screen.
       const current = rows.findIndex((row) => row.id === selectedId)
       const next = nextSelectable(rows, current, event.key === 'ArrowDown' ? 1 : -1)
 
@@ -469,9 +363,8 @@ export function BlotterTable({
 
       if (id !== undefined) {
         setSelectedId(id)
-        // Through the virtualiser, not the DOM. A row outside the drawn window
-        // has no element, so looking one up by trade id would find nothing and
-        // scroll nowhere, silently.
+        // Through the virtualiser, not the DOM: a row outside the drawn window
+        // has no element, so a lookup by trade id would scroll nowhere, silently.
         virtualizer.scrollToIndex(next, { align: 'auto' })
       }
       return
@@ -498,23 +391,17 @@ export function BlotterTable({
   }
 
   return (
-    // Wraps the whole grid rather than the table, so the bars and the config
-    // panel are all reading the same filtered rows.
+    // Wraps the grid, not the table, so the bars and the panel read the same rows.
     <MagnitudeScale minor={notionalScale}>
-      {/*
-       * min-w-0 is load-bearing. A flex item keeps min-width:auto, and every cell
-       * is whitespace-nowrap, so without it this section cannot shrink below the
-       * full width of all twelve columns and pushes the positions panel off
-       * screen.
-       */}
+      {/* min-w-0 is load-bearing: a flex item keeps min-width:auto and every cell
+          is whitespace-nowrap, so this would never shrink below twelve columns. */}
       <section
         aria-label={label}
         className="flex min-h-0 min-w-0 flex-1 flex-col"
         ref={pane}
-        // On the pane rather than on the tape, so the bar, the rows and the
-        // config panel all answer to the same right-click. Shift is let through
-        // to the browser's own menu, and so is a box someone is typing in: cut,
-        // copy and paste belong to the field.
+        // On the pane, so the bar, the rows and the panel answer to one
+        // right-click. Shift falls through to the browser's own menu, as does a
+        // box someone is typing in: cut, copy and paste belong to the field.
         onContextMenu={(event) => {
           const field =
             event.target instanceof Element ? event.target.closest('input, select, textarea') : null
@@ -523,10 +410,8 @@ export function BlotterTable({
           }
           event.preventDefault()
 
-          // A right-click on a row picks it first, so the three trade items and
-          // the rail below them are about the row under the pointer rather than
-          // whatever was picked before. A right-click anywhere else leaves the
-          // selection alone: the menu is still about it.
+          // A right-click on a row picks it first, so the menu is about the row
+          // under the pointer. Off a row, the selection is left alone.
           const id =
             event.target instanceof Element
               ? event.target.closest('[data-trade-id]')?.getAttribute('data-trade-id')
@@ -535,8 +420,8 @@ export function BlotterTable({
             setSelectedId(id)
           }
 
-          // A context menu raised from the keyboard carries no coordinates in
-          // every browser, so the pane's own corner is the fallback.
+          // Shift-F10 and the menu key raise a contextmenu with no coordinates,
+          // so the pane's own corner is the fallback.
           const corner = event.currentTarget.getBoundingClientRect()
           const keyed = event.clientX === 0 && event.clientY === 0
           setMenuAt(
@@ -558,13 +443,9 @@ export function BlotterTable({
           <PaneMenu
             at={menuAt}
             items={[
-              /**
-               * The row's three actions, first, because a right-click on a trade
-               * is about the trade. Refused rather than left out when nothing is
-               * picked, so the items below them never move. Same rule as the
-               * chips and the keys: a menu item that did what a disabled chip
-               * refuses would be a third answer to one question.
-               */
+              // The row's three actions first, since a right-click on a trade is
+              // about the trade. Refused rather than left out when nothing is
+              // picked, so the items below never move and no key beats a chip.
               {
                 label: 'Amend trade',
                 onSelect: () => {
@@ -618,8 +499,7 @@ export function BlotterTable({
               {
                 label: configOpen ? 'Hide config' : 'Config',
                 onSelect: () => setConfigOpen((open) => !open),
-                // The panel outlives the menu that opened it, so the item is
-                // the only thing left that can say it is open.
+                // The panel outlives the menu, so the item is what says it is open.
                 controls: configPanelId,
                 expanded: configOpen,
               },
@@ -641,90 +521,66 @@ export function BlotterTable({
           />
         )}
 
-        {/* The panel is a sibling of the grid, not an overlay on it, so opening it
-          shrinks the tape instead of covering the columns being read. */}
+        {/* A sibling of the grid, so opening the panel shrinks the tape. */}
         <div className="flex min-h-0 flex-1">
-          {/*
-           * pb leaves the horizontal scrollbar somewhere to sit that is not on top
-           * of the last row of the tape. focus-within rather than focus, because
-           * what takes focus is the table inside, and a ring drawn on that would
-           * scroll away with it.
-           */}
+          {/* pb keeps the horizontal scrollbar off the last row. focus-within, not
+              focus: the table inside takes focus, and a ring on it would scroll
+              away with it. */}
           <div
             ref={scroller}
             className="tape-scroll min-w-0 flex-1 overflow-auto rounded-sm border border-tape-line pb-2.5 focus-within:border-tape-focus"
           >
-            {/*
-             * border-separate, not border-collapse. In collapsed mode the table
-             * paints cell borders rather than the cell doing it, so the border on a
-             * sticky cell scrolls away and leaves the pinned columns unedged.
-             * Row borders are ignored in separate mode, so they move to the cells.
-             *
-             * table-fixed with the colgroup below is what virtualisation requires:
-             * widths come from the columns and no cell is ever measured, so the
-             * figures stay in line as rows scroll through. minWidth is the stated
-             * total, and w-full lets a wide screen share out the slack.
-             */}
+            {/* border-separate: collapsed mode paints borders on the table, so a
+                sticky cell's border scrolls away and the pinned column is left
+                unedged. Separate mode ignores row borders, hence borders on the
+                cells. table-fixed and the colgroup take the widths from the
+                columns, never from a measured cell, which virtualisation needs. */}
             <table
               ref={grid}
               style={{ minWidth: table.getTotalSize() }}
-              // grid rather than the default table role, because this one is
-              // operated: it owns a selection and the keys that move it. Binding
-              // those keys here rather than on the document keeps them from
-              // firing underneath an open dialog, and from reaching a trader
-              // typing BARC into the symbol filter.
+              // role=grid because this table is operated: it owns a selection and
+              // the keys that move it. Bound here, not on the document, so they do
+              // not fire under an open dialog or inside the filter boxes.
               //
               // biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: table is the one element ARIA in HTML allows role=grid on, and it is the APG data-grid pattern. The rule's fix, replacing the table with a div, would cost the real row and cell semantics.
               role="grid"
               tabIndex={0}
               aria-label={`${label}. Use the arrow keys to select a row.`}
-              // The whole tape plus the header bands, not the handful of rows
-              // drawn. Without it a virtualised grid tells a screen reader it
-              // holds only the rows that happen to be on screen.
+              // The whole tape plus the header bands: otherwise a virtualised grid
+              // reports only the rows that happen to be drawn.
               aria-rowcount={rows.length + headerRows.length}
               onKeyDown={onKeyDown}
               className="w-full table-fixed border-separate border-spacing-0 text-left focus:outline-none"
             >
-              {/* Driven by the visible leaves, so hiding a column takes its
-                  width with it rather than leaving the header, the body and the
-                  layout disagreeing about which column is which. */}
+              {/* Driven by the visible leaves, so hiding a column takes its width
+                  with it and the header, body and layout stay in step. */}
               <colgroup>
                 {table.getVisibleLeafColumns().map((column) => (
                   <col key={column.id} style={{ width: column.getSize() }} />
                 ))}
               </colgroup>
 
-              {/*
-               * Opaque, not tinted. A sticky header paints in the same stacking
-               * context as the rows moving beneath it, so any transparency lets row
-               * text slide through.
-               *
-               * z-20 against the pinned cell's z-10, so the header's own pinned
-               * corner wins over the body cells it crosses.
-               */}
+              {/* Opaque, not tinted: a sticky header shares a stacking context with
+                  the rows under it, so transparency lets row text through. z-20
+                  beats the pinned cell's z-10, so the header's corner wins. */}
               <thead className="sticky top-0 z-20 bg-tape-panel">
                 {headerRows.map((group, band) => (
-                  // The band height lives here and the cells carry no vertical
-                  // padding.
+                  // The band height lives here; the cells carry no vertical padding.
                   <tr key={group.id} aria-rowindex={band + 1} className="h-8">
                     {group.headers.map((header, index) => {
                       const meta = header.column.columnDef.meta
-                      // A block's own heading, which names the value its measures
-                      // are netted over and so is centred over them rather than
-                      // right-aligned on one of them.
+                      // A block's own heading, centred over its measures rather
+                      // than right-aligned on one of them.
                       const spanning = header.colSpan > 1
 
                       return (
                         <th
                           key={header.id}
-                          // Without it the heading sits over the first of the
-                          // measures it names instead of across them.
+                          // Without it the heading sits over the first measure.
                           colSpan={header.colSpan}
                           // A pinned header needs its own background: the thead's
-                          // scrolls sideways with the table, so it cannot be what
-                          // hides the columns passing underneath.
-                          // meta.className stays last: it is what right-aligns the
-                          // numeric headers over their columns.
+                          // scrolls sideways with the table. meta.className stays
+                          // last, since it right-aligns the numeric headers.
                           className={`whitespace-nowrap border-b border-tape-line bg-tape-panel px-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-tape-muted ${
                             index === 0 ? PINNED : ''
                           } ${startsBlock(header.column) ? BLOCK_EDGE : ''} ${
@@ -749,9 +605,8 @@ export function BlotterTable({
                     return null
                   }
 
-                  // Read first, because a group row's original is its first leaf
-                  // trade: taken at face value it would show that trade's status
-                  // and pending state as if they were the group's.
+                  // Read first: a group row's original is its first leaf trade, so
+                  // its status and pending state are not the group's.
                   const grouped = row.getIsGrouped()
                   const cancelled = !grouped && row.original.status === 'CANCELLED'
                   const pending = !grouped && pendingIds.has(row.original.tradeId)
@@ -761,14 +616,12 @@ export function BlotterTable({
                     return (
                       <tr
                         key={row.id}
-                        // Past the header bands, and one more because
-                        // aria-rowindex is 1-based.
+                        // Past the header bands, plus one: aria-rowindex is 1-based.
                         aria-rowindex={item.index + headerRows.length + 1}
                         // No data-trade-id: this is not a trade row.
                         aria-expanded={row.getIsExpanded()}
-                        // bg-tape-panel, the header's colour, so a group reads as a
-                        // rail across the tape rather than as a trade on it. No
-                        // flash and no pending fade for the same reason.
+                        // The header's colour, so a group reads as a rail rather
+                        // than a trade. No flash and no pending fade either.
                         className="h-8 cursor-pointer bg-tape-panel hover:bg-tape-raised"
                         onClick={() => row.toggleExpanded()}
                       >
@@ -784,18 +637,13 @@ export function BlotterTable({
                       key={row.id}
                       aria-rowindex={item.index + headerRows.length + 1}
                       data-trade-id={row.id}
-                      // The only thing that tells a screen reader what the tint
-                      // means.
+                      // The only thing that tells a screen reader what the tint means.
                       aria-selected={isSelected}
                       className={[
-                        // One background, chosen, not two layered: two background
-                        // utilities in a class list resolve by Tailwind's output
-                        // order rather than by which was written last.
-                        //
-                        // Both are opaque because the pinned cell inherits this
-                        // colour and a translucent one would not hide the columns
-                        // sliding behind it. No transition here, since one on
-                        // background-color would smear the flash past its 900ms.
+                        // One background, chosen rather than layered: two utilities
+                        // resolve by Tailwind's output order. Both opaque, since the
+                        // pinned cell inherits this and must hide what is behind it.
+                        // No transition, or it would smear the flash past its 900ms.
                         'h-8 cursor-pointer',
                         isSelected ? 'bg-tape-selected' : 'bg-tape-bg hover:bg-tape-raised',
                         cancelled ? 'text-tape-muted line-through' : '',
@@ -805,8 +653,7 @@ export function BlotterTable({
                         .filter(Boolean)
                         .join(' ')}
                       onClick={() => select(row)}
-                      // Guarded, not just wired: a double click must not be a way
-                      // round the disabled Amend button on a cancelled row.
+                      // Guarded: a double click must not get round a disabled Amend.
                       onDoubleClick={() => {
                         if (canWrite(row.original, pending)) {
                           actions.onAmend(row.original)
@@ -839,8 +686,8 @@ export function BlotterTable({
             pivoted={pivoted}
             onHide={() => {
               setConfigOpen(false)
-              // The panel is about to go inert with focus inside it, which would
-              // drop focus to the document. The grid is what it configures.
+              // The panel goes inert with focus inside it, which would drop focus
+              // to the document. The grid is what it configures.
               grid.current?.focus()
             }}
             open={configOpen}
@@ -859,12 +706,8 @@ export function BlotterTable({
   )
 }
 
-/**
- * The next trade row in the given direction, stepping over group rows. A group
- * is not a trade, so the selection must not be able to land on one. -1 when
- * there is nothing to move to, which leaves the selection where it is rather
- * than wrapping.
- */
+/** The next trade row in a direction, stepping over group rows. -1 when there is
+ *  nothing to move to, so the selection stays put rather than wrapping. */
 function nextSelectable(rows: Row<Trade>[], from: number, step: number): number {
   // With nothing selected, either key starts at the top.
   const direction = from === -1 ? 1 : step
@@ -880,13 +723,9 @@ function nextSelectable(rows: Row<Trade>[], from: number, step: number): number 
   return -1
 }
 
-/**
- * Holds the scroll extent open where rows are not drawn. A tr rather than an
- * absolutely positioned element, because a tr cannot be taken out of flow
- * without destroying the table, and the table is where the row and cell
- * semantics behind role=grid come from. Presentational because an empty row is a
- * layout device and not one of the grid's rows.
- */
+/** Holds the scroll extent open where rows are not drawn. A tr, not an absolutely
+ *  positioned element: taking a tr out of flow destroys the table, and the table
+ *  is where role=grid's row and cell semantics come from. */
 function Spacer({ height }: { height: number }): ReactElement | null {
   if (height <= 0) {
     return null
@@ -902,10 +741,8 @@ type BodyCellProps = {
   isSelected: boolean
 }
 
-/**
- * Shared by trade rows and group rows, so the pinned column, the selection
- * marker and the numeric alignment are declared once.
- */
+/** Shared by trade and group rows, so the pinned column, the selection marker and
+ *  the numeric alignment are declared once. */
 function BodyCell({ cell, index, isSelected }: BodyCellProps): ReactElement {
   const meta = cell.column.columnDef.meta
   const leading = index === 0
@@ -913,12 +750,9 @@ function BodyCell({ cell, index, isSelected }: BodyCellProps): ReactElement {
   return (
     <td
       // bg-inherit, not a fixed colour: it has to follow the row through hover,
-      // the selection, the flash and the pending fade, and inheritance tracks
-      // the animated value.
-      //
-      // The selection marker rides the first cell as an inset shadow. A border
-      // would push every cell in the row 2px out of line with the column above
-      // it.
+      // the selection, the flash and the pending fade, and inheritance tracks the
+      // animated value. The selection marker is an inset shadow, since a border
+      // would push the row 2px out of line with the column above it.
       className={`whitespace-nowrap border-b border-tape-line/60 px-1.5 ${
         leading ? `bg-inherit ${PINNED}` : ''
       } ${startsBlock(cell.column) ? BLOCK_EDGE : ''} ${
@@ -930,10 +764,8 @@ function BodyCell({ cell, index, isSelected }: BodyCellProps): ReactElement {
   )
 }
 
-/**
- * Which of a column's renderers a cell gets. A placeholder is the grouped column
- * on a leaf row, and renders empty: the value is on the group row above it.
- */
+/** Which of a column's renderers a cell gets. A placeholder is the grouped column
+ *  on a leaf row, and renders empty: the value is on the group row above. */
 function renderCell(cell: Cell<Trade, unknown>): ReactNode {
   if (cell.getIsPlaceholder()) {
     return null
@@ -948,13 +780,9 @@ function renderCell(cell: Cell<Trade, unknown>): ReactNode {
   return flexRender(cell.getIsAggregated() ? column.aggregatedCell : column.cell, cell.getContext())
 }
 
-/**
- * A heading, with the sort control on it where the column can be sorted.
- *
- * A placeholder is a column with no heading at this level, which under a split
- * is the grouped column: its name belongs on the band with the measures, not
- * repeated above them.
- */
+/** A heading, with the sort control where the column can be sorted. A placeholder
+ *  is a column with no heading at this band: under a split that is the grouped
+ *  column, whose name belongs on the band with the measures. */
 function HeaderLabel({ header }: { header: Header<Trade, unknown> }): ReactNode {
   if (header.isPlaceholder) {
     return null
@@ -994,11 +822,8 @@ type FilterBarProps = {
   idPrefix: string
 }
 
-/**
- * Filtering happens here rather than on the server, because the cache holds every
- * trade: a frame for a trade outside the current filter still belongs in the
- * cache, and clearing the filter must not need a round trip.
- */
+/** Filtering is client-side: the cache holds every trade, so a frame outside the
+ *  filter still belongs in it and clearing needs no round trip. */
 function FilterBar({
   table,
   grip,
@@ -1014,8 +839,7 @@ function FilterBar({
 
   return (
     <div className="mb-2 flex flex-wrap items-center gap-2">
-      {/* First, so the handle is in the same place on every pane and does not
-        move as the controls beside it wrap. */}
+      {/* First, so the handle is in the same place on every pane. */}
       {grip}
       {nameplate}
 
@@ -1068,8 +892,8 @@ function FilterBar({
   )
 }
 
-/** Stated widths, because a button takes its width from the label it is holding
- *  and a filter row that resized as it was used would move the box beside it. */
+/** Stated widths on the boxes above: a button sizes to its label, so a filter row
+ *  would otherwise move as it is used. */
 const SIDE_FILTER: SelectOption[] = [
   { value: '', label: 'Both sides' },
   { value: 'BUY', label: 'BUY' },

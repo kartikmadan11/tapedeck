@@ -1,28 +1,17 @@
 import type { CreateTradeInput, DecimalString } from '@tapedeck/shared'
 import { compareDecimal, formatDecimal, notional, toDecimal } from '@tapedeck/shared'
 
-/**
- * The two checks that hold a booking back for a second press, kept out of the
- * form so the policy can be tested without rendering anything.
- *
- * Both are advisory. They sit in the browser; the guarantee that a retry cannot
- * double-book is the clientTradeId, which the server enforces.
- */
+/** The two checks that hold a booking back for a second press. Both are advisory:
+ *  the guarantee against a double-book is the clientTradeId, enforced server-side. */
 
-/** How long an identical ticket counts as a probable repeat. */
 export const DUPLICATE_WINDOW_MS = 5_000
 
-/**
- * The notional a booking has to be confirmed above. The prefilled ticket is
- * 72,500, so this clears it by 3.4x and a single extra zero on the quantity
- * trips it.
- */
+/** The notional a booking has to be confirmed above. The prefilled ticket is
+ *  72,500, so this clears it by 3.4x and one extra zero on the quantity trips it. */
 export const NOTIONAL_LIMIT: DecimalString = toDecimal('250000')
 
-/**
- * The economics of a ticket as one comparable string. Nothing identifying is in
- * it: two tickets with the same signature would book the same trade twice.
- */
+/** The economics of a ticket as one comparable string. Nothing identifying is in
+ *  it: two tickets with the same signature would book the same trade twice. */
 export function signatureOf(values: CreateTradeInput): string {
   return [
     values.symbol,
@@ -34,31 +23,22 @@ export function signatureOf(values: CreateTradeInput): string {
   ].join('|')
 }
 
-/** The last booking this form made, as the duplicate check needs to see it. */
 export interface LastBooking {
   signature: string
   tradeId: string
   at: number
 }
 
-/**
- * Why a press is being held. The signature is carried so the form can tell a
- * confirmation of this ticket from a first press of a different one.
- */
+/** Why a press is being held. The signature is carried so the form can tell a
+ *  confirmation of this ticket from a first press of a different one. */
 export interface Guard {
   kind: 'duplicate' | 'size'
   signature: string
   message: string
 }
 
-/**
- * The one guard a ticket has to clear, or null.
- *
- * Duplicate is tested before size: on a repeat the repeat is the new information.
- *
- * `now` is a parameter so the window has a testable boundary rather than one
- * that can only be reached by waiting.
- */
+/** Duplicate is tested before size: on a repeat, the repeat is the new
+ *  information. `now` is a parameter so the boundary is testable without waiting. */
 export function guardFor(
   values: CreateTradeInput,
   last: LastBooking | null,
@@ -87,20 +67,14 @@ export function guardFor(
   return null
 }
 
-/** What the held button says, by what is holding it. */
 export const CONFIRM_LABEL: Record<Guard['kind'], string> = {
   duplicate: 'Confirm duplicate',
   size: 'Confirm size',
 }
 
-/**
- * A v4 uuid for one ticket.
- *
- * crypto.randomUUID is restricted to secure contexts, so it is absent when the
- * app is reached over plain http at anything but localhost. getRandomValues
- * carries no such restriction, so the fallback is still cryptographically
- * random rather than dropping to Math.random.
- */
+/** crypto.randomUUID needs a secure context, so it is absent over plain http away
+ *  from localhost. getRandomValues has no such restriction, which keeps the
+ *  fallback cryptographically random. */
 export function newTicketId(): string {
   if (typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID()
@@ -108,8 +82,8 @@ export function newTicketId(): string {
 
   const bytes = crypto.getRandomValues(new Uint8Array(16))
   // Version 4 in the high nibble of byte 6, variant 1 in the top bits of byte 8,
-  // per RFC 4122. Without these the string is random but not a valid uuid, and
-  // the server's schema would reject it.
+  // per RFC 4122. Without them the string is random but not a uuid, and the
+  // server's schema rejects it.
   bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40
   bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80
 

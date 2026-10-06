@@ -11,13 +11,12 @@ if (!container) {
   throw new Error('index.html is missing #root')
 }
 
-// Before the first render, so the identity is settled before anything stamps it
-// on a write, and before the workspace reads the address bar, since this takes
-// the handoff parameter back out of it.
+// Before the first render, so the identity is settled before anything stamps it on
+// a write, and before the workspace reads the bar this takes the parameter out of.
 adoptIdentity()
 
-// Created once here rather than inside a component, so a re-render cannot drop the
-// cache the socket is writing into.
+// Created outside a component, so a re-render cannot drop the cache the socket is
+// writing into.
 const queryClient = createQueryClient()
 
 createRoot(container).render(

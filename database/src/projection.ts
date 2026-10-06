@@ -2,11 +2,9 @@ import type { Trade, TradeEvent } from '@tapedeck/shared'
 import type { TradeEventRow, TradeRow } from './schema.js'
 
 /**
- * The one place a row becomes a wire object. Both the API and the seed go
- * through it, so timestamp formats cannot diverge.
- *
- * Price stays the string pg returned: parsing it to a number here is the whole
- * precision loss the numeric column exists to avoid.
+ * The one place a row becomes a wire object, used by both the API and the seed, so
+ * timestamp formats cannot diverge. Price stays the string pg returned: parsing it
+ * here is the whole precision loss the numeric column exists to avoid.
  */
 export function toTrade(row: TradeRow): Trade {
   return {

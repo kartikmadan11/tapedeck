@@ -1,8 +1,7 @@
 import { z } from 'zod'
 
-// Money is an exact base-10 string end to end, matching numeric(18, 6) in
-// Postgres. Arithmetic goes through toMinorUnits (bigint); Number() is for
-// display only.
+// Money is an exact base-10 string end to end, matching numeric(18, 6) in Postgres.
+// Arithmetic goes through toMinorUnits (bigint); Number() is for display only.
 export const DECIMAL_SCALE = 6
 
 /** Up to 12 integer digits and 6 fractional digits, matching `numeric(18, 6)`. */
@@ -54,10 +53,8 @@ export function notional(quantity: number, price: DecimalString): DecimalString 
   return fromMinorUnits(BigInt(quantity) * toMinorUnits(price))
 }
 
-/**
- * Enough of a trade to aggregate. Structural rather than `Trade`, which this file
- * cannot import: `trade.ts` imports this one.
- */
+/** Structural rather than `Trade`, which this file cannot import: `trade.ts`
+ * imports this one. */
 export interface PricedLeg {
   side: 'BUY' | 'SELL'
   quantity: number
@@ -69,11 +66,8 @@ export function netQuantity(legs: readonly PricedLeg[]): number {
   return legs.reduce((total, leg) => total + (leg.side === 'BUY' ? leg.quantity : -leg.quantity), 0)
 }
 
-/**
- * Signed exposure, summed in bigint. Deliberately the same computation
- * selectPositions runs in SQL, so a grouped blotter row and the positions
- * panel's row for the same symbol agree to the last place.
- */
+/** Signed exposure in bigint. The same computation selectPositions runs in SQL, so a
+ * grouped blotter row and the positions panel agree to the last place. */
 export function netNotional(legs: readonly PricedLeg[]): DecimalString {
   let total = 0n
 
@@ -85,15 +79,9 @@ export function netNotional(legs: readonly PricedLeg[]): DecimalString {
   return fromMinorUnits(total)
 }
 
-/**
- * Volume-weighted average price, exact.
- *
- * Side is deliberately not applied to the weights: a sell leg pulls the average
- * towards its own price rather than cancelling a buy leg out of the denominator,
- * so a flat book still reports the price it dealt at.
- *
- * null rather than zero for an empty list.
- */
+/** Volume-weighted average price, exact. Side is not applied to the weights: a sell leg
+ * pulls the average towards its own price rather than cancelling a buy leg out of the
+ * denominator, so a flat book still reports what it dealt at. null, not zero, if empty. */
 export function vwap(legs: readonly PricedLeg[]): DecimalString | null {
   let weighted = 0n
   let volume = 0n
@@ -108,9 +96,8 @@ export function vwap(legs: readonly PricedLeg[]): DecimalString | null {
     return null
   }
 
-  // Half up, which `+ volume / 2n` gives exactly for both odd and even volumes.
-  // Bigint division truncates, so without it an average of 72.4655 renders as
-  // 72.465.
+  // Half up: bigint division truncates, so without `+ volume / 2n` an average of
+  // 72.4655 would render as 72.465.
   return fromMinorUnits((weighted + volume / 2n) / volume)
 }
 

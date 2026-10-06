@@ -11,11 +11,8 @@ import { ACTION, CHIP, CONTROL, MICRO_LABEL } from '../../lib/ui.js'
 import { BookedBy } from './BookedBy.js'
 import { useAmendTrade } from './useAmendTrade.js'
 
-/**
- * The shared amend contract minus the concurrency token, which is not something
- * the user types. Amending `symbol` or `side` is not expressible here because it
- * is not expressible in the contract.
- */
+/** The shared amend contract minus the concurrency token, which the user does not
+ *  type. `symbol` and `side` are not amendable here because the contract says so. */
 const amendFields = amendTradeInput.omit({ version: true })
 type FormValues = z.input<typeof amendFields>
 
@@ -27,11 +24,8 @@ export function AmendDialog({ trade, onClose }: Props): ReactElement {
   /** Names the dialog off its own heading, rather than restating the heading. */
   const titleId = useId()
 
-  /**
-   * The version the user opened, held deliberately rather than read live from the
-   * cache. Resubmitting with whatever version has since arrived would quietly
-   * overwrite someone else's change.
-   */
+  /** The version the user opened, held rather than read live from the cache:
+   *  resubmitting with whatever has since arrived overwrites someone else's edit. */
   const [editingVersion, setEditingVersion] = useState(trade.version)
 
   const form = useForm<FormValues, unknown, z.output<typeof amendFields>>({
@@ -75,15 +69,9 @@ export function AmendDialog({ trade, onClose }: Props): ReactElement {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-tape-bg/80 p-4">
-      {/*
-       * A cast shadow rather than a blur. backdrop-filter would establish a
-       * containing block, and the scrim above is already fixed with no
-       * transformed ancestor, which is what keeps it covering the viewport.
-       *
-       * The role is on the box rather than on the scrim, because the scrim is
-       * the whole viewport and the dialog is not. No aria-modal: focus is not
-       * trapped, so claiming a boundary would be claiming something untrue.
-       */}
+      {/* A cast shadow, not a blur: backdrop-filter would establish a containing block,
+        and the scrim stays over the viewport by being fixed with no transformed ancestor.
+        role on the box, not the viewport-wide scrim. No aria-modal: focus is not trapped. */}
       <div
         aria-labelledby={titleId}
         className="w-full max-w-md rounded-sm border border-tape-line bg-tape-panel p-4 shadow-[0_24px_64px_-12px_rgb(0_0_0/0.9)]"
@@ -103,8 +91,8 @@ export function AmendDialog({ trade, onClose }: Props): ReactElement {
           <BookedBy action="amendment" trader={trade.trader} />
 
           <div className="grid grid-cols-3 gap-2">
-            {/* The label span is a sibling of the input, so the uppercase and the
-                10px do not inherit into the field the user types in. */}
+            {/* The label span is a sibling of the input, so the uppercase and 10px
+                do not inherit into the field being typed in. */}
             <label className="block">
               <span className={`mb-1 block ${MICRO_LABEL}`}>Quantity</span>
               <input
@@ -125,8 +113,8 @@ export function AmendDialog({ trade, onClose }: Props): ReactElement {
               {errors.price ? <Hint>{errors.price.message}</Hint> : null}
             </label>
 
-            {/* Shown, not offered: who a trade is with is fixed at booking. A div
-                rather than a label because there is no control to name. */}
+            {/* Shown, not offered: the counterparty is fixed at booking. A div, not
+                a label, because there is no control to name. */}
             <div>
               <span className={`mb-1 block ${MICRO_LABEL}`}>Counterparty</span>
               <p className="h-7 truncate leading-7">{trade.counterparty}</p>

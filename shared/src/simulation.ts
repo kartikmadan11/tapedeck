@@ -1,9 +1,7 @@
 import { z } from 'zod'
 
-/**
- * The generated-flow feed, which books, amends and cancels trades on a timer.
- * It drives the application's own write path rather than fabricating frames.
- */
+/** The generated feed, which books, amends and cancels on a timer. It drives the
+ * application's own write path rather than fabricating frames. */
 export const simulationState = z.object({
   running: z.boolean(),
   /** Reported, not settable. */

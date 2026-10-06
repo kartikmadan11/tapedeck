@@ -157,8 +157,8 @@ describe('signing out', () => {
     signIn('Log in')
     await screen.findByRole('grid')
 
-    // The stored session is what makes a window signed in, so a failed call is
-    // not the user's problem.
+    // The stored session is what makes a window signed in, so the failed call
+    // is not the user's problem.
     fetchMock.mockImplementation(() => Promise.reject(new Error('offline')))
     fireEvent.click(screen.getByRole('button', { name: 'Log out' }))
 

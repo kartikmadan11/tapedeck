@@ -1,8 +1,7 @@
 /**
- * A seeded LCG, so seed data is byte-identical on every machine.
- *
- * Numerical Recipes constants. Statistical quality is irrelevant here; being
- * deterministic, dependency-free and identical across platforms is not.
+ * A seeded LCG, so seed data is byte-identical on every machine. Numerical Recipes
+ * constants: statistical quality is irrelevant here, being deterministic,
+ * dependency-free and identical across platforms is not.
  */
 export class Rng {
   private state: number
@@ -32,7 +31,6 @@ export class Rng {
     return chosen
   }
 
-  /** True with the given probability. */
   chance(probability: number): boolean {
     return this.next() < probability
   }

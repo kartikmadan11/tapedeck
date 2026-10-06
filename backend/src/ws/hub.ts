@@ -9,8 +9,8 @@ import type { FastifyBaseLogger } from 'fastify'
 import type { WebSocket } from 'ws'
 import type { Bus } from '../bus.js'
 
-// A client buffering more than this is dropped. Only safe because of seq: it
-// reconnects, takes a snapshot and replays what it missed, so nothing is lost.
+// A client buffering more than this is dropped. Safe only because of seq: it
+// reconnects, takes a snapshot and replays what it missed.
 const MAX_BUFFERED_BYTES = 1_000_000
 
 interface Client {
@@ -32,10 +32,7 @@ export interface HubOptions {
   pingIntervalMs: number
   /** Reads trades, positions and the high-water seq in one consistent transaction. */
   readSnapshot: () => Promise<{ seq: number; trades: Trade[]; positions: Position[] }>
-  /**
-   * The generated feed's current state, read at handshake time so a connecting
-   * client is told whether it is running.
-   */
+  /** Read at handshake time, so a connecting client is told whether the feed runs. */
   readSimulation: () => SimulationState
 }
 
@@ -71,14 +68,10 @@ export function createHub(options: HubOptions): Hub {
     }
   }
 
-  /**
-   * Buffer from the moment the socket arrives, read a consistent snapshot, send
-   * it, replay only what it does not contain, then register. Subscribing after
-   * the read loses frames; subscribing before it duplicates them.
-   *
-   * `seq > snapshotSeq` is sound only because the advisory lock makes the
-   * sequence gap-free and commit-ordered.
-   */
+  /** Buffer from the moment the socket arrives, read a consistent snapshot, send it,
+   * replay only what it does not contain, then register. Subscribing after the read
+   * loses frames; before it duplicates them. `seq > snapshotSeq` is sound only because
+   * the advisory lock makes the sequence gap-free and ordered. */
   async function attach(socket: WebSocket): Promise<void> {
     const buffer: ServerFrame[] = []
     const stopBuffering = bus.subscribe((frame) => {
@@ -102,7 +95,6 @@ export function createHub(options: HubOptions): Hub {
         } satisfies ServerFrame),
       )
 
-      // Replay the sequenced frames the snapshot missed, in order.
       for (const frame of buffer) {
         const seq = frameSequence(frame)
         if (seq !== null && seq > snapshot.seq) {
@@ -110,17 +102,15 @@ export function createHub(options: HubOptions): Hub {
         }
       }
 
-      // Positions carry no cursor, so send only the latest buffered one: it is
-      // derived state and supersedes every earlier frame.
+      // Positions carry no cursor, so send only the latest buffered one: derived
+      // state supersedes every earlier frame.
       const latestPositions = buffer.findLast((frame) => frame.type === 'positions')
       if (latestPositions) {
         socket.send(JSON.stringify(latestPositions))
       }
 
-      // Feed state is part of the handshake, not a delta. A frame buffered during
-      // the read wins, being strictly newer than what the read observed. Exactly
-      // one frame either way: a simulation frame carries no seq, so it matches
-      // neither the replay filter nor the positions drain.
+      // Feed state is part of the handshake, not a delta, so a frame buffered during the
+      // read wins. One frame either way: it carries no seq, so it matches neither filter.
       const toggledDuringRead = buffer.findLast((frame) => frame.type === 'simulation')
       socket.send(
         JSON.stringify(
@@ -152,10 +142,8 @@ export function createHub(options: HubOptions): Hub {
     })
   }
 
-  /**
-   * Without recording the pong and terminating on the next tick, a client that
-   * vanished without a close frame stays in the set and is sent every frame.
-   */
+  /** Without the pong record and a terminate on the next tick, a client that vanished
+   * without a close frame stays in the set and is sent every frame. */
   const pingTimer = setInterval(() => {
     for (const client of clients) {
       if (!client.alive) {
@@ -169,8 +157,7 @@ export function createHub(options: HubOptions): Hub {
     }
   }, pingIntervalMs)
 
-  // Without unref this timer alone keeps the event loop alive and Vitest hangs
-  // after the tests pass.
+  // Without unref this timer keeps the event loop alive and Vitest hangs.
   pingTimer.unref()
 
   return {

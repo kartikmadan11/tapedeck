@@ -16,11 +16,8 @@ const PRIMARY = `${ENTRY} bg-tape-text font-semibold text-tape-bg hover:brightne
 
 const SECONDARY = `${ENTRY} border border-tape-line text-tape-text hover:border-tape-accent hover:text-tape-accent`
 
-/**
- * What a visitor sees before they sign in. One column on one left edge, because
- * the whole application is a monospace grid and a centred hero would be the one
- * screen that is not.
- */
+/** One column on one left edge: the rest of the application is a monospace grid,
+ *  and a centred hero would be the one screen that is not. */
 export function Landing({ onEnter }: Props): ReactElement {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-[68ch] flex-col justify-center gap-7 px-6 py-12">

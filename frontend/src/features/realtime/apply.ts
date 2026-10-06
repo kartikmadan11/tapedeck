@@ -10,13 +10,9 @@ import { BLOTTER_LIMIT } from '@tapedeck/shared'
 
 export const emptyBlotter: BlotterState = { seq: 0, trades: [], positions: [] }
 
-/**
- * Newest first, which is the server's ORDER BY. Keeping the same ordering means a
- * refetch never reshuffles rows the stream placed.
- *
- * Timestamps are UTC ISO at one precision, so comparing the strings is comparing
- * the instants, with no Date parsing in a sort comparator.
- */
+/** Newest first, matching the server's ORDER BY, so a refetch never reshuffles
+ *  rows the stream placed. UTC ISO at one precision, so the strings compare as
+ *  instants and the comparator parses no dates. */
 function byRecency(a: Trade, b: Trade): number {
   if (a.tradeTimestamp !== b.tradeTimestamp) {
     return a.tradeTimestamp < b.tradeTimestamp ? 1 : -1
@@ -24,26 +20,16 @@ function byRecency(a: Trade, b: Trade): number {
   return a.tradeId < b.tradeId ? 1 : -1
 }
 
-/**
- * The most recent BLOTTER_LIMIT trades, which is the window the server was asked
- * for and so the window the cache holds.
- *
- * Trimmed on the way in rather than at render time. Without it the bounded first
- * load drifts back to unbounded: cancelled trades stay on the tape and nothing
- * ever leaves the array.
- *
- * Safe to cut from the end because the array is sorted newest first, so what
- * falls off is the oldest trade held.
- */
+/** The most recent BLOTTER_LIMIT trades, the window the server was asked for.
+ *  Trimmed on the way in, because cancelled trades stay on the tape and nothing
+ *  ever leaves the array. Safe to cut from the end: sorted newest first. */
 function windowed(trades: Trade[]): Trade[] {
   return trades.length > BLOTTER_LIMIT ? trades.slice(0, BLOTTER_LIMIT) : trades
 }
 
-/**
- * An amendment cannot change tradeTimestamp or tradeId, so a replacement keeps
- * its slot. A trade not held yet is inserted in order rather than appended,
- * because appending would leave the array unsorted until the next refetch.
- */
+/** A replacement keeps its slot, since an amendment cannot change tradeTimestamp
+ *  or tradeId. A new trade is inserted in order: appending leaves the array
+ *  unsorted until the next refetch. */
 function upsert(trades: Trade[], incoming: Trade): Trade[] {
   const existing = trades.findIndex((trade) => trade.tradeId === incoming.tradeId)
   if (existing !== -1) {
@@ -55,19 +41,14 @@ function upsert(trades: Trade[], incoming: Trade): Trade[] {
   const at = trades.findIndex((trade) => byRecency(incoming, trade) < 0)
   const next = trades.slice()
   next.splice(at === -1 ? trades.length : at, 0, incoming)
-  // Only the insert path can grow the array. A replacement is one for one, so
-  // trimming there would cut a row on an amendment of an already full window.
+  // Only the insert path grows the array. Trimming on replacement would cut a row
+  // on every amendment of an already full window.
   return windowed(next)
 }
 
-/**
- * The only writer of blotter state, pure and socket-free, so every delivery
- * order a real connection can produce is reachable from a test.
- *
- * Every branch refuses a payload older than the cursor already held. Without
- * that, a refetch landing after a frame it does not contain silently reverts the
- * frame, which is the lost update the cursor exists to prevent.
- */
+/** The only writer of blotter state, pure and socket-free so every delivery order
+ *  is reachable from a test. Every branch refuses a payload older than the cursor
+ *  held, or a refetch landing after a frame it lacks would revert that frame. */
 export function apply(state: BlotterState, frame: ServerFrame): BlotterState {
   switch (frame.type) {
     case 'snapshot':
@@ -76,9 +57,8 @@ export function apply(state: BlotterState, frame: ServerFrame): BlotterState {
       }
       return {
         seq: frame.seq,
-        // Windowed as well as sorted, even though the handshake snapshot is
-        // already windowed server-side, so the invariant belongs here rather
-        // than to an agreement between two files.
+        // Windowed here too, though the handshake snapshot already is server-side:
+        // the invariant should not rest on an agreement between two files.
         trades: windowed(frame.trades.slice().sort(byRecency)),
         positions: frame.positions,
       }
@@ -98,15 +78,13 @@ export function apply(state: BlotterState, frame: ServerFrame): BlotterState {
       }
 
     case 'positions':
-      // Derived state with no cursor, so there is nothing to order it against
-      // and the latest one wins. It must not advance seq: doing so would make the
-      // client discard trade frames it has not applied.
+      // No cursor to order it against, so the latest wins. Must not advance seq,
+      // or the client would discard trade frames it has not applied.
       return { ...state, positions: frame.positions }
 
     case 'simulation':
-      // Whether the feed is running is not blotter state. It is routed to its own
-      // cache entry before this point; the case exists so the union stays
-      // exhaustive, and returning state unchanged keeps the cursor untouched.
+      // Routed to its own cache entry before this point. The case only keeps the
+      // union exhaustive.
       return state
 
     default: {
@@ -127,13 +105,9 @@ export function isTradeDelta(frame: ServerFrame): frame is TradeDeltaFrame {
   )
 }
 
-/**
- * True when a frame is further ahead than the next expected cursor, so something
- * was missed and the client should refetch.
- *
- * Only meaningful because the server serialises writes: the sequence is gap-free,
- * so a hole in it is a lost frame rather than a rolled-back transaction.
- */
+/** A frame ahead of the next expected cursor, so one was missed and the client
+ *  should refetch. Meaningful only because the server serialises writes: the
+ *  sequence is gap-free, so a hole is a lost frame. */
 export function hasGap(state: BlotterState, frame: TradeDeltaFrame): boolean {
   // Cursor 0 is a client that has not applied anything yet.
   return state.seq > 0 && frame.seq > state.seq + 1
@@ -151,11 +125,8 @@ export function applyTradesResponse(state: BlotterState, response: TradesRespons
   }
 }
 
-/**
- * GET /api/positions. Its seq decides whether the payload is stale but does not
- * become the cursor, because the trades in state may be older than it and
- * advancing would discard the frames in between.
- */
+/** Its seq decides staleness but does not become the cursor: the trades in state
+ *  may be older, and advancing would discard the frames in between. */
 export function applyPositionsResponse(
   state: BlotterState,
   response: PositionsResponse,

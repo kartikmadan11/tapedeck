@@ -9,11 +9,8 @@ import { useCancelTrade } from './useCancelTrade.js'
 
 type Props = { trade: Trade; onClose: () => void }
 
-/**
- * Confirms a cancellation. Cancelling is irreversible and rows reorder
- * underneath the pointer as the feed runs, so the protection is naming the
- * trade rather than the extra click.
- */
+/** Rows reorder under the pointer as the feed runs, so the protection against
+ *  cancelling the wrong trade is naming it, not the extra click. */
 export function CancelDialog({ trade, onClose }: Props): ReactElement {
   const cancel = useCancelTrade()
 
@@ -31,9 +28,8 @@ export function CancelDialog({ trade, onClose }: Props): ReactElement {
   }, [onClose])
 
   const onConfirm = (): void => {
-    // The version is read at the moment of confirming, from the cache-resolved
-    // trade, so a cancel racing someone else's amend is still refused rather
-    // than silently applied to a row that has since moved on.
+    // Read at the moment of confirming, off the cache-resolved trade, so a cancel
+    // racing someone else's amend is refused rather than applied to a stale row.
     cancel.mutate({ tradeId: trade.tradeId, version: trade.version }, { onSuccess: onClose })
   }
 
