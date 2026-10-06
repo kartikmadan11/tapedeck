@@ -1,7 +1,7 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { App } from './App.js'
+import { Gate } from './features/auth/Gate.js'
 import './index.css'
 import { adoptIdentity } from './lib/identity.js'
 import { createQueryClient } from './lib/queryClient.js'
@@ -23,7 +23,9 @@ const queryClient = createQueryClient()
 createRoot(container).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <App />
+      {/* The Gate, not the App: the blotter only mounts once there is a session,
+          so nothing fetches or opens a socket before anyone has signed in. */}
+      <Gate />
     </QueryClientProvider>
   </StrictMode>,
 )

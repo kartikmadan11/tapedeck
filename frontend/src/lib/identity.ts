@@ -1,19 +1,30 @@
-import { PARTY_MAX_LENGTH } from '@tapedeck/shared'
+import { DEFAULT_TRADER, PARTY_MAX_LENGTH } from '@tapedeck/shared'
+import { readSession } from './session.js'
 
 const STORAGE_KEY = 'tapedeck.trader'
 
 /** The parameter an identity is handed over on. */
 const ACTOR_PARAM = 'actor'
 
-/** Returned whenever storage is empty or unavailable, so the actor is never blank. */
-export const DEFAULT_TRADER = 'k.madan'
+/** Returned whenever nothing is stored or storage is unavailable, so the actor is
+ *  never blank. */
+export { DEFAULT_TRADER }
 
 /**
- * Held in sessionStorage, which is scoped to the window rather than the browser,
- * so two windows hold two identities. A cookie or localStorage is shared across
- * both and could only ever hold one.
+ * The name this window writes as, in order of authority: the signed-in session,
+ * then the name a link handed over, then the default.
+ *
+ * Both are in sessionStorage, which is scoped to the window rather than the
+ * browser, so two windows hold two identities. A cookie or localStorage is shared
+ * across both and could only ever hold one.
  */
 export function readTrader(): string {
+  // The server issued this one, so it outranks anything a link asked for.
+  const signedIn = readSession()
+  if (signedIn !== null) {
+    return signedIn.trader
+  }
+
   try {
     const stored = sessionStorage.getItem(STORAGE_KEY)?.trim()
     return stored === undefined || stored.length === 0 ? DEFAULT_TRADER : stored
@@ -25,8 +36,9 @@ export function readTrader(): string {
 }
 
 /**
- * Takes the identity the window was handed, once, before anything reads it.
- * There is deliberately nothing on screen that sets it.
+ * Takes the identity the window was handed, once, before anything reads it. It
+ * is a suggestion, not a grant: the sign-in form starts on this name and the
+ * session that sign-in returns is what the window then writes as.
  *
  * Consumed rather than read. The parameter is taken back out of the address bar,
  * because the bar is also the workspace link: left in, it would travel to

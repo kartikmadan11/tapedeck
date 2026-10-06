@@ -1,16 +1,24 @@
 import fastifyStatic from '@fastify/static'
 import fastifyWebsocket from '@fastify/websocket'
-import { createDatabase, type Database, type DatabaseHandle, Rng } from '@tapedeck/database'
-import { BLOTTER_LIMIT } from '@tapedeck/shared'
+import {
+  createDatabase,
+  type Database,
+  type DatabaseHandle,
+  Rng,
+  TRADERS,
+} from '@tapedeck/database'
+import { BLOTTER_LIMIT, DEFAULT_TRADER, DEMO_PASSWORD } from '@tapedeck/shared'
 import Fastify, { type FastifyInstance } from 'fastify'
 import { type Bus, createBus } from './bus.js'
 import type { Config } from './config.js'
 import { registerErrorHandler } from './plugins/errorHandler.js'
 import { TradeRepository } from './repositories/trades.js'
+import { registerAuthRoutes } from './routes/auth.js'
 import { registerHealthRoutes } from './routes/health.js'
 import { registerPositionRoutes } from './routes/positions.js'
 import { registerSimulationRoutes } from './routes/simulation.js'
 import { registerTradeRoutes } from './routes/trades.js'
+import { AuthService } from './services/authService.js'
 import { TradeService } from './services/tradeService.js'
 import { createSimulator, type Simulator } from './simulation/simulator.js'
 import { createHub, type Hub } from './ws/hub.js'
@@ -22,6 +30,7 @@ declare module 'fastify' {
     bus: Bus
     hub: Hub
     tradeService: TradeService
+    authService: AuthService
     simulator: Simulator
   }
 }
@@ -49,6 +58,14 @@ export async function buildApp(config: Config): Promise<BuiltApp> {
   })
   const repository = new TradeRepository(database.db)
   const tradeService = new TradeService(repository, bus)
+
+  /**
+   * Seeded with the desk the database seed books for, plus the actor a fresh
+   * client stamps, so every trader name visible on the tape can sign in. One
+   * password for all of them, printed on the sign-in form.
+   */
+  const authService = new AuthService()
+  await authService.seed([...TRADERS, DEFAULT_TRADER], DEMO_PASSWORD)
 
   /**
    * Created here but never started here, so buildApp() stays free of side
@@ -89,12 +106,14 @@ export async function buildApp(config: Config): Promise<BuiltApp> {
   app.decorate('bus', bus)
   app.decorate('hub', hub)
   app.decorate('tradeService', tradeService)
+  app.decorate('authService', authService)
   app.decorate('simulator', simulator)
 
   await app.register(fastifyWebsocket)
 
   registerErrorHandler(app, { serveSpaFallback: config.STATIC_DIR !== undefined })
   registerHealthRoutes(app)
+  registerAuthRoutes(app)
   registerTradeRoutes(app)
   registerPositionRoutes(app)
   registerSimulationRoutes(app)

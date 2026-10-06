@@ -20,8 +20,15 @@ import { CancelDialog } from './features/trades/CancelDialog.js'
 import { TradeForm } from './features/trades/TradeForm.js'
 import { useBlotter, usePendingTradeIds, useRefreshBlotter } from './features/trades/useTrades.js'
 import { Workspace } from './features/workspace/Workspace.js'
+import { CHIP } from './lib/ui.js'
 
-export function App(): ReactElement {
+/**
+ * Optional, so the existing tests can render the blotter on its own without
+ * standing a session up first. The Gate always passes it.
+ */
+type Props = { onSignOut?: (() => void) | undefined }
+
+export function App({ onSignOut }: Props = {}): ReactElement {
   useRealtime()
   const blotter = useBlotter()
   const pendingIds = usePendingTradeIds()
@@ -82,6 +89,11 @@ export function App(): ReactElement {
           <SimulationToggle />
           <RefreshButton onRefresh={refresh} refreshing={blotter.isFetching} />
           <IdentityBadge trader={trader} />
+          {onSignOut === undefined ? null : (
+            <button className={CHIP} onClick={onSignOut} type="button">
+              Log out
+            </button>
+          )}
         </div>
       </header>
 

@@ -6,6 +6,8 @@ import { tradeId, tradeStatus } from './trade.js'
 
 export const errorCode = z.enum([
   'VALIDATION_FAILED',
+  'UNAUTHENTICATED',
+  'ALREADY_EXISTS',
   'NOT_FOUND',
   'VERSION_CONFLICT',
   'INVALID_STATE',
@@ -19,6 +21,21 @@ export const validationFailedError = z.object({
   details: z.object({
     issues: z.array(z.object({ path: z.string(), message: z.string() })),
   }),
+})
+
+/** Wrong credentials, or a token the server does not hold. One code for both, so
+ *  a reply does not say which usernames exist. */
+export const unauthenticatedError = z.object({
+  code: z.literal('UNAUTHENTICATED'),
+  message: z.string(),
+  details: z.object({}),
+})
+
+/** A name someone already holds. Names the field so a form can mark the box. */
+export const alreadyExistsError = z.object({
+  code: z.literal('ALREADY_EXISTS'),
+  message: z.string(),
+  details: z.object({ field: z.string() }),
 })
 
 /** One 404 serves both an unknown trade and an unknown route, hence the optional id. */
@@ -54,6 +71,8 @@ export const internalError = z.object({
 
 export const apiError = z.discriminatedUnion('code', [
   validationFailedError,
+  unauthenticatedError,
+  alreadyExistsError,
   notFoundError,
   versionConflictError,
   invalidStateError,
@@ -66,6 +85,8 @@ export type VersionConflictError = z.infer<typeof versionConflictError>
 /** The single domain-error to HTTP mapping. */
 export const HTTP_STATUS: Record<ErrorCode, number> = {
   VALIDATION_FAILED: 400,
+  UNAUTHENTICATED: 401,
+  ALREADY_EXISTS: 409,
   NOT_FOUND: 404,
   VERSION_CONFLICT: 409,
   INVALID_STATE: 409,
@@ -85,6 +106,14 @@ export class DomainError extends Error {
   get status(): number {
     return HTTP_STATUS[this.payload.code]
   }
+}
+
+export function unauthenticated(message: string): DomainError {
+  return new DomainError({ code: 'UNAUTHENTICATED', message, details: {} })
+}
+
+export function alreadyExists(field: string, message: string): DomainError {
+  return new DomainError({ code: 'ALREADY_EXISTS', message, details: { field } })
 }
 
 export function notFound(id: string): DomainError {

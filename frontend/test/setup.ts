@@ -17,6 +17,21 @@ Element.prototype.setPointerCapture = (): void => {}
 Element.prototype.releasePointerCapture = (): void => {}
 
 /**
+ * jsdom has no media queries at all, and the landing page's tape asks whether
+ * motion is wanted before it starts printing. Answers no preference, which is the
+ * path a browser takes by default.
+ */
+Object.defineProperty(window, 'matchMedia', {
+  configurable: true,
+  value: (query: string) => ({
+    matches: false,
+    media: query,
+    addEventListener: (): void => {},
+    removeEventListener: (): void => {},
+  }),
+})
+
+/**
  * jsdom declares no DragEvent, so Testing Library falls back to a plain Event and
  * drops the properties a drag handler reads off one. MouseEvent carries
  * relatedTarget, which the drop zones use to tell a pointer crossing between two

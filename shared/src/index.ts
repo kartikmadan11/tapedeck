@@ -1,3 +1,4 @@
+export * from './auth.js'
 export * from './books.js'
 export * from './counterparties.js'
 export * from './errors.js'

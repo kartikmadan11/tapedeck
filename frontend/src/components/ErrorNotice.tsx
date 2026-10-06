@@ -53,6 +53,10 @@ function describe(error: unknown): ReactElement | string {
         </>
       )
 
+    // The server's own wording is already the thing to say, so it is passed
+    // through rather than restated here.
+    case 'UNAUTHENTICATED':
+    case 'ALREADY_EXISTS':
     case 'NOT_FOUND':
     case 'INTERNAL':
       return payload.message

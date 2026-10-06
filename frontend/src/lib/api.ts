@@ -3,7 +3,9 @@ import type {
   ApiError,
   CancelTradeInput,
   CreateTradeInput,
+  Credentials,
   PositionsResponse,
+  Session,
   SimulationState,
   Trade,
   TradeEvent,
@@ -13,6 +15,7 @@ import {
   apiError,
   BLOTTER_LIMIT,
   positionsResponse,
+  session,
   simulationState,
   trade,
   tradeEvent,
@@ -20,6 +23,7 @@ import {
 } from '@tapedeck/shared'
 import { z } from 'zod'
 import { readTrader } from './identity.js'
+import { readSession } from './session.js'
 
 /**
  * Carries the server's typed error payload rather than just a status, so a
@@ -53,14 +57,23 @@ function opaqueFailure(status: number, body: string): ApiError {
   }
 }
 
+/** Sent on every request, so the one route that checks it gets it without each
+ *  caller remembering to. Absent until someone signs in. */
+function bearer(): Record<string, string> {
+  const current = readSession()
+  return current === null ? {} : { authorization: `Bearer ${current.token}` }
+}
+
 async function request<T>(path: string, schema: z.ZodType<T>, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...init,
     headers: {
       accept: 'application/json',
-      // There is no authentication here, so the actor is the window's declared
-      // identity: asserted by the caller and trusted by the server.
+      // The actor the server writes into the audit trail. Still asserted by the
+      // caller rather than read off the token, because the trade routes are not
+      // behind the session: see the README's assumptions.
       'x-tapedeck-actor': readTrader(),
+      ...bearer(),
       ...(init?.body === undefined ? {} : { 'content-type': 'application/json' }),
       ...init?.headers,
     },
@@ -87,6 +100,26 @@ function safeJson(text: string): unknown {
   } catch {
     return null
   }
+}
+
+export function register(input: Credentials): Promise<Session> {
+  return request('/api/auth/register', session, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export function login(input: Credentials): Promise<Session> {
+  return request('/api/auth/login', session, { method: 'POST', body: JSON.stringify(input) })
+}
+
+/**
+ * Told to the server so the token stops working there too, and deliberately not
+ * awaited by the caller: the window is signed out the moment its stored session
+ * is gone, whether or not the network agreed.
+ */
+export function logout(): Promise<void> {
+  return request('/api/auth/logout', z.unknown(), { method: 'POST' }).then(() => undefined)
 }
 
 /**
