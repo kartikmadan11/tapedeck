@@ -610,6 +610,25 @@ describe('the configuration panel', () => {
     expect(row('TRD-100001')).not.toBeNull()
     expect(row('TRD-100004')).toBeNull()
   })
+
+  it('hides from a button on the panel, not only from the right-click menu', () => {
+    renderBlotter()
+    openConfig()
+    expect(screen.getByRole('combobox', { name: 'Group by' })).not.toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide' }))
+
+    // Mounted either way, so the question is whether it is reachable.
+    expect(screen.queryByRole('combobox', { name: 'Group by' })).toBeNull()
+  })
+
+  it('puts focus on the grid, since the panel it was pressed in goes inert', () => {
+    renderBlotter()
+    openConfig()
+    fireEvent.click(screen.getByRole('button', { name: 'Hide' }))
+
+    expect(screen.getByRole('grid')).toHaveFocus()
+  })
 })
 
 describe('the filters suggest what is on the tape', () => {

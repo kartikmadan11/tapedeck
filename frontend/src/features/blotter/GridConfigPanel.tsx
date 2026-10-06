@@ -12,6 +12,10 @@ type Props = {
   id: string
   /** The names the Counterparty box offers, taken off the tape. */
   counterparties: readonly string[]
+  /** Closes the panel from inside it, so the right-click menu is not the only
+   *  way back out. Expected to move focus, since the panel it was pressed in
+   *  becomes inert. */
+  onHide: () => void
 }
 
 /** Darker than the panel it sits on, per the note in lib/ui.ts. */
@@ -24,7 +28,7 @@ const PANEL_CONTROL = `${CONTROL} w-full bg-tape-bg`
  * the panel cannot drift from the grid it describes: a header click shows up in
  * Order By because both are looking at `sorting`.
  */
-export function GridConfigPanel({ table, open, id, counterparties }: Props): ReactElement {
+export function GridConfigPanel({ table, open, id, counterparties, onHide }: Props): ReactElement {
   const { grouping, sorting } = table.getState()
   const groupBy = grouping[0]
   const splitBy = grouping[1]
@@ -52,6 +56,16 @@ export function GridConfigPanel({ table, open, id, counterparties }: Props): Rea
       {/* A stated width, not a derived one, so nothing in here relays out as
           the wrapper animates. */}
       <div className="tape-scroll ml-2 flex h-full w-70 flex-col gap-3 overflow-y-auto rounded-sm border border-tape-line bg-tape-panel p-2">
+        {/* The panel's own way out. Config is reachable only from the pane's
+            right-click menu, so without this the one way to close it is a
+            gesture nothing on screen mentions. */}
+        <div className="flex items-center justify-between">
+          <h2 className={MICRO_LABEL}>Config</h2>
+          <button className={CHIP} onClick={onHide} type="button">
+            Hide
+          </button>
+        </div>
+
         <Section title="Group by">
           <select
             aria-label="Group by"

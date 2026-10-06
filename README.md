@@ -574,6 +574,11 @@ covering the columns being read, and while it is closed it is `inert`, because a
 zero-width panel still holds real form controls and the next **Tab** out of the
 grid would otherwise land in an invisible select.
 
+It opens from the pane's menu and closes from a **Hide** button on its own
+header: an open panel is a visible surface, so it carries its own way out.
+**Hide** moves focus to the grid, since the panel goes `inert` with focus inside
+it.
+
 **The filter boxes suggest what is on the tape, not what the reference data
 says.** Symbol, Trader and Book on the pane bar, and Counterparty in the panel,
 each hang a `datalist` off the trades the pane is holding, so every suggestion

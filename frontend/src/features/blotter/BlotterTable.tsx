@@ -658,6 +658,12 @@ export function BlotterTable({
           <GridConfigPanel
             counterparties={suggestions.counterparty}
             id={configPanelId}
+            onHide={() => {
+              setConfigOpen(false)
+              // The panel is about to go inert with focus inside it, which would
+              // drop focus to the document. The grid is what it configures.
+              grid.current?.focus()
+            }}
             open={configOpen}
             table={table}
           />
