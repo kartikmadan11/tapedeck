@@ -297,13 +297,14 @@ export function Workspace({ trades, pendingIds, actions, nav }: Props): ReactEle
   }
 
   /**
-   * A pane opened from the nav, on the name it was given and on the default view.
+   * A new pane, on the name it was given and on the default view.
    *
    * The default view rather than a copy is the difference from Duplicate, and it
    * is the reason both controls exist: one branches off the view in front of you,
    * and this one is the empty second reading of the tape. It lands at the end of
-   * the workspace, because the control it comes off names no pane to open it
-   * beside.
+   * the workspace either way, including when a pane's own menu opened it: where a
+   * fresh view goes is not something the pane you right-clicked has a say in,
+   * which is Duplicate's job.
    */
   const addPane = (name: string): void => {
     // Guarded here as well as by withholding the control, since the ceiling is
@@ -561,6 +562,11 @@ export function Workspace({ trades, pendingIds, actions, nav }: Props): ReactEle
           onDuplicate={
             order.length >= MAX_PANES ? undefined : (config) => duplicate(region.id, config)
           }
+          // The same control the nav carries, reached from the pane instead.
+          // Two routes to one pane because the nav is where you look for it and
+          // the menu is where your hand already is.
+          onNewPane={order.length >= MAX_PANES ? undefined : () => addPane('')}
+          onShare={share}
           pendingIds={pendingIds}
           trades={trades}
         />
@@ -590,11 +596,13 @@ export function Workspace({ trades, pendingIds, actions, nav }: Props): ReactEle
         ? null
         : createPortal(<NewPane onOpen={addPane} />, nav)}
 
-      {/* The workspace is the subject here too, so this cannot live on a pane's
-        own bar: a Share button inside a pane could not say whether it meant that
-        pane or all of them. It stays on the workspace's own strip rather than
-        moving up beside New pane, because what it leaves behind is a line of
-        text and the nav has no room for one. */}
+      {/* The workspace is the subject here too, which is why the copy of this in
+        every pane's menu is named: "Share workspace" there, where an unqualified
+        Share inside a pane could not say whether it meant that pane or all of
+        them. This one stays on the workspace's own strip rather than moving up
+        beside New pane, because what it leaves behind is a line of text and the
+        nav has no room for one. It is also where that line appears when the menu
+        is what pressed it, since the strip is the only place with room. */}
       <div className="flex shrink-0 items-center justify-end gap-2">
         {shared === null ? null : (
           <span className={MICRO_LABEL} role="status">

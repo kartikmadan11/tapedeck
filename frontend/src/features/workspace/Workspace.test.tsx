@@ -84,6 +84,26 @@ function row(paneName: string, tradeId: string): HTMLElement | null {
 
 const panes = (): HTMLElement[] => screen.getAllByRole('grid')
 
+/**
+ * A pane's own controls, which are behind its right-click rather than on its
+ * bar. Portaled to the body, so the menu is not inside the region it belongs to
+ * and has to be addressed on its own.
+ *
+ * Pointer down before the right-click, because that is the order a browser fires
+ * the two in, and it is what closes a menu left open on another pane.
+ */
+function menu(paneName: string) {
+  const region = screen.getByRole('region', { name: paneName })
+  fireEvent.pointerDown(region)
+  fireEvent.contextMenu(region)
+  return within(screen.getByRole('menu'))
+}
+
+/** Opens a pane's menu and presses one of its items. */
+function choose(paneName: string, item: string): void {
+  fireEvent.click(menu(paneName).getByRole('menuitem', { name: item }))
+}
+
 /** A pane's name on its own bar, which is also the control that changes it. */
 const nameplate = (paneName: string): HTMLElement =>
   pane(paneName).getByRole('button', { name: `Rename ${paneName}` })
@@ -136,31 +156,33 @@ describe('the workspace', () => {
   it('never offers to close the only pane', () => {
     renderWorkspace()
 
-    // There is no button to press, rather than a button that refuses. The
-    // workspace cannot be emptied by any route a user has.
-    expect(first().queryByRole('button', { name: 'Close' })).toBeNull()
-    expect(first().getByRole('button', { name: 'Duplicate' })).toBeInTheDocument()
+    // Offered and refused rather than missing, which is the one thing the menu
+    // changed: an item that disappears is an item the one below it moves up
+    // into, and a workspace still cannot be emptied by any route a user has.
+    const items = menu('Trades')
+    expect(items.getByRole('menuitem', { name: 'Close' })).toBeDisabled()
+    expect(items.getByRole('menuitem', { name: 'Duplicate' })).toBeEnabled()
   })
 
   it('offers to close either of two panes, since neither of them is the slot', () => {
     renderWorkspace()
-    fireEvent.click(first().getByRole('button', { name: 'Duplicate' }))
+    choose('Trades', 'Duplicate')
 
     // Not "the first pane is permanent". Which pane is first is a position, and
     // a position changes when panes are moved, so that rule would hand the Close
     // button to whichever pane happened to be drawn first. One pane minimum is
     // the invariant that means something.
-    expect(first().getByRole('button', { name: 'Close' })).toBeInTheDocument()
-    expect(second().getByRole('button', { name: 'Close' })).toBeInTheDocument()
+    expect(menu('Trades').getByRole('menuitem', { name: 'Close' })).toBeEnabled()
+    expect(menu('Trades, pane 2').getByRole('menuitem', { name: 'Close' })).toBeEnabled()
   })
 
   it('adds a pane that closes, and closes only that pane', () => {
     renderWorkspace()
-    fireEvent.click(first().getByRole('button', { name: 'Duplicate' }))
+    choose('Trades', 'Duplicate')
 
     expect(panes()).toHaveLength(2)
 
-    fireEvent.click(second().getByRole('button', { name: 'Close' }))
+    choose('Trades, pane 2', 'Close')
     expect(panes()).toHaveLength(1)
     expect(screen.getByRole('region', { name: 'Trades' })).toBeInTheDocument()
   })
@@ -169,12 +191,17 @@ describe('the workspace', () => {
     address('?panes=8')
     renderWorkspace()
 
-    // Withheld rather than refused. The link numbers its panes p1 to p8, so a
-    // ninth pane would be a workspace that cannot be shared, which is worse than
-    // a button that is not there.
+    // Refused, and both routes to a ninth pane are. The link numbers its panes
+    // p1 to p8, so a ninth would be a workspace that cannot be shared. One
+    // pane's menu rather than all eight, since the items come off the same two
+    // props for every pane and only one menu is open at a time.
     expect(panes()).toHaveLength(8)
-    expect(screen.queryAllByRole('button', { name: 'Duplicate' })).toHaveLength(0)
-    expect(screen.getAllByRole('button', { name: 'Close' })).toHaveLength(8)
+    const items = menu('Trades')
+    expect(items.getByRole('menuitem', { name: 'Duplicate' })).toBeDisabled()
+    expect(items.getByRole('menuitem', { name: 'New pane' })).toBeDisabled()
+    expect(items.getByRole('menuitem', { name: 'Close' })).toBeEnabled()
+    // The nav's control is withheld instead, since nothing moves up into it.
+    expect(screen.queryByRole('button', { name: 'New pane' })).toBeNull()
   })
 
   it('opens the duplicate on the view it was duplicated from', () => {
@@ -182,9 +209,9 @@ describe('the workspace', () => {
 
     // A duplicate that arrived on the defaults would make the button useless:
     // the whole point is to branch off the arrangement in front of you.
-    fireEvent.click(first().getByRole('button', { name: 'Config' }))
+    choose('Trades', 'Config')
     fireEvent.change(first().getByLabelText('Group by'), { target: { value: 'symbol' } })
-    fireEvent.click(first().getByRole('button', { name: 'Duplicate' }))
+    choose('Trades', 'Duplicate')
 
     expect(second().getByRole('button', { name: 'VOD, 1 trades' })).toBeInTheDocument()
     expect(second().getByLabelText('Group by')).toHaveValue('symbol')
@@ -192,22 +219,23 @@ describe('the workspace', () => {
 
   it('leaves each pane holding its own view', () => {
     renderWorkspace()
-    fireEvent.click(first().getByRole('button', { name: 'Duplicate' }))
+    choose('Trades', 'Duplicate')
 
     // Filtering one pane must not reach the other. The panes share the single
     // cache entry they read from, and that is all they share.
     fireEvent.change(second().getByLabelText('Filter by symbol'), { target: { value: 'BARC' } })
 
-    expect(second().getByText('1 of 2 trades')).toBeInTheDocument()
-    expect(first().getByText('2 trades')).toBeInTheDocument()
+    expect(row('Trades, pane 2', 'TRD-100002')).not.toBeNull()
+    expect(row('Trades, pane 2', 'TRD-100001')).toBeNull()
     expect(row('Trades', 'TRD-100001')).not.toBeNull()
+    expect(row('Trades', 'TRD-100002')).not.toBeNull()
   })
 
   it('hands over the view and not the reading position', () => {
     renderWorkspace()
 
     fireEvent.click(row('Trades', 'TRD-100001') as HTMLElement)
-    fireEvent.click(first().getByRole('button', { name: 'Duplicate' }))
+    choose('Trades', 'Duplicate')
 
     // Which row someone had selected is where they were, not how they were
     // looking, so the duplicate starts with nothing selected and the pane that
@@ -219,7 +247,7 @@ describe('the workspace', () => {
 
   it('names the panes apart, so two grids are two things to a screen reader', () => {
     renderWorkspace()
-    fireEvent.click(first().getByRole('button', { name: 'Duplicate' }))
+    choose('Trades', 'Duplicate')
 
     const named = panes().map((grid) => grid.getAttribute('aria-label'))
     expect(named).toEqual([
@@ -287,7 +315,7 @@ describe('naming a pane', () => {
   it('does not hand a name to a duplicate', () => {
     renderWorkspace()
     rename('Trades', 'EU Flow')
-    fireEvent.click(pane('EU Flow').getByRole('button', { name: 'Duplicate' }))
+    choose('EU Flow', 'Duplicate')
 
     // The view is handed over and the name is not. Two panes with one name
     // between them are two panes nobody can tell apart.
@@ -342,7 +370,7 @@ describe('opening a pane from the nav', () => {
 
   it('opens it on the default view rather than on the view in front of you', () => {
     renderWorkspace()
-    fireEvent.click(first().getByRole('button', { name: 'Config' }))
+    choose('Trades', 'Config')
     fireEvent.change(first().getByLabelText('Group by'), { target: { value: 'symbol' } })
     openPane('EU Flow')
 
@@ -350,7 +378,9 @@ describe('opening a pane from the nav', () => {
     // branches off what you are reading and this one is the empty second view.
     expect(first().getByRole('button', { name: 'VOD, 1 trades' })).toBeInTheDocument()
     expect(pane('EU Flow').queryByRole('button', { name: 'VOD, 1 trades' })).toBeNull()
-    expect(pane('EU Flow').getByText('2 trades')).toBeInTheDocument()
+    // Flat, so both trades are rows of their own rather than inside a group.
+    expect(row('EU Flow', 'TRD-100001')).not.toBeNull()
+    expect(row('EU Flow', 'TRD-100002')).not.toBeNull()
   })
 
   it('opens nothing when the naming is abandoned', () => {
@@ -460,7 +490,7 @@ describe('arranging the panes', () => {
 
   function two(): void {
     renderWorkspace()
-    fireEvent.click(first().getByRole('button', { name: 'Duplicate' }))
+    choose('Trades', 'Duplicate')
   }
 
   /** Three even panes, which is the arrangement the nesting defect was found in
@@ -499,14 +529,14 @@ describe('arranging the panes', () => {
 
   it('gives a closed pane space back in proportion', () => {
     renderWorkspace()
-    fireEvent.click(first().getByRole('button', { name: 'Duplicate' }))
-    fireEvent.click(first().getByRole('button', { name: 'Duplicate' }))
+    choose('Trades', 'Duplicate')
+    choose('Trades', 'Duplicate')
 
     // Opening twice off the first pane leaves it a quarter, so closing the
     // middle pane has to leave the other two one to two, not evened out.
     expect(tree().shares).toEqual({ 'pane-1': 0.25, 'pane-3': 0.25, 'pane-2': 0.5 })
 
-    fireEvent.click(pane('Trades, pane 2').getByRole('button', { name: 'Close' }))
+    choose('Trades, pane 2', 'Close')
     expect(tree().shares).toEqual({ 'pane-1': 0.3333, 'pane-2': 0.6667 })
   })
 
@@ -832,8 +862,8 @@ describe('arranging the panes', () => {
 
   it('previews uneven panes at the shares they keep', () => {
     renderWorkspace()
-    fireEvent.click(first().getByRole('button', { name: 'Duplicate' }))
-    fireEvent.click(first().getByRole('button', { name: 'Duplicate' }))
+    choose('Trades', 'Duplicate')
+    choose('Trades', 'Duplicate')
 
     drag('Trades, pane 3')
     fireEvent.dragOver(zone(1, 'top'))
@@ -931,7 +961,7 @@ describe('a shared workspace', () => {
     expect(panes()).toHaveLength(2)
     expect(first().getByRole('button', { name: 'VOD, 1 trades' })).toBeInTheDocument()
     expect(first().queryByRole('button', { name: 'Book' })).toBeNull()
-    expect(second().getByText('1 of 2 trades')).toBeInTheDocument()
+    expect(row('Trades, pane 2', 'TRD-100001')).toBeNull()
     // The link turns the Trade column on, which the default view has off.
     expect(second().getByText('TRD-100002')).toBeInTheDocument()
   })
@@ -982,9 +1012,9 @@ describe('sharing a workspace', () => {
   it('copies a link to what is on screen now, not to what it opened on', async () => {
     renderWorkspace()
 
-    fireEvent.click(first().getByRole('button', { name: 'Config' }))
+    choose('Trades', 'Config')
     fireEvent.change(first().getByLabelText('Group by'), { target: { value: 'book' } })
-    fireEvent.click(first().getByRole('button', { name: 'Duplicate' }))
+    choose('Trades', 'Duplicate')
     fireEvent.change(second().getByLabelText('Filter by trader'), { target: { value: 'k.m' } })
 
     fireEvent.click(screen.getByRole('button', { name: 'Share' }))
@@ -997,6 +1027,19 @@ describe('sharing a workspace', () => {
     expect(shared?.views).toHaveLength(2)
     expect(shared?.views[0]?.grouping).toEqual(['book'])
     expect(shared?.views[1]?.columnFilters).toEqual([{ id: 'trader', value: 'k.m' }])
+  })
+
+  it('shares the workspace from a pane, and says which it means', async () => {
+    renderWorkspace()
+    choose('Trades', 'Duplicate')
+
+    // Named in the menu, because an unqualified Share sitting in one pane's own
+    // controls could not say whether it meant that pane or all of them. What it
+    // copies is the same link the strip's button copies, both panes and all.
+    choose('Trades', 'Share workspace')
+    expect(await screen.findByText('Link copied')).toBeInTheDocument()
+
+    expect(decodeWorkspace(new URL(copied[0] ?? '').searchParams)?.views).toHaveLength(2)
   })
 
   it('leaves the link in the address bar as well as on the clipboard', async () => {

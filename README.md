@@ -22,6 +22,13 @@ the name that booked them. Pause the feed, then amend the same trade from both
 windows without reloading, and the second attempt is told the row changed
 underneath it, with the version it is now on.
 
+**Right-click a pane for its own controls**: another pane, a duplicate of this
+one, its configuration, a reset, a link to the workspace and a close.
+Configuration is where **Group by** lives, and grouping by symbol is the check
+worth making: every group row's net quantity and net notional equal the
+positions panel's row for the same symbol, digit for digit. Holding **Shift**
+while right-clicking gives the browser its own menu back.
+
 ---
 
 ## Architecture decisions
@@ -208,7 +215,7 @@ npm run typecheck   # tsc --noEmit over both the node and the web projects
 npm run lint        # biome
 ```
 
-498 tests across 20 files. The ones that matter most:
+507 tests across 20 files. The ones that matter most:
 
 - **concurrency**: two amends submitted at the same `version`, where the second
   gets a 409 `VERSION_CONFLICT` naming the current version
@@ -297,6 +304,14 @@ npm run lint        # biome
   was given, opens one with no name at all on Enter alone, arrives on the default
   view where a duplicate arrives on its source's, and lands at the end of a
   side-by-side workspace beside the other two rather than under the last of them
+- **the pane's own menu**: that it opens where the pointer was, that it opens at
+  the pane's corner instead when the event carries no coordinates, which is the
+  keyboard route, that holding **Shift** leaves the event uncancelled so the
+  browser keeps its own menu, that the arrow keys step over the items a pane
+  cannot do rather than coming to rest on one, and that **Reset** puts the sort,
+  the filters, the grouping and the columns back while leaving the panel it was
+  reached from open. The Shift case asserts on the event rather than on the
+  absence of a sheet, so it is the `preventDefault` under test and not its effect
 - **the drop preview**: that the ghost arrangement is the one the drop produces
   and not the zone the pointer is in, driven from a side-by-side workspace where
   aiming at a bottom edge has to come back vertical, from three uneven panes
@@ -510,6 +525,50 @@ covering the columns being read, and while it is closed it is `inert`, because a
 zero-width panel still holds real form controls and the next **Tab** out of the
 grid would otherwise land in an invisible select.
 
+**A pane's own controls are on the pane, behind a right-click.** Its bar carries
+the handle, the name and those five filters, and nothing else. **New pane**,
+**Duplicate**, **Config**, **Reset**, **Share workspace** and **Close** were
+four chips on that same row, which is a third of a row a trader's hand is
+constantly on spent on things a view is arranged with once, and it pushed the
+filters into the width the pane's name needed. **Reset** is the view and only
+the view: no sort, no filters, no grouping and the default columns, leaving the
+pane's name, its size and the trades alone, because a reset that also renamed
+and resized the pane is a control nobody would risk pressing.
+
+Two of the six are the workspace's rather than the pane's, and the one that
+needed it is named for it. **New pane** means what it says wherever it is
+pressed. **Share workspace** does not: an unqualified Share sitting among a
+pane's own controls could not say whether it meant that pane or all of them,
+which is the argument that kept it off a pane's bar in the first place, and
+naming the item answers it. The strip's copy stays **Share**, because the strip
+is the workspace's own and has nothing to disambiguate from. It is also where the
+line of text lands when the menu is what pressed it, since a menu that has closed
+cannot say it worked.
+
+Four details that make the menu usable rather than merely present. Holding
+**Shift** while right-clicking falls through to the browser's own menu, since a
+grid that takes over right-click with nothing held back takes away view source,
+inspect and the spell checker. A right-click inside one of the boxes falls
+through for the same reason without needing the key, because cut, copy and paste
+belong to the field, and both the filter row and the panel are full of fields.
+The keyboard reaches it, because **Shift** with **F10** and the menu key both
+raise the same event, and a menu raised that way carries no pointer coordinates,
+so it opens at the pane's own corner rather than at the top left of the window.
+And what a pane cannot do is offered and refused
+rather than left out, so the only pane's **Close** and a full workspace's
+**Duplicate** are greyed in place: an item that disappears is an item the one
+below it moves up into, and a list read off muscle memory has to be the same list
+every time it opens.
+
+The cost is discoverability, and it is real: nothing on screen says to
+right-click. That is the convention this comes from, where every grid in a
+trading application is configured this way and a trader learns it once across all
+of them, and it is the wrong trade for somebody opening this one for the first
+time. **New pane** is in the nav for that reason, named, as the one route in that
+needs no prior knowledge. For the rest the mitigation is the line at the top of
+this file rather than a hint on the bar, which would be a chip spent saying there
+are no chips.
+
 **A workspace is a tree of splits, not one axis with a weight per pane.** Panes
 are dragged by the handle on their own bar and dropped on another pane's edge,
 and a drop means the pane lands beside that one pane, in that one pane's slot,
@@ -593,9 +652,9 @@ only supposed to rearrange.
 **Duplicate** opens another pane on the view the trader is currently looking at,
 and every pane renders the same trades from the single cache entry, so a second
 pane opens no second fetch, no second socket and no second cursor to reconcile.
-It stops being offered at eight panes, which is the point where the link format's
-`p1` to `p8` could no longer carry the workspace: a button that produced a
-workspace **Share** cannot describe is worse than a button that is not there.
+It is refused at eight panes, which is the point where the link format's `p1` to
+`p8` could no longer carry the workspace: a control that produced a workspace
+**Share** cannot describe is worse than one that will not fire.
 
 **A pane can also be opened from the nav, named as it is opened.** Duplicate is a
 pane's own control and hands over the view in front of it. **New pane** is the
@@ -605,8 +664,10 @@ because opening a pane is the moment someone knows what it is for. It lands at
 the end of the workspace, on the axis the workspace is already divided on, so a
 third pane joins two that stand side by side rather than arriving under whichever
 of them happens to be last. It takes its half out of that end, so the pane at the
-other end keeps the size it was given, and it is withheld at eight panes for the
-same reason Duplicate is.
+other end keeps the size it was given, and at eight panes it stops for the same
+reason Duplicate does. The nav's copy is withheld rather than refused, which is
+the one place the two differ: nothing moves up into the gap a missing chip
+leaves, where a missing menu item would hand its position to the next one.
 
 Where that control sits is worth a line, because it is the one place in the
 application where a component renders outside its own tree. The nav is where it

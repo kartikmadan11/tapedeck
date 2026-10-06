@@ -20,15 +20,17 @@ import {
 } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { DecimalString, Trade } from '@tapedeck/shared'
-import { BLOTTER_LIMIT, toMinorUnits } from '@tapedeck/shared'
+import { toMinorUnits } from '@tapedeck/shared'
 import type { KeyboardEvent, ReactElement, ReactNode } from 'react'
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
-import { CHIP, CONTROL, MICRO_LABEL } from '../../lib/ui.js'
+import { CONTROL } from '../../lib/ui.js'
 import type { PaneConfig } from '../workspace/paneConfig.js'
 import { DEFAULT_VIEW } from '../workspace/paneConfig.js'
 import { createColumns, DEFAULT_COLUMN, GroupToggle, groupedVisibility } from './columns.js'
 import { GridConfigPanel } from './GridConfigPanel.js'
 import { barScale, MagnitudeScale } from './magnitude.js'
+import type { Point } from './PaneMenu.js'
+import { PaneMenu } from './PaneMenu.js'
 import type { RowActions } from './SelectionBar.js'
 import { canWrite, SelectionBar } from './SelectionBar.js'
 import { useRowFlash } from './useRowFlash.js'
@@ -73,6 +75,21 @@ type Props = {
    * that would empty the workspace.
    */
   onClose?: (() => void) | undefined
+
+  /**
+   * Opens another pane on the default view. Omitted for the same reason
+   * onDuplicate is, which is also what greys the menu item rather than dropping
+   * it: a workspace at its ceiling has nowhere to put one.
+   */
+  onNewPane?: (() => void) | undefined
+
+  /**
+   * Copies a link to the whole workspace, not to this pane. The old argument
+   * for keeping it off a pane was that a Share on a pane's bar could not say
+   * which of the two it meant, and the menu answers that by naming it: the item
+   * reads "Share workspace" where the workspace's own strip just reads "Share".
+   */
+  onShare?: (() => void) | undefined
 
   /**
    * The handle this pane is moved by, rendered at the head of its filter bar.
@@ -122,6 +139,8 @@ export function BlotterTable({
   onConfigChange,
   onDuplicate,
   onClose,
+  onNewPane,
+  onShare,
   grip,
   nameplate,
 }: Props): ReactElement {
@@ -180,6 +199,26 @@ export function BlotterTable({
   // Generated rather than a literal, because the panel is per grid and a second
   // grid's toggle must not have its aria-controls pointing at this one's panel.
   const configPanelId = useId()
+
+  /**
+   * Back to the view a pane opens on: no sort, no filters, no grouping, and the
+   * columns the default shows.
+   *
+   * Not back to the trades, the name or the size. What a trader has arranged
+   * themselves into a corner with is the view, and a Reset that also renamed the
+   * pane and resized it would be a control nobody would risk pressing.
+   */
+  const reset = useCallback(() => {
+    setSorting(DEFAULT_VIEW.sorting)
+    setColumnFilters(DEFAULT_VIEW.columnFilters)
+    setGrouping(DEFAULT_VIEW.grouping)
+    setColumnVisibility(DEFAULT_VIEW.columnVisibility)
+    setExpanded({})
+  }, [])
+
+  /** Where the pane's menu was asked for, or null while it is closed. */
+  const [menuAt, setMenuAt] = useState<Point | null>(null)
+  const dismissMenu = useCallback(() => setMenuAt(null), [])
 
   const flashing = useRowFlash(trades)
 
@@ -378,8 +417,8 @@ export function BlotterTable({
 
   return (
     // Wraps the whole grid rather than the table, so a pane is one subtree with
-    // one scale: the bars, the count label and the config panel are all reading
-    // the same filtered rows.
+    // one scale: the bars and the config panel are all reading the same filtered
+    // rows.
     <MagnitudeScale minor={notionalScale}>
       {/*
        * min-w-0 is load-bearing. A flex item keeps min-width:auto, and every cell
@@ -387,31 +426,79 @@ export function BlotterTable({
        * full width of all twelve columns and pushes the positions panel off
        * screen. With it, the overflow-auto wrapper below scrolls the table.
        */}
-      <section aria-label={label} className="flex min-h-0 min-w-0 flex-1 flex-col">
-        {/*
-         * The filtered leaf count, not rows.length: with grouping on, rows.length
-         * is the number of groups, and "3 of 500 trades" when three symbols are
-         * grouped would be a straight lie about what is held.
-         */}
-        <FilterBar
-          configOpen={configOpen}
-          configPanelId={configPanelId}
-          grip={grip}
-          nameplate={nameplate}
-          onClose={onClose}
-          // The pane's own view, handed over as it stands: a duplicate opens on
-          // what the trader was looking at when they pressed it, which is the
-          // only reading of the word that is any use.
-          onDuplicate={
-            onDuplicate === undefined
-              ? undefined
-              : () => onDuplicate({ sorting, columnFilters, grouping, columnVisibility })
+      <section
+        aria-label={label}
+        className="flex min-h-0 min-w-0 flex-1 flex-col"
+        // On the pane rather than on the tape, so the bar, the rows and the
+        // config panel all answer to the same right-click. Shift is let through
+        // to the browser's own menu, which is what the sheet's last line says,
+        // and so is a box someone is typing in: cut, copy and paste belong to
+        // the field, and the filters and the panel are full of fields.
+        onContextMenu={(event) => {
+          const field =
+            event.target instanceof Element ? event.target.closest('input, select, textarea') : null
+          if (event.shiftKey || field !== null) {
+            return
           }
-          onToggleConfig={() => setConfigOpen((open) => !open)}
-          shown={leaves.length}
-          table={table}
-          total={trades.length}
-        />
+          event.preventDefault()
+          // A context menu raised from the keyboard carries no coordinates in
+          // every browser, so the pane's own corner is the fallback rather than
+          // the top left of the window.
+          const corner = event.currentTarget.getBoundingClientRect()
+          const keyed = event.clientX === 0 && event.clientY === 0
+          setMenuAt(
+            keyed
+              ? { x: corner.left + 8, y: corner.top + 8 }
+              : { x: event.clientX, y: event.clientY },
+          )
+        }}
+      >
+        <FilterBar grip={grip} nameplate={nameplate} table={table} />
+
+        {menuAt === null ? null : (
+          <PaneMenu
+            at={menuAt}
+            items={[
+              {
+                label: 'New pane',
+                onSelect: () => onNewPane?.(),
+                disabled: onNewPane === undefined,
+              },
+              {
+                label: 'Duplicate',
+                // The pane's own view, handed over as it stands: a duplicate
+                // opens on what the trader was looking at when they chose it,
+                // which is the only reading of the word that is any use.
+                onSelect: () =>
+                  onDuplicate?.({ sorting, columnFilters, grouping, columnVisibility }),
+                disabled: onDuplicate === undefined,
+                separated: true,
+              },
+              {
+                label: configOpen ? 'Hide config' : 'Config',
+                onSelect: () => setConfigOpen((open) => !open),
+                // The panel outlives the menu that opened it, so the item is
+                // the only thing left that can say it is open.
+                controls: configPanelId,
+                expanded: configOpen,
+              },
+              { label: 'Reset', onSelect: reset },
+              {
+                label: 'Share workspace',
+                onSelect: () => onShare?.(),
+                disabled: onShare === undefined,
+              },
+              {
+                label: 'Close',
+                onSelect: () => onClose?.(),
+                disabled: onClose === undefined,
+                separated: true,
+              },
+            ]}
+            label={label}
+            onDismiss={dismissMenu}
+          />
+        )}
 
         {/* The panel is a sibling of the grid, not an overlay on it, so opening it
           shrinks the tape instead of covering the columns being read. */}
@@ -743,13 +830,6 @@ function SortMarker({ direction }: { direction: false | 'asc' | 'desc' }): React
 
 type FilterBarProps = {
   table: Table<Trade>
-  shown: number
-  total: number
-  configOpen: boolean
-  configPanelId: string
-  onToggleConfig: () => void
-  onDuplicate: (() => void) | undefined
-  onClose: (() => void) | undefined
   grip: ReactNode | undefined
   nameplate: ReactNode | undefined
 }
@@ -762,20 +842,9 @@ type FilterBarProps = {
  * Deliberately not where grouping, ordering or column visibility live. These five
  * are the controls a trader reaches for constantly, and the rest are a setup a
  * view is arranged with once: putting both in one row would make the frequent
- * ones harder to find. The rest are in the panel this row's last button opens.
+ * ones harder to find. The rest are a right-click away, on the pane itself.
  */
-function FilterBar({
-  table,
-  shown,
-  total,
-  configOpen,
-  configPanelId,
-  onToggleConfig,
-  onDuplicate,
-  onClose,
-  grip,
-  nameplate,
-}: FilterBarProps): ReactElement {
+function FilterBar({ table, grip, nameplate }: FilterBarProps): ReactElement {
   const value = (id: string): string => (table.getColumn(id)?.getFilterValue() as string) ?? ''
   const set = (id: string, next: string): void => {
     table.getColumn(id)?.setFilterValue(next === '' ? undefined : next)
@@ -833,56 +902,8 @@ function FilterBar({
         <option value="ACTIVE">ACTIVE</option>
         <option value="CANCELLED">CANCELLED</option>
       </select>
-
-      <span className={`ml-auto ${MICRO_LABEL}`}>{countLabel(shown, total)}</span>
-
-      <button
-        aria-controls={configPanelId}
-        aria-expanded={configOpen}
-        className={CHIP}
-        onClick={onToggleConfig}
-        type="button"
-      >
-        {configOpen ? 'Hide config' : 'Config'}
-      </button>
-
-      {/*
-       * The pane's own controls, on the pane's own bar. Not the grouping and
-       * ordering chrome this row deliberately does not carry: these two are about
-       * the window rather than about the view inside it, and a Duplicate button
-       * anywhere else could not say which view it was duplicating.
-       */}
-      {onDuplicate === undefined ? null : (
-        <button className={CHIP} onClick={onDuplicate} type="button">
-          Duplicate
-        </button>
-      )}
-
-      {onClose === undefined ? null : (
-        <button
-          className={`${CHIP} hover:border-tape-sell hover:text-tape-sell`}
-          onClick={onClose}
-          type="button"
-        >
-          Close
-        </button>
-      )}
     </div>
   )
-}
-
-/**
- * The count held is the whole book only while the window is not full. At
- * BLOTTER_LIMIT the blotter is showing the most recent 500 of a book that is
- * larger, and a bare "500 trades" would claim otherwise.
- *
- * Positions are not qualified the same way: they are aggregated server-side over
- * every active trade, so the panel can report exposure the visible rows do not
- * add up to.
- */
-function countLabel(shown: number, total: number): string {
-  const held = total >= BLOTTER_LIMIT ? `latest ${total}` : `${total}`
-  return shown === total ? `${held} trades` : `${shown} of ${held} trades`
 }
 
 /** Lighter than the canvas it sits on, so the filter row reads as chrome above

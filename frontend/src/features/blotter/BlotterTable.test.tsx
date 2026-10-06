@@ -124,9 +124,22 @@ const UNGROUPED = [
 /** What a group row can answer for, and so what grouping leaves on screen. */
 const NETTED = ['Price', 'Quantity', 'Notional']
 
-function openConfig(): void {
-  fireEvent.click(screen.getByRole('button', { name: 'Config' }))
+/** The pane itself, which is what carries its own menu. */
+const paneRegion = (): HTMLElement => screen.getByRole('region', { name: 'Trades' })
+
+/**
+ * A pane's own controls, behind its right-click rather than on its bar. Pointer
+ * down first, because that is the order a browser fires the two in and it is
+ * also what closes a menu already open.
+ */
+function choose(item: string): void {
+  const region = paneRegion()
+  fireEvent.pointerDown(region)
+  fireEvent.contextMenu(region)
+  fireEvent.click(screen.getByRole('menuitem', { name: item }))
 }
+
+const openConfig = (): void => choose('Config')
 
 function set(label: string, value: string): void {
   fireEvent.change(screen.getByLabelText(label), { target: { value } })
@@ -321,16 +334,6 @@ describe('grouping and aggregation', () => {
       '432,250.00',
     ])
   })
-
-  it('counts the trades held, not the groups showing', () => {
-    renderBlotter()
-    openConfig()
-    set('Group by', 'symbol')
-
-    // Two group rows are on screen. "2 trades" would be a lie about a book of
-    // four.
-    expect(screen.getByText('4 trades')).toBeInTheDocument()
-  })
 })
 
 describe('a group row is not a trade', () => {
@@ -406,9 +409,8 @@ describe('virtualisation', () => {
   it('still reports the whole tape rather than the part of it drawn', () => {
     renderBlotter(TAPE)
 
-    // Both of these would otherwise describe the window instead of the book,
-    // which is the characteristic way a virtualised grid lies.
-    expect(screen.getByText('latest 500 trades')).toBeInTheDocument()
+    // Would otherwise describe the window instead of the book, which is the
+    // characteristic way a virtualised grid lies.
     expect(screen.getByRole('grid')).toHaveAttribute('aria-rowcount', '501')
   })
 
@@ -618,5 +620,136 @@ describe('the configuration panel', () => {
     set('Minimum notional', '3000')
     expect(row('TRD-100001')).not.toBeNull()
     expect(row('TRD-100004')).toBeNull()
+  })
+})
+
+describe("a pane's own menu", () => {
+  /** The positioned sheet, which is the menu's parent: the line about shift is
+   *  inside the sheet and outside the menu, so the menu's children are all
+   *  items. */
+  const sheet = (): HTMLElement | null => screen.queryByRole('menu')?.parentElement ?? null
+
+  /** Returns false when the event was cancelled, which is the preventDefault
+   *  itself rather than its effect. */
+  const rightClick = (init: object = {}): boolean => fireEvent.contextMenu(paneRegion(), init)
+
+  it('opens where the pointer was rather than where the pane is', () => {
+    renderBlotter()
+    rightClick({ clientX: 420, clientY: 160 })
+
+    // Unclamped, because the clamp that keeps a sheet inside the viewport needs
+    // a measured box and jsdom has no layout to measure.
+    expect(sheet()).toHaveStyle({ left: '420px', top: '160px' })
+  })
+
+  it('opens at the pane when the menu came from the keyboard', () => {
+    renderBlotter()
+    const region = paneRegion()
+    region.getBoundingClientRect = (): DOMRect => ({ ...new DOMRect(), left: 240, top: 300 })
+
+    // Shift+F10 and the menu key both raise a contextmenu event, and it carries
+    // no coordinates. The top left of the window is the wrong place for a menu
+    // belonging to a pane halfway down the screen.
+    rightClick()
+    expect(sheet()).toHaveStyle({ left: '248px', top: '308px' })
+  })
+
+  it('leaves the browser its own menu when shift is held', () => {
+    renderBlotter()
+
+    // A grid that takes over right-click with nothing held back takes away view
+    // source, inspect and the spell checker, which is why the sheet says so.
+    expect(rightClick({ shiftKey: true })).toBe(true)
+    expect(sheet()).toBeNull()
+
+    expect(rightClick()).toBe(false)
+    expect(sheet()).not.toBeNull()
+  })
+
+  it('leaves a box someone is typing in its own menu', () => {
+    renderBlotter()
+
+    // Cut, copy and paste belong to the field. The pane's menu is on the pane,
+    // and the filters and the config panel are full of boxes.
+    const box = screen.getByLabelText('Filter by symbol')
+    expect(fireEvent.contextMenu(box)).toBe(true)
+    expect(sheet()).toBeNull()
+  })
+
+  it('steps the arrow keys over the items that are refused', () => {
+    renderBlotter()
+    rightClick()
+
+    // A blotter with no workspace around it can open, duplicate, share and
+    // close nothing, so four of the six are refused and the keyboard must not
+    // come to rest on any of them.
+    const menu = screen.getByRole('menu')
+    expect(screen.getByRole('menuitem', { name: 'Config' })).toHaveFocus()
+
+    fireEvent.keyDown(menu, { key: 'ArrowDown' })
+    expect(screen.getByRole('menuitem', { name: 'Reset' })).toHaveFocus()
+
+    // Down from the last item offered wraps past Close, New pane and Duplicate
+    // rather than stopping on any of them.
+    fireEvent.keyDown(menu, { key: 'ArrowDown' })
+    expect(screen.getByRole('menuitem', { name: 'Config' })).toHaveFocus()
+  })
+
+  it('closes on escape, and choosing nothing is not a choice', () => {
+    renderBlotter()
+    rightClick()
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+
+    expect(sheet()).toBeNull()
+    // The panel stays shut. It is mounted either way, so this asks the question
+    // a screen reader asks: inert and aria-hidden, or reachable.
+    expect(screen.queryByRole('combobox', { name: 'Group by' })).toBeNull()
+  })
+
+  it('closes when a click lands outside it', () => {
+    renderBlotter()
+    rightClick()
+    fireEvent.pointerDown(document.body)
+
+    expect(sheet()).toBeNull()
+  })
+
+  it('says the config is open, since the panel outlives the menu', () => {
+    renderBlotter()
+    openConfig()
+    rightClick()
+
+    // The item is the only thing left that can carry it: the button that used
+    // to say so was on the bar, and the menu it moved into closes on the press.
+    const item = screen.getByRole('menuitem', { name: 'Hide config' })
+    expect(item).toHaveAttribute('aria-expanded', 'true')
+
+    // And says which thing is open, since the sheet is portaled to the body and
+    // the panel is nowhere near it in the tree.
+    const controlled = document.getElementById(item.getAttribute('aria-controls') ?? '')
+    expect(controlled).toContainElement(screen.getByRole('combobox', { name: 'Group by' }))
+  })
+
+  it('puts the view back the way the pane opened, and no more than that', () => {
+    renderBlotter()
+    openConfig()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Quantity' }))
+    set('Minimum quantity', '2000')
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Book' }))
+    set('Group by', 'symbol')
+
+    choose('Reset')
+
+    // All four at once, because a Reset that cleared three of them is worse
+    // than none: the one left behind is the one nobody thinks to look for.
+    expect(headers()).toEqual(UNGROUPED)
+    expect(row('TRD-100004')).not.toBeNull()
+    expect(screen.getByLabelText('Order by')).toHaveValue('tradeTimestamp')
+    expect(screen.getByRole('button', { name: 'Desc' })).toBeInTheDocument()
+
+    // Still open. Reset is the view and not the pane, and a control that also
+    // closed what you were working in is a control nobody presses twice.
+    expect(screen.getByRole('combobox', { name: 'Group by' })).toHaveValue('')
   })
 })
