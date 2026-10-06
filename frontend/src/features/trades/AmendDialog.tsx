@@ -8,6 +8,7 @@ import type { z } from 'zod'
 import { ErrorNotice } from '../../components/ErrorNotice.js'
 import { ApiRequestError } from '../../lib/api.js'
 import { ACTION, CHIP, CONTROL, MICRO_LABEL } from '../../lib/ui.js'
+import { BookedBy } from './BookedBy.js'
 import { useAmendTrade } from './useAmendTrade.js'
 
 /**
@@ -89,7 +90,7 @@ export function AmendDialog({ trade, onClose }: Props): ReactElement {
         role="dialog"
       >
         <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
-          <header className="mb-3 flex items-baseline justify-between">
+          <header className="mb-1 flex items-baseline justify-between">
             <h2 className="text-sm font-semibold" id={titleId}>
               Amend {trade.tradeId}
               <span className="ml-2 text-tape-muted">
@@ -98,6 +99,8 @@ export function AmendDialog({ trade, onClose }: Props): ReactElement {
             </h2>
             <span className={MICRO_LABEL}>editing version {editingVersion}</span>
           </header>
+
+          <BookedBy action="amendment" trader={trade.trader} />
 
           <div className="grid grid-cols-3 gap-2">
             {/* The label span is a sibling of the input, so the uppercase and the

@@ -4,6 +4,7 @@ import type { ReactElement } from 'react'
 import { useEffect, useId } from 'react'
 import { ErrorNotice } from '../../components/ErrorNotice.js'
 import { CHIP } from '../../lib/ui.js'
+import { BookedBy } from './BookedBy.js'
 import { useCancelTrade } from './useCancelTrade.js'
 
 type Props = { trade: Trade; onClose: () => void }
@@ -45,9 +46,11 @@ export function CancelDialog({ trade, onClose }: Props): ReactElement {
         className="w-full max-w-md rounded-sm border border-tape-line bg-tape-panel p-4 shadow-[0_24px_64px_-12px_rgb(0_0_0/0.9)]"
         role="dialog"
       >
-        <h2 className="mb-3 text-sm font-semibold" id={titleId}>
+        <h2 className="mb-1 text-sm font-semibold" id={titleId}>
           Cancel {trade.tradeId}?
         </h2>
+
+        <BookedBy action="cancellation" trader={trade.trader} />
 
         <p className="text-tape-muted">
           <span className={trade.side === 'BUY' ? 'text-tape-buy' : 'text-tape-sell'}>

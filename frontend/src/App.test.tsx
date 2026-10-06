@@ -675,3 +675,43 @@ describe('acting on a row', () => {
     expect(readback()).toBeEmptyDOMElement()
   })
 })
+
+describe('whose trade it is', () => {
+  /** The default identity is the fixture's trader, so a case about someone
+   *  else's trade moves the trade rather than the window. */
+  async function open(chip: 'Amend' | 'Cancel', trader?: string): Promise<void> {
+    if (trader !== undefined) {
+      respondWith([aTrade({ trader })], [aPosition()], 1)
+    }
+    renderApp()
+    await findRow('TRD-100001')
+    selectRow('TRD-100001')
+    fireEvent.click(screen.getByRole('button', { name: chip }))
+    await screen.findByRole('dialog')
+  }
+
+  it('says the trade is yours when it is', async () => {
+    await open('Amend')
+
+    expect(screen.getByText('Booked by you')).toBeInTheDocument()
+  })
+
+  it('names the trader and says whose name the amendment will carry', async () => {
+    await open('Amend', 'r.chatterjee')
+
+    // Not a refusal. Correcting someone else's booking is trade support's job,
+    // so the control is saying whose trade it is and who the event will name.
+    expect(screen.getByText(/Booked by r\.chatterjee/)).toHaveTextContent(
+      'Your name goes on the amendment.',
+    )
+    expect(screen.getByRole('button', { name: 'Save amendment' })).toBeEnabled()
+  })
+
+  it('names the cancellation rather than the amendment on the other dialog', async () => {
+    await open('Cancel', 'r.chatterjee')
+
+    expect(screen.getByText(/Booked by r\.chatterjee/)).toHaveTextContent(
+      'Your name goes on the cancellation.',
+    )
+  })
+})
