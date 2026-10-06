@@ -5,17 +5,13 @@ import type { PaneConfig } from './paneConfig.js'
 import { DEFAULT_VIEW, showsByDefault } from './paneConfig.js'
 
 /**
- * The columns a shared link is allowed to name.
- *
- * An enum rather than a free string, because sorting, grouping and filtering all
- * look the id up as a column and work with what they find. A link naming a
- * column that does not exist is not a view the grid can build, so it is rejected
- * here rather than half-applied there.
+ * The columns a shared link is allowed to name. An enum rather than a free
+ * string, because a link naming a column that does not exist is not a view the
+ * grid can build.
  *
  * Duplicated from the column definitions on purpose: a schema that read its own
  * valid values out of the thing it validates would accept whatever it was given.
- * The test holds the two lists together, so adding a column and forgetting to
- * make it shareable fails a test rather than quietly dropping out of links.
+ * A test holds the two lists together.
  */
 const COLUMN_IDS = [
   'tradeId',
@@ -37,12 +33,9 @@ export const SHAREABLE_COLUMNS: readonly string[] = COLUMN_IDS
 const columnId = z.enum(COLUMN_IDS)
 
 /**
- * Panes have a floor of one and a ceiling of eight.
- *
- * The floor carries the one-pane-cannot-close invariant into the schema, so a
- * crafted link cannot produce the empty workspace the UI has no way to reach.
- * The ceiling is there because each pane is a table model and a virtualiser, and
- * a link is a thing someone else clicks.
+ * Panes have a floor of one and a ceiling of eight. The floor carries the
+ * one-pane-cannot-close invariant into the schema, so a crafted link cannot
+ * produce the empty workspace the UI has no way to reach.
  */
 export const MAX_PANES = 8
 
@@ -50,10 +43,9 @@ const view = z.object({
   sorting: z.array(z.object({ id: columnId, desc: z.boolean() })).max(COLUMN_IDS.length),
 
   /**
-   * Filter values are strings, always, and now unavoidably: they arrive as one
-   * parameter value each, and a URLSearchParams value is a string or it is
-   * absent. The bound is what still earns its place, since the box itself has no
-   * maxlength and a link is a thing someone else clicks.
+   * Filter values are always strings: they arrive as one parameter value each,
+   * and a URLSearchParams value is a string or it is absent. The bound is here
+   * because the box itself has no maxlength.
    */
   columnFilters: z
     .array(z.object({ id: columnId, value: z.string().max(64) }))
@@ -63,25 +55,18 @@ const view = z.object({
   grouping: z.array(columnId).max(2),
 
   /**
-   * The one place a column id is not checked, because this is the one place an
-   * unrecognised id cannot do anything: visibility is read per column as
+   * The one place a column id is not checked. Visibility is read per column as
    * columnVisibility[column.id] ?? true, so a key for a column that is not there
-   * is never looked at. Checking it would mean a Partial record, whose values are
-   * boolean | undefined and so not a VisibilityState.
+   * is never looked at, and checking it would mean a Partial record, whose values
+   * are boolean | undefined and so not a VisibilityState.
    */
   columnVisibility: z.record(z.string().max(64), z.boolean()),
 })
 
 /**
- * Where a pane sits and how much of the window it has, which together are the
- * arrangement.
- *
- * A path is bounded by the pane ceiling at both ends: it cannot be deeper than
- * the number of panes there are to nest, and no split can have more children
- * than the workspace has panes. A share is a fraction of the window rather than
- * of the split above it, because that is the figure that means the same thing
- * whatever the link does with the levels in between, and it is the one a person
- * reading the URL can interpret.
+ * Where a pane sits and how much of the window it has. A share is a fraction of
+ * the window rather than of the split above it, which is the figure that means
+ * the same thing whatever the link does with the levels in between.
  */
 /** No split can have more children than the workspace has panes to put in it. */
 const LAST_SLOT = MAX_PANES - 1
@@ -94,20 +79,14 @@ const placed = z.object({
 })
 
 /**
- * How long a pane's name can be.
- *
- * Short enough to sit on a bar that already holds five filters and four buttons.
- * Exported so the box enforces it as it is typed, rather than the schema
- * refusing the whole link once it is too late to say anything useful about it.
+ * How long a pane's name can be. Exported so the box enforces it as it is typed,
+ * rather than the schema refusing the whole link afterwards.
  */
 export const NAME_LIMIT = 24
 
 /**
- * A pane's own name, or null for one that has none.
- *
- * Free text someone typed, so there is nothing to validate but the length. Null
- * rather than absent, because a pane with no name of its own is named by where
- * it is, and that is a fact about the pane rather than a field that is missing.
+ * A pane's own name, or null for one that has none. Free text someone typed, so
+ * there is nothing to validate but the length.
  */
 const paneName = z.string().min(1).max(NAME_LIMIT).nullable()
 
@@ -147,10 +126,9 @@ function owned(key: string): boolean {
 }
 
 /**
- * Four decimal places, which is a tenth of a pixel on a 4K screen and two
- * characters a person can read. Weights are re-derived from these and
- * renormalised, so three thirds written as `0.3333` come back as three thirds
- * rather than as a workspace a ten-thousandth short.
+ * Four decimal places, which is a tenth of a pixel on a 4K screen. Weights are
+ * re-derived from these and renormalised, so three thirds written as `0.3333`
+ * come back as three thirds rather than a workspace a ten-thousandth short.
  */
 const PLACES = 1e4
 
@@ -159,11 +137,8 @@ const ROUNDING = 1 / PLACES
 
 /**
  * Whether this is the order a pane opens on, which a link therefore leaves
- * unsaid.
- *
- * Compared field by field rather than by identity, because the sorting a grid
- * reports back is rebuilt by the table on every change and is only ever equal to
- * the default by value.
+ * unsaid. Compared field by field rather than by identity, because the sorting a
+ * grid reports back is rebuilt by the table on every change.
  */
 function opensOnOrder(sorting: PaneConfig['sorting']): boolean {
   return (
@@ -176,42 +151,19 @@ function opensOnOrder(sorting: PaneConfig['sorting']): boolean {
 }
 
 /**
- * The view of one pane, as query parameters.
- *
- * Readable on purpose, and that is a decision with a cost attached. The payload
- * used to be base64url, which was shorter and immune to hand-editing. Spelling
- * it out means a trader can read a link before clicking it, change a grouping
- * without opening the app, and see from the address bar what a colleague is
- * actually looking at.
- *
- * Lists repeat the parameter rather than joining with a separator:
+ * The view of one pane, as query parameters:
  *
  *     ?panes=2&p1.group=symbol&p1.group=book&p1.sort=-quantity&p1.where.symbol=VOD
  *
- * A comma would have been shorter and would not have survived. URLSearchParams
- * serialises to application/x-www-form-urlencoded, whose safe set is
- * alphanumerics plus `*`, `-`, `.` and `_`, so a comma comes out as `%2C` and
- * the readability is gone at the first list. Repeating the key needs no
- * separator at all, so nothing in the query is escaped except the two things
- * that should be: a filter value and a pane's name, which are both free text
- * someone typed into a box. A space in either comes out as `+`, which is in the
- * safe set and reads as a space.
+ * Lists repeat the parameter rather than joining with a separator. URLSearchParams
+ * serialises to application/x-www-form-urlencoded, whose safe set is only
+ * alphanumerics, `*`, `-`, `.` and `_`, so a comma comes out as `%2C`. Repeating
+ * the key escapes nothing except a filter value and a pane's name, which are free
+ * text someone typed into a box. `-` marks a descending sort.
  *
- * `-` marks a descending sort, as it does in most APIs that take one.
- *
- * The arrangement rides along as `axis` for the root, `p{n}.at` for where each
- * pane sits and `p{n}.size` for how much of the window it has, and `p{n}.name`
- * carries a name somebody gave a pane. All four are omitted when they say
- * nothing: a stacked workspace of evenly sized panes with no names on it is what
- * a link opens on, so the common case writes none of them and the old one-axis
- * links keep meaning what they meant.
- *
- * The view is written the same way, as what the pane does differently rather
- * than as what it holds. The default view hides the trade id and orders by time,
- * so a link that stated the visibility and the sorting it was handed would carry
- * `p1.hide=tradeId&p1.sort=-tradeTimestamp` on every pane of every workspace,
- * and the one fact worth sending, that this pane is not like that, would be the
- * hardest thing in the query to see.
+ * The arrangement rides along as `axis` for the root and `p{n}.at`, `p{n}.size`
+ * and `p{n}.name` per pane. Everything here is omitted when it matches the
+ * default, which the decoder's own defaults are the other half of.
  */
 export function encodeWorkspace(root: Region, viewOf: (id: string) => PaneConfig): URLSearchParams {
   const params = new URLSearchParams()
@@ -236,8 +188,7 @@ export function encodeWorkspace(root: Region, viewOf: (id: string) => PaneConfig
     const config = viewOf(leaf.id)
     const key = (field: string): string => `p${index + 1}.${field}`
 
-    // Only a name somebody chose. A pane without one is named by where it sits,
-    // and where it sits is in the link already.
+    // Only a name somebody chose. A pane without one is named by where it sits.
     if (leaf.name !== undefined) {
       params.set(key('name'), leaf.name)
     }
@@ -248,30 +199,26 @@ export function encodeWorkspace(root: Region, viewOf: (id: string) => PaneConfig
       params.set(key('size'), String(Math.round((shares.get(leaf.id) ?? 0) * PLACES) / PLACES))
     }
 
-    // In the order the config panel lists them, so reading the URL and reading
-    // the panel are the same exercise.
     for (const id of config.grouping) {
       params.append(key('group'), id)
     }
     if (!opensOnOrder(config.sorting)) {
       const tokens = config.sorting.map((sort) => `${sort.desc ? '-' : ''}${sort.id}`)
       // A `sort` with nothing after it is a pane with no order at all, which has
-      // to be stated now that an absent one means the default. Clicking a header
-      // until the arrow goes away is a decision as much as sorting on it is.
+      // to be stated because an absent one means the default.
       for (const token of tokens.length === 0 ? [''] : tokens) {
         params.append(key('sort'), token)
       }
     }
     // One parameter per filter rather than a list of id:value pairs. A value is
-    // free text, so any separator chosen for it is a separator a trader can type
-    // into the box and break their own link with.
+    // free text, so any separator chosen for it is one a trader can type into the
+    // box and break their own link with.
     for (const filter of config.columnFilters) {
       params.set(key(`where.${filter.id}`), String(filter.value))
     }
-    // Driven by the column list rather than by the record's own keys, because
-    // the two are not the same question: a record with no entry for the trade id
-    // is a pane showing it, and only the list knows which columns there are to
-    // have no entry for.
+    // Driven by the column list rather than by the record's own keys: a record
+    // with no entry for a column is a pane showing it, and only the list knows
+    // which columns there are to have no entry for.
     for (const id of COLUMN_IDS) {
       const visible = config.columnVisibility[id] ?? true
       if (visible !== showsByDefault(id)) {
@@ -285,11 +232,8 @@ export function encodeWorkspace(root: Region, viewOf: (id: string) => PaneConfig
 
 /**
  * How many panes the link is asking for: the stated count if there is one, and
- * otherwise the highest pane any parameter mentions.
- *
- * Deriving it is most of what makes the URL worth being able to read. Appending
- * `?p1.group=symbol` to a bare address is a complete request, and the count only
- * has to be stated to ask for a pane that carries no settings of its own.
+ * otherwise the highest pane any parameter mentions. The count only has to be
+ * stated to ask for a pane that carries no settings of its own.
  *
  * The ceiling is enforced here as well as in the schema, because this is the
  * number a loop runs to and a link may ask for a hundred thousand.
@@ -313,12 +257,9 @@ function paneCount(params: URLSearchParams): number | null {
 
 /**
  * The sizes the link states, with whatever it left out dividing what is left
- * over evenly.
- *
- * So `&p1.size=0.5` on a workspace of three is a complete request: pane one
- * takes half and the other two take a quarter each. Null when the link has
- * already spent the window and still has panes to place, which is a size for a
- * pane that could only be invisible.
+ * over evenly: `&p1.size=0.5` on a workspace of three gives pane one half and
+ * the other two a quarter each. Null when the link has already spent the window
+ * and still has panes to place.
  *
  * Sizes that account for every pane are passed through untouched and
  * renormalised downstream, because four decimal places do not sum to one and a
@@ -330,9 +271,8 @@ function sizes(stated: readonly (number | null)[]): number[] | null {
     return stated.map((size) => size ?? 0)
   }
 
-  // The accumulator is stated, because the sizes it adds up are nullable and
-  // reduce would otherwise take its type from them and make the running total
-  // nullable too.
+  // The accumulator is stated because the sizes it adds up are nullable, and
+  // reduce would otherwise take the running total's type from them.
   const spent = stated.reduce<number>((sum, size) => sum + (size ?? 0), 0)
   const spare = 1 - spent
   if (spare <= 0) {
@@ -349,17 +289,14 @@ type Placement = { at: readonly number[]; of: number }
  * one.
  *
  * The leaves are pane numbers rather than ids, counted from zero, and the order
- * of a split is the order of the indices rather than the order of the pane
- * numbers: a path says where a pane is, and the numbering is how its parameters
- * are grouped. A link whose paths disagree with its numbering therefore draws
- * the panes where the paths put them and renumbers them on the next share.
+ * of a split is the order of the indices rather than of the pane numbers. A link
+ * whose paths disagree with its numbering draws the panes where the paths put
+ * them and renumbers them on the next share.
  *
- * Forgiving about two things and strict about one. Gaps in the indices are an
- * order and nothing more, so `0` and `2` are the first and the second. A level
- * holding a single slot has nothing to divide, so what it holds moves up, the
- * same way closing a pane promotes the one region its splitter has left. But a
- * pane and a split in the same slot, or two panes claiming it, is a question
- * with no answer, and the whole link is rejected rather than guessed at.
+ * Gaps in the indices are an order and nothing more, so `0` and `2` are the
+ * first and the second. A level holding a single slot has nothing to divide, so
+ * what it holds moves up. A pane and a split in the same slot, or two panes
+ * claiming it, is rejected rather than guessed at.
  */
 function arrangementOf(placements: readonly Placement[]): Arrangement | null {
   const only = placements[0]
@@ -411,13 +348,8 @@ export type WorkspaceLink = {
 
 /**
  * Null for anything that is not a workspace, and the caller falls back to the
- * default single pane.
- *
- * A readable URL is a URL people edit, so this is reached with typos in it far
- * more often than the base64 version was. It still rejects the whole link rather
- * than dropping the part it could not read: a link that half-applies shows a
- * view nobody chose, and looks like the app losing state rather than the link
- * being wrong.
+ * default single pane. The whole link is rejected rather than the part that could
+ * not be read: a link that half-applies shows a view nobody chose.
  *
  * What a link does not state it gets from the default view, which is the other
  * half of the encoder writing only what differs. So this returns a whole
@@ -440,19 +372,16 @@ export function decodeWorkspace(params: URLSearchParams): WorkspaceLink | null {
     const order = params.getAll(key('sort'))
 
     panes.push({
-      // Blank is the same as absent, which is what clearing the box on screen
-      // does: a name of nothing is a pane back on the name its position gives it,
-      // not a pane with an empty title.
+      // Blank is the same as absent: a name of nothing is a pane back on the
+      // name its position gives it, not a pane with an empty title.
       name: name === '' ? null : name,
       // A pane with no path stated sits at the top level in its own numbered
       // slot, so appending two paths to a bare link is a complete request and
       // the unnested workspace states no paths at all.
       at: at === null ? [number - 1] : at.split('.').map(Number),
       share: size === null ? null : Number(size),
-      // Absent is the order a pane opens on, not no order, which is what makes
-      // appending a grouping to a bare address a complete request rather than a
-      // request for an unsorted tape. A parameter with no value is the no order
-      // case, and it is the only thing absence can no longer say.
+      // Absent is the order a pane opens on, not no order. A parameter with no
+      // value is the no order case.
       sorting:
         order.length === 0
           ? DEFAULT_VIEW.sorting
@@ -484,9 +413,8 @@ export function decodeWorkspace(params: URLSearchParams): WorkspaceLink | null {
     return null
   }
 
-  // Shaped by hand above, validated here. Everything the parameters could not
-  // get wrong structurally they can still get wrong by name or by number, and
-  // the schema is the only thing that knows which names are columns.
+  // Shaped by hand above, validated here: the schema is the only thing that
+  // knows which names are columns.
   const parsed = workspaceState.safeParse({
     axis: params.get(AXIS_PARAM) ?? 'rows',
     panes: panes.map((pane, index) => ({ ...pane, share: shares[index] ?? 0 })),
@@ -531,10 +459,9 @@ export function readWorkspace(search: string): WorkspaceLink | null {
 export function workspaceUrl(root: Region, viewOf: (id: string) => PaneConfig): string {
   const url = new URL(window.location.href)
 
-  // Cleared before it is written, and this is the part the single opaque
-  // parameter got for free. Closing a pane, clearing a filter or putting the
-  // panes back in a stack now has to remove a parameter, or the next read picks
-  // up what the last share left.
+  // Cleared before it is written. Closing a pane, clearing a filter or putting
+  // the panes back in a stack removes a parameter, or the next read picks up
+  // what the last share left.
   for (const key of [...url.searchParams.keys()]) {
     if (owned(key)) {
       url.searchParams.delete(key)

@@ -37,11 +37,7 @@ function aPosition(overrides: Record<string, unknown> = {}): Position {
   })
 }
 
-/**
- * Stands in for the browser's WebSocket so a frame can be delivered by hand. The
- * reducer is tested on its own; what this proves is the wiring from a frame on the
- * socket to a row on the screen.
- */
+/** Stands in for the browser's WebSocket so a frame can be delivered by hand. */
 class FakeSocket {
   static instances: FakeSocket[] = []
 
@@ -177,10 +173,7 @@ function findRow(tradeId: string): Promise<HTMLElement> {
   })
 }
 
-/**
- * Amend, cancel and history are reached from the selection bar, so they exist
- * only once a row is picked.
- */
+/** Amend, cancel and history exist only once a row is picked. */
 function selectRow(tradeId: string): void {
   const found = row(tradeId)
   if (found === null) {
@@ -244,8 +237,8 @@ describe('App', () => {
 
     expect(await screen.findByText('CANCELLED')).toBeInTheDocument()
 
-    // The row is still there to select, which is the point: a cancelled trade
-    // keeps its place on the tape, and the bar refuses to write to it.
+    // A cancelled trade keeps its place on the tape, and the bar refuses to write
+    // to it.
     selectRow('TRD-100001')
     expect(screen.getByRole('button', { name: 'Amend' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
@@ -300,8 +293,7 @@ describe('App', () => {
     renderApp()
     await findRow('TRD-100001')
 
-    // A trade this client never heard about, because it was booked while the
-    // socket was down. Nothing but a re-read will find it.
+    // A trade booked while the socket was down, so nothing but a re-read finds it.
     respondWith([aTrade(), aTrade({ tradeId: 'TRD-100002', symbol: 'HSBA' })], [aPosition()], 2)
 
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
@@ -311,8 +303,7 @@ describe('App', () => {
   })
 
   it('books under the window identity and stamps the same name as the actor', async () => {
-    // Handed over before the first render, the way it arrives in the app, since
-    // there is no box on screen to type it into any more.
+    // Handed over before the first render, the way it arrives in the app.
     window.history.replaceState(null, '', '/?actor=j.okonkwo')
     adoptIdentity()
 
@@ -322,7 +313,6 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Book trade' }))
 
     // One identity feeds both the trader on the trade and the actor on the event.
-    // Two sources here is how an audit trail starts disagreeing with itself.
     await waitFor(() => {
       const write = lastWrite()
       expect(write.body.trader).toBe('j.okonkwo')
@@ -334,9 +324,8 @@ describe('App', () => {
     renderApp()
     await findRow('TRD-100001')
 
-    // It was a text box. The name stamped on an amend is the one thing in the
-    // application a trader should not be able to choose, so there is no longer a
-    // control labelled with it, only the name itself.
+    // The name stamped on an amend is the one thing a trader should not be able to
+    // choose, so there is no control labelled with it, only the name itself.
     expect(screen.queryByLabelText('Trading as')).toBeNull()
     expect(screen.getByText('Trading as').parentElement).toHaveTextContent('Trading as k.madan')
   })
@@ -371,8 +360,8 @@ describe('the simulated feed control', () => {
 
     deliver({ type: 'simulation', running: true, intervalMs: SIMULATION_INTERVAL_MS })
 
-    // The broadcast is what keeps two windows agreeing. Without it this client
-    // would still read 'Start feed' while trades arrived underneath it.
+    // Without the broadcast this client would still read 'Start feed' while trades
+    // arrived underneath it.
     expect(await screen.findByRole('button', { name: 'Pause feed' })).toBeInTheDocument()
   })
 
@@ -422,8 +411,8 @@ describe('booking guards', () => {
     book()
     await waitFor(() => expect(bookings()).toHaveLength(1))
 
-    // The ten-click case: the form keeps the ticket it just sent, so pressing
-    // again is the accident the guard exists for.
+    // The form keeps the ticket it just sent, so pressing again is the accident
+    // the guard exists for.
     book()
     expect(await screen.findByRole('button', { name: 'Confirm duplicate' })).toBeInTheDocument()
     expect(screen.getByRole('alert')).toHaveTextContent(
@@ -431,8 +420,7 @@ describe('booking guards', () => {
     )
     expect(bookings()).toHaveLength(1)
 
-    // Confirming is the same button, so the hand does not have to move. A
-    // confirmed repeat is a real second clip and books.
+    // Confirming is the same button, and a confirmed repeat books.
     book('Confirm duplicate')
     await waitFor(() => expect(bookings()).toHaveLength(2))
     expect(screen.getByRole('button', { name: 'Book trade' })).toBeInTheDocument()
@@ -459,8 +447,7 @@ describe('booking guards', () => {
     book()
     await screen.findByRole('button', { name: 'Confirm size' })
 
-    // Back under the limit, so the reason the press was held no longer applies
-    // and the button must not still be offering to confirm it.
+    // Back under the limit, so the reason the press was held no longer applies.
     fireEvent.change(quantity(), { target: { value: '1000' } })
 
     expect(await screen.findByRole('button', { name: 'Book trade' })).toBeInTheDocument()
@@ -481,8 +468,8 @@ describe('booking guards', () => {
     for (const key of keys) {
       expect(key).toMatch(UUID)
     }
-    // Two deliberate clips are two trades. A key reused here would make the
-    // second a silent replay of the first and lose a booking.
+    // A key reused here would make the second clip a silent replay of the first
+    // and lose a booking.
     expect(new Set(keys).size).toBe(2)
   })
 })
@@ -498,8 +485,8 @@ describe('cancelling a trade', () => {
   it('confirms against the trade rather than cancelling on the first click', async () => {
     await openCancelDialog()
 
-    // Naming the trade is the part that prevents the mistake. With rows arriving
-    // on their own, a bare one-click Cancel is easy to land on the wrong one.
+    // With rows arriving on their own, a bare one-click Cancel is easy to land on
+    // the wrong trade.
     expect(await screen.findByText('Cancel TRD-100001?')).toBeInTheDocument()
     expect(() => lastWrite()).toThrow(/nothing was written/)
   })
@@ -540,8 +527,6 @@ describe('acting on a row', () => {
     renderApp()
     await findRow('TRD-100001')
 
-    // Three buttons on every row was 186px of a grid that did not have it, and
-    // the same offer repeated for every trade on the tape.
     expect(readback()).toBeEmptyDOMElement()
     expect(screen.queryByRole('button', { name: 'Amend' })).not.toBeInTheDocument()
 
@@ -592,8 +577,7 @@ describe('acting on a row', () => {
     fireEvent.keyDown(grid, { key: 'ArrowDown' })
     expect(readback()).toHaveTextContent('TRD-100001')
 
-    // Clamped rather than wrapping: a trader holding the key down should stop at
-    // the end of the tape, not reappear at the top of it.
+    // Clamped rather than wrapping: the key held down stops at the end of the tape.
     fireEvent.keyDown(grid, { key: 'ArrowDown' })
     expect(readback()).toHaveTextContent('TRD-100001')
 

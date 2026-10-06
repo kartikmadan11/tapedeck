@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { adoptIdentity, DEFAULT_TRADER, readTrader } from './identity.js'
 
 beforeEach(() => {
-  // jsdom keeps both of these for the whole file, so without this one case's
-  // identity, or the parameter it arrived on, would decide the next one's.
+  // jsdom keeps both for the whole file, so without this one case's identity, or
+  // the parameter it arrived on, would decide the next one's.
   sessionStorage.clear()
   window.history.replaceState(null, '', '/')
 })
@@ -19,9 +19,8 @@ describe('the identity a window trades as', () => {
     arriveOn('/?actor=j.okonkwo')
 
     expect(readTrader()).toBe('j.okonkwo')
-    // Consumed rather than read, because the same bar carries the workspace
-    // link: left in, it would travel to whoever was sent that link and have
-    // them booking under this name.
+    // Consumed rather than read: the same bar carries the workspace link, so left
+    // in it would have whoever was sent that link booking under this name.
     expect(window.location.search).toBe('')
   })
 
@@ -44,8 +43,8 @@ describe('the identity a window trades as', () => {
     window.history.replaceState(null, '', '/?panes=1&p1.group=pnl')
     adoptIdentity()
 
-    // A link that does not parse is the one somebody needs to be able to read,
-    // and on arrival the bar is the only copy of what they typed.
+    // A link that does not parse is the one somebody needs to be able to read, and
+    // the bar is the only copy of what they typed.
     expect(window.location.search).toBe('?panes=1&p1.group=pnl')
     expect(readTrader()).toBe(DEFAULT_TRADER)
   })

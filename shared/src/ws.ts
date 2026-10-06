@@ -3,11 +3,9 @@ import { simulationState } from './simulation.js'
 import { position, trade } from './trade.js'
 
 /**
- * The stream cursor is `trade_events.seq`, so a reconnecting client is answered
- * from the same table that records what happened.
- *
- * Validated as a number because pg returns int8 as a string, which would make
- * `seq > cursor` lexicographic, where '10' > '9' is false.
+ * The stream cursor is `trade_events.seq`. Validated as a number because pg
+ * returns int8 as a string, which would make `seq > cursor` lexicographic,
+ * where '10' > '9' is false.
  */
 export const sequenceNumber = z.number().int().positive()
 
@@ -42,12 +40,10 @@ export const tradeCancelledFrame = sequenced.extend({
 })
 
 /**
- * Recomputed exposure, pushed after a mutation. Has no `seq` field.
- *
- * Positions are derived state with no place in the event order. Reusing the
- * triggering event's seq would put two frames on the wire with the same cursor,
- * breaking both gap detection and the handshake drain filter. Omitting the
- * field makes that unrepresentable rather than merely documented.
+ * Recomputed exposure, pushed after a mutation. Has no `seq` field: positions
+ * are derived state, and reusing the triggering event's seq would put two
+ * frames on the wire with the same cursor, breaking both gap detection and the
+ * handshake drain filter.
  */
 export const positionsFrame = z.object({
   type: z.literal('positions'),
@@ -55,13 +51,9 @@ export const positionsFrame = z.object({
 })
 
 /**
- * The generated feed starting or stopping. Unsequenced, for the same reason
- * positions are: it is not something that happened to a trade, so it has no
- * place in the event order and must not advance any client's cursor.
- *
- * Broadcast rather than kept per-window so two windows cannot disagree about
- * whether the feed is running, which would undercut the premise that every
- * client sees the same world.
+ * The generated feed starting or stopping. Unsequenced like positions, so it
+ * must not advance any client's cursor. Broadcast rather than kept per-window,
+ * so two windows cannot disagree about whether the feed is running.
  */
 export const simulationFrame = z.object({
   type: z.literal('simulation'),
@@ -128,8 +120,5 @@ export type TradesResponse = z.infer<typeof tradesResponse>
 export const positionsResponse = blotterState.omit({ trades: true })
 export type PositionsResponse = z.infer<typeof positionsResponse>
 
-/**
- * Server-push only. A client recovers from a gap by refetching over REST, so
- * there is one code path for loading state. Liveness uses protocol ping/pong.
- */
+/** Server-push only. Gap recovery is a REST refetch, liveness is protocol ping/pong. */
 export type ClientFrame = never

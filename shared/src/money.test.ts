@@ -75,8 +75,7 @@ describe('scaling to minor units', () => {
 
   it('survives a value that a double cannot represent', () => {
     const exact = '999999999999.999999'
-    // Eighteen significant digits against a double's sixteen: the float path
-    // corrupts the value, the bigint path does not.
+    // Eighteen significant digits against a double's sixteen.
     expect(Number(exact).toFixed(6)).not.toBe(exact)
     expect(fromMinorUnits(toMinorUnits(toDecimal(exact)))).toBe(exact)
   })
@@ -136,8 +135,7 @@ describe('aggregating a group of trades', () => {
   it('still reports an average price for a book that is flat', () => {
     const flat = [leg('BUY', 1_000, '10'), leg('SELL', 1_000, '20')]
 
-    // The whole reason the weights ignore side. Netting them would make the
-    // denominator zero and lose the fact that this book dealt at 15.
+    // Netting the weights would make the denominator zero.
     expect(netQuantity(flat)).toBe(0)
     expect(vwap(flat)).toBe('15.000000')
   })
@@ -167,15 +165,14 @@ describe('aggregating a group of trades', () => {
   })
 
   it('has no average price to report for an empty group', () => {
-    // null and not '0.000000': a zero average is a claim about where the book
-    // traded, and the cell renders a dash instead.
+    // null and not '0.000000', so the cell can render a dash.
     expect(vwap([])).toBeNull()
   })
 })
 
 describe('comparison', () => {
   it('orders by value, not lexicographically', () => {
-    // This is the trap: as plain strings, '10.000000' sorts before '9.000000'.
+    // The trap: as plain strings, '10.000000' sorts before '9.000000'.
     expect('10.000000' < '9.000000').toBe(true)
     expect(compareDecimal(toDecimal('10'), toDecimal('9'))).toBeGreaterThan(0)
   })

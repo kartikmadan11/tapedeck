@@ -14,23 +14,15 @@ import {
 } from '@tapedeck/shared'
 import { and, asc, desc, eq, sql } from 'drizzle-orm'
 
-// The advisory lock key. Arbitrary but stable across processes, and
-// recognisable in pg_locks.
+// Advisory lock key. Arbitrary but must be stable across processes.
 const WRITE_LOCK_KEY = 8_427_301
 
 /**
  * Serialises every mutation, which is what makes max(seq) a valid high-water
- * mark.
- *
- * bigserial allocates before commit, so seq 7 can commit before seq 6. A reader
- * can then observe max(seq) = 7 while 6 is uncommitted; 6 commits, broadcasts,
- * and a reconnecting client's drain filter asks `6 > 7` and discards it, losing
- * that trade until the next reconnect. Serialising makes the sequence gap-free
- * and commit-ordered, and removes any need for SELECT ... FOR UPDATE.
- *
- * The cost is a serial write path, noted in the README as the throughput
- * ceiling. At scale it would be replaced by broker-side ordering or an outbox
- * reading this same table. The lock releases at commit or rollback.
+ * mark. bigserial allocates before commit, so without this seq 7 can commit
+ * before seq 6 and a reader can observe max(seq) = 7 while 6 is uncommitted; a
+ * reconnecting client's drain filter then asks `6 > 7` and discards it.
+ * Releases at commit or rollback.
  */
 async function acquireWriteLock(tx: Queryable): Promise<void> {
   await tx.execute(sql`select pg_advisory_xact_lock(${WRITE_LOCK_KEY})`)
@@ -44,11 +36,8 @@ export interface MutationResult {
 }
 
 /**
- * A booking either happened or had already happened.
- *
- * A union rather than a MutationResult with a `replayed` flag, because a replay
- * has no seq and no event: nothing was written, so there is no cursor to carry
- * and a flag would need a seq invented to sit beside it.
+ * A union rather than a MutationResult with a `replayed` flag: a replay wrote
+ * no event, so there is no seq to carry on that branch.
  */
 export type CreateResult =
   | { replayed: false; result: MutationResult }
@@ -68,9 +57,9 @@ export class TradeRepository {
   }
 
   /**
-   * Reads trades, positions and the high-water seq in one repeatable-read
-   * transaction. A snapshot holding trades at seq 100 and positions at seq 103
-   * would show a panel that disagrees with its own blotter.
+   * Trades, positions and the high-water seq in one repeatable-read
+   * transaction: trades at seq 100 beside positions at seq 103 is a panel that
+   * disagrees with its own blotter.
    */
   async readSnapshot(query: TradeQuery = {}): Promise<ConsistentSnapshot> {
     return this.db.transaction(
@@ -131,16 +120,10 @@ export class TradeRepository {
    * Books a trade, or returns the one an earlier request with the same
    * clientTradeId already booked.
    *
-   * The check reads rather than relying on the unique index to raise: a
-   * constraint violation aborts the transaction, so answering the replay would
-   * need a second one, and the lock would have to be taken again to make that
-   * read consistent. Reading first is also the only way to return the earlier
-   * trade, which is what the caller asked for.
-   *
-   * Safe against a concurrent duplicate because the write lock is already held:
-   * one create runs at a time, so no insert can land between this read and the
-   * insert below. Without the lock this would be a textbook check-then-act race
-   * and the index would be doing the work alone.
+   * Reads rather than relying on the unique index to raise: a constraint
+   * violation aborts the transaction, and the earlier trade has to be returned
+   * anyway. Not a check-then-act race because the write lock is already held,
+   * so no insert can land between this read and the insert below.
    */
   async createTrade(input: CreateTradeInput, actor: string): Promise<CreateResult> {
     return this.db.transaction(async (tx) => {
@@ -181,10 +164,9 @@ export class TradeRepository {
   }
 
   /**
-   * Amends under optimistic concurrency, diagnosing the three-way outcome inside
-   * the lock rather than by interpreting a zero-row UPDATE. A follow-up read
-   * after a failed UPDATE is not atomic with it under READ COMMITTED, so the
-   * currentVersion it reported could already be stale.
+   * Diagnoses the three-way outcome inside the lock rather than by interpreting
+   * a zero-row UPDATE: a follow-up read after a failed UPDATE is not atomic with
+   * it under READ COMMITTED, so the currentVersion it reported could be stale.
    */
   async amendTrade(
     tradeId: string,
@@ -223,10 +205,7 @@ export class TradeRepository {
     })
   }
 
-  /**
-   * Cancelling a cancelled trade is an explicit INVALID_STATE, not a silent
-   * success, so a user clicking a struck-through row is told why.
-   */
+  /** Cancelling a cancelled trade is an explicit INVALID_STATE, not a silent success. */
   async cancelTrade(tradeId: string, version: number, actor: string): Promise<MutationResult> {
     return this.db.transaction(async (tx) => {
       await acquireWriteLock(tx)
@@ -328,7 +307,7 @@ function selectTrades(tx: Queryable, query: TradeQuery): Promise<Trade[]> {
 
   // trades_timestamp_idx is on (tradeTimestamp desc, tradeId desc), the same
   // order this asks for, so the limit is a truncated index scan rather than a
-  // sort of the whole table that then throws most of the rows away.
+  // sort of the whole table.
   return (query.limit === undefined ? ordered : ordered.limit(query.limit)).then((rows) =>
     rows.map(toTrade),
   )
@@ -336,9 +315,8 @@ function selectTrades(tx: Queryable, query: TradeQuery): Promise<Trade[]> {
 
 /**
  * Aggregated in numeric by Postgres, never summed on the client: two clients
- * adding floats in a different order can disagree in the last place.
- *
- * Cancelled trades are excluded, not netted out: the trade did not happen.
+ * adding floats in a different order can disagree in the last place. Cancelled
+ * trades are excluded, not netted out.
  */
 async function selectPositions(tx: Queryable): Promise<Position[]> {
   const result = await tx.execute<{

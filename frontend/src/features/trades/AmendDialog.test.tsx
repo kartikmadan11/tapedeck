@@ -101,9 +101,8 @@ describe('AmendDialog', () => {
   it('shows the counterparty without offering a field for it', () => {
     renderDialog()
 
-    // Visible, because the user needs to know who the trade is with before
-    // changing its terms. Not a control, because changing it is a cancel and a
-    // rebooking rather than an amendment.
+    // Not a control, because changing the counterparty is a cancel and a rebooking
+    // rather than an amendment.
     expect(screen.getByText('GSIL')).toBeInTheDocument()
     expect(screen.queryByLabelText('Counterparty')).toBeNull()
   })

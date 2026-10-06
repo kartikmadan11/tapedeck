@@ -6,11 +6,8 @@ import { usePositions } from './usePositions.js'
 
 /**
  * What the panel is worth on opening, and the range a drag may take it over.
- *
- * Declared here rather than where the boundary is drawn, because these are facts
- * about this content: three columns, a signed quantity and a notional that runs
- * to six figures. Below the floor they truncate, and above the ceiling the panel
- * is taking width off the twelve-column tape without showing anything more.
+ * Declared here rather than where the boundary is drawn, because the floor is
+ * the width at which three columns of six-figure notional stop truncating.
  */
 export const PANEL_WIDTH = 288
 export const PANEL_MIN_WIDTH = 216
@@ -35,8 +32,7 @@ export function PositionsPanel({ width }: { width: number }): ReactElement {
 
       <div className="min-h-0 flex-1 overflow-auto">
         <table className="w-full border-collapse text-left">
-          {/* Sticky and opaque for the same reason as the blotter's: a long
-              symbol list should keep its column labels while it scrolls. */}
+          {/* Opaque as well as sticky, or the rows scroll through the labels. */}
           <thead className="sticky top-0 z-10 bg-tape-panel">
             <tr className="h-7">
               <th className={`px-1.5 ${HEAD}`}>Symbol</th>
@@ -61,8 +57,6 @@ export function PositionsPanel({ width }: { width: number }): ReactElement {
                 >
                   {formatQuantity(position.netQuantity)}
                 </td>
-                {/* The primary figure in this panel, so it keeps the full text
-                    colour while the label columns sit back. */}
                 <td className="px-1.5 text-right tabular-nums text-tape-text">
                   {formatDecimal(position.netNotional, 2)}
                 </td>
@@ -76,7 +70,6 @@ export function PositionsPanel({ width }: { width: number }): ReactElement {
         ) : null}
       </div>
 
-      {/* leading-relaxed because this is the only multi-line 10px text here. */}
       <footer className="shrink-0 border-t border-tape-line px-2 py-1.5 text-[10px] leading-relaxed text-tape-muted">
         Netted in Postgres over active trades only, so a cancelled trade leaves no exposure behind.
       </footer>

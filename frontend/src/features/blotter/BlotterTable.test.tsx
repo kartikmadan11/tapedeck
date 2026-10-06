@@ -96,9 +96,8 @@ function tradeRow(tradeId: string): HTMLElement {
 const NOTIONAL = 4
 
 /**
- * Every column heading on screen, which is what grouping changes. The sort
- * marker is a child of the heading it marks, and which column the grid is
- * sorted by is not what these cases are about.
+ * Every column heading on screen. The sort marker is a child of the heading it
+ * marks, and these cases are not about the order.
  */
 function headers(): string[] {
   return Array.from(document.querySelectorAll('th')).map((cell) =>
@@ -128,9 +127,9 @@ const NETTED = ['Price', 'Quantity', 'Notional']
 const paneRegion = (): HTMLElement => screen.getByRole('region', { name: 'Trades' })
 
 /**
- * A pane's own controls, behind its right-click rather than on its bar. Pointer
- * down first, because that is the order a browser fires the two in and it is
- * also what closes a menu already open.
+ * A pane's own controls, behind its right-click. Pointer down first, because that
+ * is the order a browser fires the two in and it is what closes a menu already
+ * open.
  */
 function choose(item: string): void {
   const region = paneRegion()
@@ -177,10 +176,8 @@ describe('grouping and aggregation', () => {
     openConfig()
     set('Group by', 'symbol')
 
-    // Eight of the eleven were an empty cell on every group row: a group of
-    // forty trades has no one counterparty and no one timestamp, so there was
-    // nothing to put in them and eight columns to scroll past to reach the four
-    // figures a grouped view is opened for.
+    // A group of forty trades has no one counterparty and no one timestamp, so
+    // eight of the eleven would be an empty cell on every group row.
     expect(headers()).toEqual(['Symbol', ...NETTED])
   })
 
@@ -190,7 +187,7 @@ describe('grouping and aggregation', () => {
     set('Group by', 'symbol')
 
     // The whole row in one assertion, so the figures are read in the places they
-    // occupy rather than one index at a time.
+    // occupy.
     expect(cells(groupRow('VOD, 2 trades'))).toEqual([
       // The label, the expander and the active leaf count, on the grouped column.
       '▸VOD(2)',
@@ -206,8 +203,8 @@ describe('grouping and aggregation', () => {
     set('Group by', 'symbol')
     set('Group by', '')
 
-    // Derived from the grouping rather than written into the trader's own
-    // choice, so there is nothing left behind to undo by hand.
+    // Derived from the grouping rather than written into the trader's own choice,
+    // so there is nothing left behind to undo by hand.
     expect(headers()).toEqual(UNGROUPED)
   })
 
@@ -220,10 +217,9 @@ describe('grouping and aggregation', () => {
     set('Group by', 'symbol')
     expect(headers()).toEqual(['Symbol', ...NETTED])
 
-    // What goes in a shared link is the column the trader asked for, not the
-    // eight the grouping took away: resolving the panel's updater against the
-    // state the table was given would bake those eight in and they would
-    // survive the grouping being cleared.
+    // What goes in a shared link is the column the trader asked for, not the eight
+    // the grouping took away: resolving the panel's updater against the state the
+    // table was given would bake those eight in and outlive the grouping.
     expect(reported.at(-1)?.columnVisibility).toEqual({ tradeId: true })
 
     set('Group by', '')
@@ -253,10 +249,9 @@ describe('grouping and aggregation', () => {
     openConfig()
     set('Group by', 'symbol')
 
-    // Trader is not a column a group nets, so it is off the grid. The filter on
-    // it is not: the column is hidden rather than taken out of the table,
-    // because TanStack silently skips a filter whose column it cannot resolve,
-    // and this figure would quietly become everybody's flow.
+    // The column is hidden rather than taken out of the table, because TanStack
+    // silently skips a filter whose column it cannot resolve, and this figure
+    // would quietly become everybody's flow.
     expect(headers()).toEqual(['Symbol', ...NETTED])
     expect(cells(groupRow('VOD, 1 trades'))[2]).toBe('10,000')
   })
@@ -266,9 +261,8 @@ describe('grouping and aggregation', () => {
     openConfig()
     set('Group by', 'symbol')
 
-    // Three VOD trades sit under the group and two of them happened. The
-    // cancelled 5,000 at 70 is large enough that netting it in would move the
-    // count to 3 and every figure in the test above with it.
+    // Three VOD trades sit under the group and two of them happened. Netting the
+    // cancelled 5,000 at 70 in would move the count to 3 and every figure with it.
     fireEvent.click(screen.getByRole('button', { name: 'VOD, 2 trades' }))
     expect(row('TRD-100003')).not.toBeNull()
     expect(cells(groupRow('VOD, 2 trades'))[2]).toBe('6,000')
@@ -292,8 +286,8 @@ describe('grouping and aggregation', () => {
     openConfig()
     set('Group by', 'symbol')
 
-    // A dash, not 0.0000. A zero average price is a claim about where the book
-    // traded, and this group has nothing to claim.
+    // A dash, not 0.0000: a zero average price is a claim about where the book
+    // traded.
     expect(cells(groupRow('VOD, 0 trades'))[1]).toBe('-')
   })
 
@@ -322,10 +316,9 @@ describe('grouping and aggregation', () => {
     const inner = screen.getByRole('button', { name: 'EQ-LDN-01, 2 trades' })
     expect(inner).toHaveStyle({ paddingLeft: '0.75rem' })
 
-    // Both levels lead the row, in the order they were asked for, with the
-    // outer one blank here because it is on the group row above. Left where
-    // Book is declared, this label would have sat after the three figures it
-    // heads.
+    // Both levels lead the row, in the order they were asked for, with the outer
+    // one blank here because it is on the group row above. Left where Book is
+    // declared, this label would sit after the three figures it heads.
     expect(cells(groupRow('EQ-LDN-01, 2 trades'))).toEqual([
       '',
       '▸EQ-LDN-01(2)',
@@ -400,17 +393,15 @@ describe('virtualisation', () => {
   it('draws the rows that fit rather than the whole tape', () => {
     renderBlotter(TAPE)
 
-    // The spacer rows are presentational, so this counts real rows only: the
-    // header band plus the twenty that fit in the shimmed 640px and the
-    // overscan either side of them. Far from 501, which is the point.
+    // The header band plus the twenty that fit in the shimmed 640px and the
+    // overscan either side. Far from 501, which is the point.
     expect(screen.getAllByRole('row').length).toBeLessThan(60)
   })
 
   it('still reports the whole tape rather than the part of it drawn', () => {
     renderBlotter(TAPE)
 
-    // Would otherwise describe the window instead of the book, which is the
-    // characteristic way a virtualised grid lies.
+    // Would otherwise describe the window instead of the book.
     expect(screen.getByRole('grid')).toHaveAttribute('aria-rowcount', '501')
   })
 
@@ -461,9 +452,8 @@ describe('magnitude bars', () => {
   it('keeps the figure legible on top of the bar', () => {
     renderBlotter(TWO_SIZES)
 
-    // The bar is an overlay on a transparent cell rather than a background on
-    // it, which is what leaves hover, selection, the pending fade and the row
-    // flash able to reach the cell.
+    // The bar is an overlay on a transparent cell rather than a background on it,
+    // which is what leaves hover, selection and the row flash able to reach it.
     const cell = tradeRow('TRD-100001').querySelectorAll('td')[NOTIONAL]
     expect(cell).toHaveTextContent('100,000.00')
     expect(cell?.className).not.toMatch(/\bbg-/)
@@ -513,8 +503,8 @@ describe('the configuration panel', () => {
     renderBlotter()
     openConfig()
 
-    // The header starts the grid on time, newest first, so the panel has to say
-    // so rather than reporting its own idea of the order.
+    // The header starts the grid on time, newest first, so the panel has to say so
+    // rather than reporting its own idea of the order.
     expect(screen.getByLabelText('Order by')).toHaveValue('tradeTimestamp')
     expect(screen.getByRole('button', { name: 'Desc' })).toBeInTheDocument()
 
@@ -589,8 +579,7 @@ describe('the configuration panel', () => {
     set('Group by', 'symbol')
 
     // Unticked and unavailable rather than tickable: the grid reads these boxes
-    // through the grouping's override, so a tick would be a control that does
-    // nothing. The line above them is what says why.
+    // through the grouping's override, so a tick would do nothing.
     const book = screen.getByRole('checkbox', { name: 'Book' })
     expect(book).toBeDisabled()
     expect(book).not.toBeChecked()
@@ -625,8 +614,7 @@ describe('the configuration panel', () => {
 
 describe("a pane's own menu", () => {
   /** The positioned sheet, which is the menu's parent: the line about shift is
-   *  inside the sheet and outside the menu, so the menu's children are all
-   *  items. */
+   *  inside the sheet and outside the menu, so the menu's children are all items. */
   const sheet = (): HTMLElement | null => screen.queryByRole('menu')?.parentElement ?? null
 
   /** Returns false when the event was cancelled, which is the preventDefault
@@ -647,9 +635,8 @@ describe("a pane's own menu", () => {
     const region = paneRegion()
     region.getBoundingClientRect = (): DOMRect => ({ ...new DOMRect(), left: 240, top: 300 })
 
-    // Shift+F10 and the menu key both raise a contextmenu event, and it carries
-    // no coordinates. The top left of the window is the wrong place for a menu
-    // belonging to a pane halfway down the screen.
+    // Shift+F10 and the menu key both raise a contextmenu event carrying no
+    // coordinates, and the top left of the window is the wrong place for it.
     rightClick()
     expect(sheet()).toHaveStyle({ left: '248px', top: '308px' })
   })
@@ -658,7 +645,7 @@ describe("a pane's own menu", () => {
     renderBlotter()
 
     // A grid that takes over right-click with nothing held back takes away view
-    // source, inspect and the spell checker, which is why the sheet says so.
+    // source, inspect and the spell checker.
     expect(rightClick({ shiftKey: true })).toBe(true)
     expect(sheet()).toBeNull()
 
@@ -669,8 +656,8 @@ describe("a pane's own menu", () => {
   it('leaves a box someone is typing in its own menu', () => {
     renderBlotter()
 
-    // Cut, copy and paste belong to the field. The pane's menu is on the pane,
-    // and the filters and the config panel are full of boxes.
+    // Cut, copy and paste belong to the field, and the filters and the config
+    // panel are full of boxes.
     const box = screen.getByLabelText('Filter by symbol')
     expect(fireEvent.contextMenu(box)).toBe(true)
     expect(sheet()).toBeNull()
@@ -680,9 +667,8 @@ describe("a pane's own menu", () => {
     renderBlotter()
     rightClick()
 
-    // A blotter with no workspace around it can open, duplicate, share and
-    // close nothing, so four of the six are refused and the keyboard must not
-    // come to rest on any of them.
+    // A blotter with no workspace around it can open, duplicate, share and close
+    // nothing, so four of the six are refused and the keyboard skips them.
     const menu = screen.getByRole('menu')
     expect(screen.getByRole('menuitem', { name: 'Config' })).toHaveFocus()
 
@@ -701,8 +687,8 @@ describe("a pane's own menu", () => {
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
 
     expect(sheet()).toBeNull()
-    // The panel stays shut. It is mounted either way, so this asks the question
-    // a screen reader asks: inert and aria-hidden, or reachable.
+    // The panel is mounted either way, so this asks the question a screen reader
+    // asks: inert and aria-hidden, or reachable.
     expect(screen.queryByRole('combobox', { name: 'Group by' })).toBeNull()
   })
 
@@ -719,8 +705,8 @@ describe("a pane's own menu", () => {
     openConfig()
     rightClick()
 
-    // The item is the only thing left that can carry it: the button that used
-    // to say so was on the bar, and the menu it moved into closes on the press.
+    // The menu closes on the press, so the item is the only thing that can carry
+    // it.
     const item = screen.getByRole('menuitem', { name: 'Hide config' })
     expect(item).toHaveAttribute('aria-expanded', 'true')
 
@@ -741,15 +727,14 @@ describe("a pane's own menu", () => {
 
     choose('Reset')
 
-    // All four at once, because a Reset that cleared three of them is worse
-    // than none: the one left behind is the one nobody thinks to look for.
+    // All four at once: a Reset that cleared three is worse than none, because the
+    // one left behind is the one nobody thinks to look for.
     expect(headers()).toEqual(UNGROUPED)
     expect(row('TRD-100004')).not.toBeNull()
     expect(screen.getByLabelText('Order by')).toHaveValue('tradeTimestamp')
     expect(screen.getByRole('button', { name: 'Desc' })).toBeInTheDocument()
 
-    // Still open. Reset is the view and not the pane, and a control that also
-    // closed what you were working in is a control nobody presses twice.
+    // Still open: Reset is the view and not the pane.
     expect(screen.getByRole('combobox', { name: 'Group by' })).toHaveValue('')
   })
 })

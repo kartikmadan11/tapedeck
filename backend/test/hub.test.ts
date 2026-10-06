@@ -6,12 +6,9 @@ import { createBus } from '../src/bus.js'
 import { createHub } from '../src/ws/hub.js'
 
 /**
- * The handshake drain, driven directly rather than over a real socket.
- *
- * The race this covers is a frame published between the snapshot read starting
- * and the subscription being handed over. Over a real connection that window is
- * microseconds wide and cannot be hit on purpose, so readSnapshot publishes into
- * it here and the race becomes deterministic.
+ * The handshake drain, driven directly rather than over a real socket:
+ * readSnapshot publishes into the window between the read starting and the
+ * subscription being handed over, which makes that race deterministic.
  */
 
 function fakeLog(): FastifyBaseLogger {
@@ -66,9 +63,7 @@ describe('the handshake', () => {
     await hub.attach(socket)
     hub.close()
 
-    // This is what makes a reconnect a resync. Without it a client that dropped
-    // while the feed was paused and reconnected after a restart would show
-    // 'Start feed' while rows arrived, and pressing it would publish nothing.
+    // This is what makes a reconnect a resync.
     expect(sent).toEqual([
       { type: 'snapshot', seq: 5, trades: [], positions: [] },
       { type: 'simulation', running: true, intervalMs: 2_000 },
@@ -113,8 +108,7 @@ describe('the handshake drain', () => {
     await hub.attach(socket)
     hub.close()
 
-    // Unsequenced state, so the latest supersedes: replaying both would make the
-    // control flicker on connect for no reason.
+    // Unsequenced state, so the latest supersedes.
     expect(simulationFrames(sent)).toEqual([
       { type: 'simulation', running: false, intervalMs: 2_000 },
     ])

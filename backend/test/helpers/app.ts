@@ -10,12 +10,10 @@ export function testConfig(overrides: Partial<Config> = {}): Config {
     HOST: '127.0.0.1',
     NODE_ENV: 'test',
     LOG_LEVEL: 'silent',
-    // Short enough that a liveness test does not take half a minute, long
-    // enough not to fire during an unrelated test.
+    // Short enough that a liveness test is quick, long enough not to fire
+    // during an unrelated test.
     WS_PING_INTERVAL_MS: 5_000,
-    // buildApp() never starts the feed, so this is belt and braces: it means a
-    // test that does reach for server-style wiring still cannot have trades
-    // appearing underneath its assertions.
+    // buildApp() never starts the feed, so this is belt and braces.
     SIMULATION_ENABLED: false,
     SIMULATION_INTERVAL_MS: 2_000,
     SIMULATION_MAX_TRADES: 900,

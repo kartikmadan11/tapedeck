@@ -37,9 +37,8 @@ export function App(): ReactElement {
 
   /**
    * Held as ids, not as rows, so a dialog always renders the cache's current
-   * version of the trade. Holding a copy would let it show stale values after
-   * someone else amended the same trade, and the cancel dialog would then
-   * confirm against a version that no longer exists.
+   * version of the trade. A held copy would confirm against a version that no
+   * longer exists after someone else amended the same trade.
    */
   const amending = useMemo(
     () => trades.find((trade) => trade.tradeId === amendingId) ?? null,
@@ -65,23 +64,15 @@ export function App(): ReactElement {
   /**
    * How much of the width the positions panel is holding. Here rather than in
    * the panel, because the blotter beside it is the other half of the same
-   * boundary and takes whatever this leaves.
-   *
-   * Not persisted, which is a gap worth naming: a width someone set is gone on
-   * reload. It belongs with the pane arrangement in the shared link rather than
-   * in a second store of its own.
+   * boundary and takes whatever this leaves. Deliberately not persisted.
    */
   const [panelWidth, setPanelWidth] = useState(PANEL_WIDTH)
 
   /**
    * The nav's slot for the workspace's own controls, which the workspace fills
-   * through a portal.
-   *
-   * Held as the element rather than looked up by id, because a render is the
-   * wrong place to read the DOM and the node does not exist in the first one.
-   * The alternative to the slot is lifting the pane arrangement up here, which
-   * would put every rename, resize and rearrangement of a pane through this
-   * component and re-render the booking form and the positions panel with it.
+   * through a portal. Held as the element rather than looked up by id, because a
+   * render is the wrong place to read the DOM and the node does not exist in the
+   * first one.
    */
   const [nav, setNav] = useState<HTMLElement | null>(null)
 
@@ -95,12 +86,10 @@ export function App(): ReactElement {
     // cannot clip them.
     <div className="flex h-screen flex-col gap-2 overflow-hidden bg-tape-bg p-3 text-tape-text">
       <header className="flex items-baseline gap-3 border-b border-tape-line pb-2">
-        {/* Letterspacing rather than point size: the viewport belongs to the grid. */}
         <h1 className="text-sm font-semibold uppercase tracking-[0.2em]">tapedeck</h1>
         <div className="ml-auto flex items-center gap-2">
-          {/* display:contents, so an empty slot is not a gap in the row: what
-            the workspace puts here is a flex item of this row rather than of a
-            wrapper that would still be laid out while holding nothing. */}
+          {/* display:contents, so an empty slot is not a gap in the row: what the
+            workspace puts here is a flex item of this row, not of a wrapper. */}
           <div className="contents" ref={setNav} />
           <IdentityBadge trader={trader} />
           <SimulationToggle />
@@ -114,7 +103,7 @@ export function App(): ReactElement {
       {blotter.error ? <ErrorNotice error={blotter.error} /> : null}
 
       {/* No gap: the handle between them is the gap, so the boundary a pointer
-        aims at is the same line the eye reads as dividing the two. */}
+        aims at is the line that divides the two. */}
       <div className="flex min-h-0 flex-1">
         <Workspace trades={trades} pendingIds={pendingIds} actions={actions} nav={nav} />
         <PanelSeparator

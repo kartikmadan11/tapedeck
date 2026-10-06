@@ -5,36 +5,23 @@ import { compareDecimal, formatDecimal, notional, toDecimal } from '@tapedeck/sh
  * The two checks that hold a booking back for a second press, kept out of the
  * form so the policy can be tested without rendering anything.
  *
- * Both are advisory, and deliberately so. They sit in the browser, which means
- * they catch the mistake they are aimed at and stop nothing determined; the
- * guarantee that a retry cannot double-book is the clientTradeId, which the
- * server enforces. A real desk reads these limits from a limits service, per
- * book and per trader, and checks them server-side as well. Stated in the README.
+ * Both are advisory. They sit in the browser; the guarantee that a retry cannot
+ * double-book is the clientTradeId, which the server enforces.
  */
 
-/**
- * How long an identical ticket counts as a probable repeat.
- *
- * Long enough to cover a double-click and a moment's doubt, short enough that
- * working an order in clips is not interrupted: that is a sequence of deliberate
- * presses seconds apart, and a trader should not have to confirm each one.
- */
+/** How long an identical ticket counts as a probable repeat. */
 export const DUPLICATE_WINDOW_MS = 5_000
 
 /**
- * The notional a booking has to be confirmed above.
- *
- * 250,000 rather than a round million, because the mistake being caught is an
- * extra digit and the number has to sit between the ticket and the typo. The
- * prefilled ticket is 72,500, so this clears it by 3.4x and a single extra zero
- * on the quantity trips it.
+ * The notional a booking has to be confirmed above. The prefilled ticket is
+ * 72,500, so this clears it by 3.4x and a single extra zero on the quantity
+ * trips it.
  */
 export const NOTIONAL_LIMIT: DecimalString = toDecimal('250000')
 
 /**
  * The economics of a ticket as one comparable string. Nothing identifying is in
- * it, which is the point: two tickets with the same signature would book the
- * same trade twice.
+ * it: two tickets with the same signature would book the same trade twice.
  */
 export function signatureOf(values: CreateTradeInput): string {
   return [
@@ -67,10 +54,7 @@ export interface Guard {
 /**
  * The one guard a ticket has to clear, or null.
  *
- * Duplicate is tested before size. An oversized ticket was already confirmed for
- * its size when it was first booked, so on a repeat the repeat is the new
- * information and saying "above the limit" a second time would answer a question
- * nobody asked.
+ * Duplicate is tested before size: on a repeat the repeat is the new information.
  *
  * `now` is a parameter so the window has a testable boundary rather than one
  * that can only be reached by waiting.
@@ -113,10 +97,9 @@ export const CONFIRM_LABEL: Record<Guard['kind'], string> = {
  * A v4 uuid for one ticket.
  *
  * crypto.randomUUID is restricted to secure contexts, so it is absent when the
- * app is reached over plain http at anything but localhost, which is exactly how
- * a reviewer opening it on a LAN address would see it. getRandomValues carries no
- * such restriction, so the fallback is still cryptographically random rather than
- * dropping to Math.random.
+ * app is reached over plain http at anything but localhost. getRandomValues
+ * carries no such restriction, so the fallback is still cryptographically
+ * random rather than dropping to Math.random.
  */
 export function newTicketId(): string {
   if (typeof crypto.randomUUID === 'function') {

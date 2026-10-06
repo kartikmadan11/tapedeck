@@ -15,11 +15,8 @@ const TONES: Record<ConnectionStatus, string> = {
   reconnecting: 'border-tape-sell/40 bg-tape-sell/10 text-tape-sell',
 }
 
-/**
- * Shows the cursor as well as the state, because the cursor is the thing that
- * makes a reconnect safe: watching it resume where it left off is the visible
- * part of the resync contract.
- */
+/** Shows the cursor as well as the state, since the cursor is what makes a
+ *  reconnect safe. */
 export function ConnectionBadge({ status, cursor }: Props): ReactElement {
   return (
     <span
@@ -28,10 +25,8 @@ export function ConnectionBadge({ status, cursor }: Props): ReactElement {
     >
       {/*
        * Keyed on the cursor so the dot remounts when a sequenced frame lands,
-       * which is what restarts the animation. It therefore reports throughput
-       * rather than only that a socket is open, and it is still while the feed
-       * is paused. An element rather than a text node, so none of this is
-       * visible to the tests that read the badge's label.
+       * which is what restarts the animation. An element rather than a text
+       * node, so none of it is visible to a test reading the badge's label.
        */}
       <span
         key={cursor}

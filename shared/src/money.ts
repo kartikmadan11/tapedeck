@@ -70,12 +70,9 @@ export function netQuantity(legs: readonly PricedLeg[]): number {
 }
 
 /**
- * Signed exposure, summed in bigint.
- *
- * Deliberately the same computation selectPositions runs in SQL, so a grouped row
- * in the blotter and the positions panel's row for the same symbol agree to the
- * last place. Summing the formatted floats instead would let the two disagree in
- * the sixth decimal with no way to tell which was right.
+ * Signed exposure, summed in bigint. Deliberately the same computation
+ * selectPositions runs in SQL, so a grouped blotter row and the positions
+ * panel's row for the same symbol agree to the last place.
  */
 export function netNotional(legs: readonly PricedLeg[]): DecimalString {
   let total = 0n
@@ -91,13 +88,11 @@ export function netNotional(legs: readonly PricedLeg[]): DecimalString {
 /**
  * Volume-weighted average price, exact.
  *
- * Side is deliberately not applied to the weights. A sell leg pulls the average
- * towards its own price rather than cancelling a buy leg out of the denominator:
- * a book that is flat still dealt at an average price, and netting the weights
- * would divide by zero to say so.
+ * Side is deliberately not applied to the weights: a sell leg pulls the average
+ * towards its own price rather than cancelling a buy leg out of the denominator,
+ * so a flat book still reports the price it dealt at.
  *
- * null rather than zero for an empty list. A zero average price is a claim about
- * where the book traded, and here there is nothing to claim.
+ * null rather than zero for an empty list.
  */
 export function vwap(legs: readonly PricedLeg[]): DecimalString | null {
   let weighted = 0n
@@ -114,15 +109,12 @@ export function vwap(legs: readonly PricedLeg[]): DecimalString | null {
   }
 
   // Half up, which `+ volume / 2n` gives exactly for both odd and even volumes.
-  // Bigint division truncates, so without it an average of 72.4655 would render
-  // as 72.465 and the blotter would disagree with a calculator.
+  // Bigint division truncates, so without it an average of 72.4655 renders as
+  // 72.465.
   return fromMinorUnits((weighted + volume / 2n) / volume)
 }
 
-/**
- * Orders by value. Required because the default string comparator puts
- * '10.000000' before '9.000000'.
- */
+/** Orders by value: the default string comparator puts '10.000000' before '9.000000'. */
 export function compareDecimal(a: DecimalString, b: DecimalString): number {
   const left = toMinorUnits(a)
   const right = toMinorUnits(b)

@@ -26,8 +26,7 @@ export function AmendDialog({ trade, onClose }: Props): ReactElement {
   /**
    * The version the user opened, held deliberately rather than read live from the
    * cache. Resubmitting with whatever version has since arrived would quietly
-   * overwrite someone else's change, which is the exact failure optimistic
-   * concurrency exists to surface.
+   * overwrite someone else's change.
    */
   const [editingVersion, setEditingVersion] = useState(trade.version)
 
@@ -115,10 +114,8 @@ export function AmendDialog({ trade, onClose }: Props): ReactElement {
             {errors.price ? <Hint>{errors.price.message}</Hint> : null}
           </label>
 
-          {/* Shown, not offered. Who a trade is with is fixed at booking, so this
-              is context for the two fields that are editable rather than a third
-              one. Rendered rather than omitted so its absence reads as a decision,
-              and a div rather than a label because there is no control to name. */}
+          {/* Shown, not offered: who a trade is with is fixed at booking. A div
+              rather than a label because there is no control to name. */}
           <div>
             <span className={`mb-1 block ${MICRO_LABEL}`}>Counterparty</span>
             <p className="h-7 truncate leading-7">{trade.counterparty}</p>
@@ -132,8 +129,6 @@ export function AmendDialog({ trade, onClose }: Props): ReactElement {
 
         <footer className="mt-3 flex items-center gap-2">
           {conflicted ? (
-            // An outline, not a fill. The accent fill is reserved for the
-            // primary action, and this is the escape hatch beside it.
             <button
               type="button"
               className="h-7 cursor-pointer rounded-xs border border-tape-accent px-2 text-tape-accent transition-colors duration-100 hover:bg-tape-accent/15"

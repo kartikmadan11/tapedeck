@@ -1,6 +1,5 @@
 /**
- * A seeded LCG, so seed data is byte-identical on every machine and the counts
- * quoted in the README are verifiable rather than whatever Math.random() gave.
+ * A seeded LCG, so seed data is byte-identical on every machine.
  *
  * Numerical Recipes constants. Statistical quality is irrelevant here; being
  * deterministic, dependency-free and identical across platforms is not.

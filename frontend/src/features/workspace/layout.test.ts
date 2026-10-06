@@ -32,10 +32,7 @@ const split = (id: string, axis: Orientation, children: Region[], weight = 1): S
   children,
 })
 
-/**
- * The tree as an expression, because these assertions are about shape and a
- * nested object literal buries the one thing being asserted.
- */
+/** The tree as an expression, because these assertions are about shape. */
 function shape(region: Region): string {
   if (region.kind === 'pane') {
     return region.id
@@ -53,7 +50,7 @@ function shares(region: Region): Record<string, number> {
 const THIRD = 0.3333
 const SIXTH = 0.1667
 
-/** Three panes stacked, which is where the report of this started. */
+/** Three panes stacked, evenly. */
 const STACK = split('s1', 'rows', [pane('a', 1 / 3), pane('b', 1 / 3), pane('c', 1 / 3)])
 
 describe('what an edge means', () => {
@@ -74,8 +71,8 @@ describe('shares', () => {
       pane('c', 0.5),
     ])
 
-    // a is half of a half. Its weight says 0.5 and its share of the window is a
-    // quarter, and the second is the number a trader is looking at.
+    // a is half of a half: its weight says 0.5 and its share of the window is a
+    // quarter.
     expect(shares(nested)).toEqual({ a: 0.25, b: 0.25, c: 0.5 })
   })
 
@@ -104,7 +101,7 @@ describe('moving a boundary', () => {
       pane('c', 0.5),
     ])
 
-    // The inner boundary moves and the outer one does not, which is the reason a
+    // The inner boundary moves and the outer one does not, which is why a
     // separator names its split rather than an index into a flat list.
     expect(shares(resizedSplit(nested, 's2', 0, 0.2))).toEqual({ a: 0.35, b: 0.15, c: 0.5 })
     expect(shares(resizedSplit(nested, 's1', 0, 0.2))).toEqual({ a: 0.35, b: 0.35, c: 0.3 })
@@ -115,18 +112,16 @@ describe('standing one pane beside another', () => {
   it('splits that pane’s slot and leaves the rest stacked', () => {
     const next = movedPane(STACK, 'c', 'a', 'right', 's2')
 
-    // The reason the tree exists. One flat axis turned b sideways too, because
-    // sideways was a property of the workspace rather than of this one boundary.
+    // Splitting a pane's slot must not turn its siblings sideways with it.
     expect(shape(next)).toBe('rows(columns(a c) b)')
   })
 
   it('changes where the panes are and not how big they are', () => {
     const next = movedPane(STACK, 'c', 'a', 'right', 's2')
 
-    // Every pane keeps the third of the window it had. A removal renormalises the
-    // old neighbours and an insertion halves the new one, so without restating the
-    // shares afterwards all three would have resized over a drop that was only
-    // supposed to rearrange.
+    // A removal renormalises the old neighbours and an insertion halves the new
+    // one, so without restating the shares afterwards a drop that was only
+    // supposed to rearrange would resize all three.
     expect(shares(next)).toEqual({ a: THIRD, b: THIRD, c: THIRD })
     expect(sharesOf(next).get('b')).toBeCloseTo(1 / 3, 10)
   })
@@ -161,8 +156,7 @@ describe('standing one pane beside another', () => {
   it('does nothing when the pane is already against that boundary', () => {
     // Returned as-is rather than rebuilt to the same shape. Not an optimisation:
     // a rebuild mints a new split id, a split id is a React key, and both panes
-    // would remount and lose their sort and selection over a drop that changed
-    // nothing.
+    // would remount and lose their sort and selection.
     expect(movedPane(STACK, 'b', 'a', 'bottom', 's2')).toBe(STACK)
     expect(movedPane(STACK, 'b', 'c', 'top', 's2')).toBe(STACK)
     expect(movedPane(STACK, 'a', 'a', 'right', 's2')).toBe(STACK)
@@ -204,8 +198,7 @@ describe('opening a pane', () => {
   })
 
   it('stacks one opened on a workspace that is still a single pane', () => {
-    // Nothing to join, so the window divides for the first time, and it divides
-    // the way a workspace opens rather than sideways.
+    // Nothing to join, so the window divides for the first time, as rows.
     expect(shape(withPaneAtEnd(pane('a'), pane('b'), 's1'))).toBe('rows(a b)')
   })
 
@@ -281,9 +274,9 @@ describe('naming a pane', () => {
   })
 
   it('carries the name with the pane when it moves', () => {
-    // The reason a name is a field on the leaf rather than a map beside the tree.
-    // A move takes the pane out and puts it back two levels away, through four
-    // functions that know nothing about names, and the name is still on it.
+    // The reason a name is a field on the leaf rather than a map beside the tree:
+    // a move takes the pane out and puts it back two levels away, through four
+    // functions that know nothing about names.
     const moved = movedPane(renamedPane(STACK, 'c', 'EU Flow'), 'c', 'a', 'right', 's2')
 
     expect(shape(moved)).toBe('rows(columns(a c) b)')
@@ -293,8 +286,8 @@ describe('naming a pane', () => {
   it('takes the name off again, rather than setting an empty one', () => {
     const cleared = renamedPane(renamedPane(STACK, 'b', 'EU Flow'), 'b', '')
 
-    // Absent, not empty. A name nobody chose is the thing a shared link leaves
-    // out, so the two states have to be different states.
+    // Absent, not empty: a shared link leaves out a name nobody chose, so the two
+    // states have to be different states.
     expect(Object.keys(panesOf(cleared)[1] ?? {})).not.toContain('name')
   })
 
@@ -307,9 +300,8 @@ describe('the form an arrangement travels in', () => {
   const BESIDE = movedPane(STACK, 'c', 'a', 'right', 's2')
 
   it('states each pane as the child index at every level down to it', () => {
-    // What a link carries, because a path says where a pane sits without naming
-    // a split: a split id is minted on a drop and means nothing to whoever
-    // opens the link.
+    // What a link carries: a path says where a pane sits without naming a split,
+    // and a split id is minted on a drop and means nothing to whoever opens it.
     expect(Object.fromEntries(pathsOf(BESIDE))).toEqual({ a: [0, 0], c: [0, 1], b: [1] })
     expect(Object.fromEntries(pathsOf(pane('a')))).toEqual({ a: [] })
   })
@@ -332,9 +324,8 @@ describe('the form an arrangement travels in', () => {
   })
 
   it('restates the shares a link carries as the weights that produce them', () => {
-    // The two numbers are not the same thing and only one of them can travel. A
-    // weight means something beside its siblings, so a link states shares of the
-    // window, and the weights at every depth fall out of the arrangement.
+    // A weight means something only beside its siblings, so a link states shares
+    // of the window and the weights at every depth fall out of the arrangement.
     const sized = withShares(
       regionOf(
         [[0, 1], 2],

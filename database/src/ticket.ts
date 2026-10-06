@@ -1,13 +1,12 @@
 import { type DecimalString, fromMinorUnits, toDecimal, toMinorUnits } from '@tapedeck/shared'
 import type { Rng } from './rng.js'
 
-// What a plausible ticket looks like, shared by the seed and the live simulator.
-// Two copies of this would let the historical rows and the incoming ones drift
-// apart in price granularity and size, which reads as a bug in the blotter.
+// What a plausible ticket looks like, shared by the seed and the live simulator,
+// so historical and incoming rows cannot drift apart in granularity or size.
 
 /**
- * Walks a reference price by up to 1.5 percent and snaps it to a tick, so the
- * blotter shows a spread rather than identical rows. Scaled integers only.
+ * Walks a reference price by up to 1.5 percent and snaps it to a tick. Scaled
+ * integers only.
  *
  * Takes any decimal string, not only an instrument's reference, so an amendment
  * can drift from the trade's own current price.

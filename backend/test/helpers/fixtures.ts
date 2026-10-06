@@ -42,15 +42,12 @@ export async function createTrade(
 }
 
 /**
- * Puts `count` trades in the table in one statement, for the tests that need more
- * rows than the blotter window rather than more rows of a particular shape.
+ * Puts `count` trades in the table in one statement. Written straight to the
+ * table rather than over the route, so it writes no audit events: a test using
+ * it must not assert on `seq`.
  *
- * Written straight to the table rather than over the route, because 500 posts are
- * 500 serialised transactions and this is one insert. The cost is that it writes
- * no audit events, so a test using it must not assert on `seq`.
- *
- * Timestamps descend by the minute from the base, so the rows have a definite
- * order and a windowed read has a right answer to get wrong.
+ * Timestamps descend by the minute from the base, so a windowed read has a
+ * definite right answer.
  */
 export async function fillTrades(handle: DatabaseHandle, count: number): Promise<void> {
   const base = Date.UTC(2026, 9, 2, 9, 0, 0)

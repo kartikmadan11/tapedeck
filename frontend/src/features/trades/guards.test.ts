@@ -36,10 +36,8 @@ describe('the ticket signature', () => {
     },
   )
 
-  // The trader is the window's identity, not a term of the trade. Two windows
-  // booking the same clip are two trades, and neither is the other's duplicate,
-  // so including the trader here would let one window's booking silence the
-  // other's warning.
+  // The trader is the window's identity, not a term of the trade: including it
+  // would let one window's booking silence another window's duplicate warning.
   it('ignores the trader', () => {
     expect(signatureOf({ ...TICKET, trader: 'j.okonkwo' })).toBe(signatureOf(TICKET))
   })
@@ -66,8 +64,7 @@ describe('the duplicate guard', () => {
     expect(guardFor(TICKET, booked(), NOW + DUPLICATE_WINDOW_MS)).toBeNull()
   })
 
-  // The legitimate workflow the blanket confirmation would have interrupted:
-  // a different clip is not a duplicate, however fast it follows.
+  // A different clip is not a duplicate, however fast it follows.
   it('passes a different ticket inside the window', () => {
     expect(guardFor({ ...TICKET, quantity: 2_000 }, booked(), NOW + 10)).toBeNull()
   })
@@ -88,10 +85,9 @@ describe('the size guard', () => {
   })
 
   /**
-   * The boundary, which is exactly one minor unit wide because the comparison
-   * runs in minor units rather than on the decimal strings. Strictly over, so a
-   * ticket landing exactly on the limit books without a press being held: a
-   * limit is a ceiling, not a value to be argued with.
+   * The boundary is one minor unit wide because the comparison runs in minor units
+   * rather than on the decimal strings. Strictly over, so a ticket landing exactly
+   * on the limit books.
    */
   it.each([
     ['exactly on the limit', '250000.000000', null],
@@ -111,8 +107,8 @@ describe('the size guard', () => {
 })
 
 describe('precedence', () => {
-  // An oversized ticket was already confirmed for its size when it was first
-  // booked, so on a repeat the repeat is the new information.
+  // An oversized ticket was confirmed for its size on the first booking, so on a
+  // repeat the repeat is the new information.
   it('reports the duplicate rather than the size when a ticket is both', () => {
     const big = { ...TICKET, quantity: 10_000 }
     const guard = guardFor(big, booked({ signature: signatureOf(big) }), NOW + 100)

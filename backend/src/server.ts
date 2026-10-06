@@ -5,10 +5,8 @@ const config = loadConfig()
 const { app } = await buildApp(config)
 
 /**
- * Close on SIGTERM and SIGINT so `docker compose down` is a clean shutdown
- * rather than a kill: the onClose hook closes the websocket clients with 1001
- * and drains the pool, instead of leaving clients to discover the socket is gone
- * by timeout.
+ * Close on SIGTERM and SIGINT so a container stop is a clean shutdown: the
+ * onClose hook closes websocket clients with 1001 and drains the pool.
  */
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.once(signal, () => {
@@ -31,8 +29,7 @@ try {
 }
 
 // Started after listen, and only here: buildApp() has no side effects, so this
-// is the one place that decides the feed runs. Starting before listen would have
-// it writing trades that no client could yet be connected to see.
+// is the one place that decides the feed runs.
 if (config.SIMULATION_ENABLED) {
   app.simulator.start()
 }

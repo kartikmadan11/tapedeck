@@ -125,8 +125,7 @@ describe('invalid state', () => {
     const created = await createTrade(app)
     await cancel(created.tradeId, 1)
 
-    // Status is diagnosed before version: "this trade is cancelled" is the more
-    // useful of the two true statements.
+    // Status is diagnosed before version.
     const response = await amend(created.tradeId, 1)
     expect(apiError.parse(response.json()).code).toBe('INVALID_STATE')
   })
@@ -187,11 +186,8 @@ describe('the serialised write path', () => {
   })
 
   /**
-   * The claim the write lock makes about the idempotency key. The repository
-   * reads for an earlier booking and then inserts, which is a check-then-act and
-   * would be a race on its own; it is safe only because one create runs at a
-   * time. Ten at once is the test of that, and it would also catch the insert
-   * being moved out from under the lock later.
+   * The repository reads for an earlier booking and then inserts, which is a
+   * check-then-act and safe only because one create runs at a time.
    */
   it('books once when the same key arrives concurrently ten times', async () => {
     const KEY = '5d4c3b2a-1098-4765-ba43-210fedcba987'
@@ -209,8 +205,7 @@ describe('the serialised write path', () => {
     const codes = responses.map((response) => response.statusCode).sort((a, b) => a - b)
     expect(codes).toEqual([200, 200, 200, 200, 200, 200, 200, 200, 200, 201])
 
-    // Every reply names the same trade, so the nine that lost the race still
-    // answered the question the caller asked rather than an error.
+    // Every reply names the same trade.
     const ids = new Set(responses.map((response) => (response.json() as Trade).tradeId))
     expect(ids.size).toBe(1)
 

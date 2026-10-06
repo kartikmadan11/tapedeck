@@ -48,8 +48,8 @@ const TAPE_EPOCH = Date.UTC(2026, 9, 2, 9, 0, 0)
 
 /**
  * Trade `index` of a tape, counted back from the most recent, so index 0 is the
- * newest and a larger index is older. One second apart, so no two trades tie and
- * the ordering under test is the timestamp rather than the tiebreak.
+ * newest. One second apart, so no two trades tie and the ordering under test is
+ * the timestamp rather than the tiebreak.
  */
 function aTapeTrade(index: number, overrides: Record<string, unknown> = {}): Trade {
   return aTrade({
@@ -258,10 +258,9 @@ describe('apply: trade deltas', () => {
 })
 
 /**
- * The cache holds the window the server was asked for, not everything it has
- * ever been sent. Untrimmed, a bounded first load drifts straight back to
- * unbounded: the feed only ever adds rows, since a cancelled trade stays on the
- * tape.
+ * The cache holds the window the server was asked for, not everything it has ever
+ * been sent. The feed only ever adds rows, since a cancelled trade stays on the
+ * tape, so untrimmed a bounded first load drifts back to unbounded.
  */
 describe('apply: the blotter window', () => {
   it('trims a snapshot larger than the window to the most recent BLOTTER_LIMIT', () => {
@@ -301,9 +300,8 @@ describe('apply: the blotter window', () => {
 
     expect(next.trades).toHaveLength(BLOTTER_LIMIT)
     expect(ids(next)).not.toContain('TRD-200000')
-    // The cursor still advances. The frame was applied, and the trade is absent
-    // because the window says so rather than because it was missed: leaving the
-    // cursor behind would make the next frame look like a gap and force a refetch.
+    // The cursor still advances: leaving it behind would make the next frame look
+    // like a gap and force a refetch.
     expect(next.seq).toBe(11)
   })
 
@@ -462,8 +460,8 @@ describe('REST writers', () => {
 
     const next = apply(held, { type: 'simulation', running: true, intervalMs: 2_000 })
 
-    // Whether the generated feed is running is not blotter state. Returning the
-    // same object is the assertion: nothing is copied, and the cursor cannot move.
+    // Returning the same object is the assertion: nothing is copied, and the
+    // cursor cannot move.
     expect(next).toBe(held)
   })
 })

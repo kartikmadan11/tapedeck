@@ -14,10 +14,7 @@ import { createBus } from '../src/bus.js'
 import { nextAction } from '../src/simulation/nextAction.js'
 import { createSimulator, SIMULATOR_ACTOR } from '../src/simulation/simulator.js'
 
-/**
- * No database and no app in this file. The generator is pure and the runner
- * takes its writes as callbacks, so the whole feed is exercised with fakes.
- */
+/** No database and no app: the generator is pure and the writes are callbacks. */
 
 function aTrade(overrides: Partial<Trade> = {}): Trade {
   return {
@@ -134,8 +131,7 @@ describe('nextAction', () => {
       if (action.kind !== 'amend') {
         continue
       }
-      // amendTradeInput is a strictObject, so this is really asserting that the
-      // generator does not try to express something the contract forbids.
+      // amendTradeInput is a strictObject, so an extra key would be rejected.
       expect(Object.keys(action.input).sort()).toEqual(['price', 'quantity', 'version'])
     }
   })
@@ -167,7 +163,7 @@ describe('simulator', () => {
     await simulator.runOnce()
 
     expect(writes.create).toHaveBeenCalledOnce()
-    // The actor is what the audit trail records, and it must say a robot did it.
+    // The actor is what the audit trail records.
     expect(writes.create.mock.calls[0]?.[1]).toBe(SIMULATOR_ACTOR)
   })
 
@@ -192,8 +188,8 @@ describe('simulator', () => {
     const { simulator, frames } = buildSimulator([])
     await simulator.runOnce()
 
-    // The fake writes publish nothing, so an empty list proves the simulator is
-    // not fabricating trade frames alongside the real ones.
+    // The fake writes publish nothing, so an empty list proves nothing was
+    // fabricated.
     expect(frames).toEqual([])
   })
 
@@ -204,9 +200,8 @@ describe('simulator', () => {
 
     simulator.start()
 
-    // A conflict is what a race with a human amend looks like, so the tick logs
-    // it and re-arms. More than one attempt is the proof: if the rejection
-    // escaped, the first failure would stop the feed for good.
+    // More than one attempt is the proof: if the rejection escaped, the first
+    // failure would stop the feed for good.
     await vi.waitFor(() => {
       expect(writes.create.mock.calls.length).toBeGreaterThanOrEqual(3)
     })
@@ -222,8 +217,7 @@ describe('simulator', () => {
     simulator.start()
     expect(simulator.state.running).toBe(true)
 
-    // A second start is not a transition, so it must not publish again: a client
-    // would otherwise see the feed restart when nothing had changed.
+    // A second start is not a transition, so it must not publish again.
     simulator.start()
     simulator.stop()
     simulator.stop()

@@ -8,10 +8,10 @@ const FLASH_MS = 900
  * The trades that changed since the last render, so the table can flash them.
  *
  * `updatedAt` is the change detector rather than `version`, because it also moves
- * when nothing else visible did, and comparing one string beats diffing rows.
+ * when nothing else visible did.
  *
- * The first batch is recorded without flashing, otherwise 500 seeded rows all
- * flash on load and the signal is worthless exactly when a reviewer is watching.
+ * The first batch is recorded without flashing, otherwise every seeded row
+ * flashes on load.
  */
 export function useRowFlash(trades: Trade[]): ReadonlySet<string> {
   const seen = useRef(new Map<string, string>())

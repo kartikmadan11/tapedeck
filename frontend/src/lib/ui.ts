@@ -1,6 +1,5 @@
 /**
- * Shared control classes. These strings were pasted across nine files, so a
- * focus ring or a border could be changed in one control and not the rest.
+ * Shared control classes.
  *
  * No background is set here on purpose. A control on the panel needs a darker
  * fill and one on the canvas needs a lighter one, and two background utilities
@@ -23,26 +22,17 @@ export const CHIP =
 export const MICRO_LABEL = 'text-[10px] uppercase tracking-[0.14em] text-tape-muted'
 
 /**
- * A draggable boundary between two regions.
- *
- * The bar is the hit area and stays quiet: a full-contrast strip between two
- * grids of numbers reads as a rule the eye has to cross. The pill in the middle
- * is the conventional mark for something to grab and is the only part carrying
- * contrast, which is why tape-line at 1.6:1 is enough for the bar itself.
- *
- * Drawn as a pseudo-element, so an hr can have one without a child, and an hr is
- * what carries the separator role without asserting it.
+ * A draggable boundary between two regions. The bar is the hit area, and the
+ * pill in the middle is drawn as a pseudo-element so an hr can have one without
+ * a child, an hr being what carries the separator role without asserting it.
  */
 export const HANDLE =
   "relative shrink-0 touch-none border-0 bg-tape-line transition-colors duration-100 before:absolute before:left-1/2 before:top-1/2 before:-translate-x-1/2 before:-translate-y-1/2 before:rounded-full before:bg-tape-muted before:transition-colors before:duration-100 before:content-[''] hover:bg-tape-raised hover:before:bg-tape-accent focus-visible:bg-tape-raised focus-visible:outline-none focus-visible:before:bg-tape-accent"
 
 /**
- * Eight pixels, which is a pointer target rather than a line. Six was the width
- * of the rule it draws and missing it took two attempts.
- *
- * The two of them are also the gap between the regions they separate, so a
- * container that holds one sets no gap of its own: a handle sitting in the
- * middle of a 24px channel does not read as the thing that divides them.
+ * Eight pixels, which is a pointer target rather than a line. These are also the
+ * whole gap between the regions they separate, so a container that holds one
+ * sets no gap of its own.
  */
 export const HANDLE_ROW = 'h-2 w-full cursor-row-resize before:h-0.5 before:w-8'
 export const HANDLE_COLUMN = 'h-full w-2 cursor-col-resize before:h-8 before:w-0.5'
@@ -57,6 +47,5 @@ const ACTION_BASE =
 export const ACTION = `${ACTION_BASE} bg-tape-accent-fill`
 
 /** The same button while it is holding a press for confirmation. It replaces
- *  ACTION rather than appearing beside it, so the rule above still holds: one
- *  accent fill on screen, and the colour change is the whole message. */
+ *  ACTION rather than appearing beside it, so the rule above still holds. */
 export const ACTION_HELD = `${ACTION_BASE} bg-tape-warn-fill`

@@ -8,8 +8,7 @@ type Props = {
   label: string
   /**
    * How far the boundary moved, in the same units as the weights. Which boundary
-   * of which split is closed over by whoever placed this: a separator can report
-   * how far it travelled, and where it sits in the tree is not its business.
+   * of which split is closed over by whoever placed this.
    */
   onResize: (delta: number) => void
   orientation: Orientation
@@ -17,10 +16,7 @@ type Props = {
   weightAfter: number
 }
 
-/**
- * One keypress of travel. Two per cent is fine enough to tune a split and
- * coarse enough that holding the key crosses a pane in about a second.
- */
+/** One keypress of travel, as a share of the pair's combined weight. */
 const STEP = 0.02
 
 type Drag = {
@@ -38,15 +34,14 @@ type Drag = {
  * The draggable boundary between two panes.
  *
  * While the pointer is down this writes `flex-grow` straight onto the two
- * neighbouring pane elements and commits once, on release. That is a deliberate
- * exception to holding everything in state: a pane is a virtualised grid of 500
- * trades, and putting a resize through React would re-render both of them on
- * every pointer move. The committed value is the one that was written, so there
- * is no frame where the two disagree.
+ * neighbouring pane elements and commits once, on release: a pane is a
+ * virtualised grid of 500 trades, and putting a resize through React would
+ * re-render both of them on every pointer move. The committed value is the one
+ * that was written, so there is no frame where the two disagree.
  *
  * The neighbours are read off the DOM as siblings rather than threaded in as
- * refs, which is sound because the markup that places a separator is the markup
- * that guarantees a pane on each side of it.
+ * refs, which holds because the markup that places a separator guarantees a pane
+ * on each side of it.
  */
 export function Separator({
   label,

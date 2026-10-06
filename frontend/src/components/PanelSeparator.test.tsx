@@ -9,9 +9,9 @@ const MAX = 560
 const OPENING = 288
 
 /**
- * The handle plus the element it resizes, which it finds as its own next
- * sibling. State is held here rather than asserted through a mock, so a test
- * sees what a committed drag actually leaves on screen.
+ * The handle and the element it resizes, which it finds as its own next sibling.
+ * State is held here rather than in a mock, so a test sees what a committed drag
+ * leaves on screen.
  */
 function Harness({ opening = OPENING }: { opening?: number }): ReactElement {
   const [width, setWidth] = useState(opening)
@@ -51,8 +51,8 @@ describe('resizing the panel beside the blotter', () => {
   it('reports the width it opens on, and the range it may be taken over', () => {
     render(<Harness />)
 
-    // A splitter with no stated range is one a screen reader can only describe
-    // as moved, not as nearly closed.
+    // A splitter with no stated range is one a screen reader can only describe as
+    // moved, not as nearly closed.
     expect(handle()).toHaveAttribute('aria-valuenow', String(OPENING))
     expect(handle()).toHaveAttribute('aria-valuemin', String(MIN))
     expect(handle()).toHaveAttribute('aria-valuemax', String(MAX))
@@ -64,8 +64,7 @@ describe('resizing the panel beside the blotter', () => {
     dragTo(900)
 
     // The panel is on the far side of the handle, so left is bigger. 100px of
-    // travel is 100px of panel, with no scaling: that is the whole reason this
-    // boundary is in pixels.
+    // travel is 100px of panel, with no scaling.
     expect(drawn()).toBe('388px')
     expect(handle()).toHaveAttribute('aria-valuenow', '388')
   })
@@ -84,9 +83,7 @@ describe('resizing the panel beside the blotter', () => {
     render(<Harness />)
     dragTo(to)
 
-    // Clamped rather than merely resisted. The floor is the width the panel's
-    // own numbers stop fitting at, and the ceiling is where it is taking width
-    // off the tape for nothing.
+    // Clamped rather than merely resisted.
     expect(drawn()).toBe(`${expected}px`)
   })
 
@@ -94,8 +91,8 @@ describe('resizing the panel beside the blotter', () => {
     render(<Harness />)
 
     // Dragged out past the ceiling and then all the way back. A handle that
-    // accumulated a delta per move would have discarded the travel the clamp ate
-    // on the way out and come back to the wrong place.
+    // accumulated a delta per move would discard the travel the clamp ate on the
+    // way out and come back to the wrong place.
     dragTo(0, 1000)
 
     expect(drawn()).toBe('288px')
@@ -125,8 +122,7 @@ describe('resizing the panel beside the blotter', () => {
     fireEvent.pointerCancel(handle(), { pointerId: 1 })
 
     // Cancel commits what was reached rather than reverting it, the same as a
-    // release: the width is already on screen, and snapping back would undo a
-    // move the user watched happen.
+    // release: the width is already on screen.
     expect(handle()).toHaveAttribute('aria-valuenow', '388')
 
     // And the drag is over, so a further move cannot still be driving it.
@@ -135,8 +131,7 @@ describe('resizing the panel beside the blotter', () => {
   })
 
   it('does nothing at all when there is nothing after it to resize', () => {
-    // Defensive, because the handle reads its neighbour off the DOM rather than
-    // being handed a ref. A boundary with one side is not a boundary.
+    // The handle reads its neighbour off the DOM rather than being handed a ref.
     render(
       <PanelSeparator
         label="Resize the positions panel"
@@ -176,8 +171,7 @@ describe('resizing the panel beside the blotter', () => {
     it('ignores the keys for the other axis', () => {
       render(<Harness />)
 
-      // This boundary is vertical. Up on it is not a smaller version of the same
-      // request, it is a different one, so it does nothing.
+      // This boundary is vertical, so the other axis is a different request.
       fireEvent.keyDown(handle(), { key: 'ArrowUp' })
       fireEvent.keyDown(handle(), { key: 'ArrowDown' })
 

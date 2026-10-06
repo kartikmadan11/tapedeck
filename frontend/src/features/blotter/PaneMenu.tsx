@@ -10,17 +10,15 @@ export type MenuItem = {
   label: string
   onSelect: () => void
   /**
-   * Offered and refused rather than left out, so the menu is the same list every
-   * time it opens. An item that moves up because the one above it disappeared is
-   * an item that gets mis-clicked by someone going on muscle memory.
+   * Refused rather than left out, so the menu is the same list every time it
+   * opens and no item moves under a pointer going on muscle memory.
    */
   disabled?: boolean | undefined
   /** Draws a rule above this item, which is all the grouping the list needs. */
   separated?: boolean | undefined
   /**
-   * For an item that opens something and leaves it open. Carried here because
-   * the control moved into this menu and the panel it opens still has to be
-   * announced as open, which a plain menu item cannot say.
+   * For an item that opens something and leaves it open: the panel still has to
+   * be announced as open, which a plain menu item cannot say.
    */
   expanded?: boolean | undefined
   controls?: string | undefined
@@ -44,11 +42,6 @@ const PAD = 4
 /**
  * A pane's own controls, on the pane rather than on its bar.
  *
- * They were four chips in the filter row: Config, Duplicate, Close and the one
- * that opens another pane. That row is where a trader's hand already is for
- * symbol and trader, and spending a third of it on things a view is arranged
- * with once pushed the filters into the space the pane name needed.
- *
  * Shift falls through to the browser's own menu, which is the convention on a
  * grid that takes over right-click, and the reason the sheet says so.
  */
@@ -59,8 +52,7 @@ export function PaneMenu({ label, at, items, onDismiss }: Props): ReactElement {
 
   /**
    * Which item the arrow keys are on, as a roving tabindex rather than as focus
-   * following the pointer: a menu where hovering moves focus is a menu where the
-   * keyboard loses its place every time the mouse is nudged.
+   * following the pointer, which would lose the keyboard's place on every hover.
    */
   const [active, setActive] = useState(() => firstEnabled(items))
 
@@ -189,8 +181,7 @@ function firstEnabled(items: readonly MenuItem[]): number {
 
 /**
  * The next item in a direction, skipping what cannot be chosen and wrapping at
- * either end. Without the skip, a workspace at its pane ceiling would strand the
- * arrow key on a Duplicate that does nothing.
+ * either end.
  */
 function step(items: readonly MenuItem[], from: number, direction: number): number {
   for (let moved = 1; moved <= items.length; moved += 1) {

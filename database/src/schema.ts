@@ -18,8 +18,7 @@ import {
  * Date so the projection can emit canonical ISO.
  *
  * mode: 'string' would hand back Postgres's own literal, whose offset follows the
- * server's timezone setting, so the API's timestamp format would depend on a
- * database session variable. precision: 3 matches the contract, so the value the
+ * server's timezone setting. precision: 3 matches the contract, so the value the
  * database orders by is the value the client sorts by.
  */
 const WIRE_TIME = { withTimezone: true, precision: 3, mode: 'date' } as const
@@ -33,8 +32,8 @@ export const eventTypeEnum = pgEnum('trade_event_type', ['CREATED', 'AMENDED', '
  *
  * price is numeric(18, 6) and pg returns numeric as a string, so the value
  * crosses the wire exactly as stored. No type parser may be registered for the
- * numeric OID. Six decimal places rather than the usual four for cash equities,
- * so a per-unit price derived from a block value needs no rounding.
+ * numeric OID. Six decimal places, so a per-unit price derived from a block
+ * value needs no rounding.
  *
  * version is the concurrency token, and by construction equals the trade's event
  * count, since every mutation writes one event and bumps it in one transaction.
@@ -42,10 +41,10 @@ export const eventTypeEnum = pgEnum('trade_event_type', ['CREATED', 'AMENDED', '
 export const trades = pgTable(
   'trades',
   {
-    // TRD-100001 upwards, from a sequence. Declaring the default here as well as
-    // in the migration is what makes tradeId optional on insert, so no caller
-    // can invent an id. The migration hoists the CREATE SEQUENCE above this
-    // table, since a default cannot reference a sequence that does not exist.
+    // TRD-100001 upwards, from a sequence. The default is declared here as well
+    // as in the migration, which is what makes tradeId optional on insert. The
+    // migration hoists the CREATE SEQUENCE above this table, since a default
+    // cannot reference a sequence that does not exist.
     tradeId: text('trade_id')
       .primaryKey()
       .default(sql`'TRD-' || lpad(nextval('trade_id_seq')::text, 6, '0')`),
@@ -57,9 +56,9 @@ export const trades = pgTable(
     book: text('book').notNull(),
     counterparty: text('counterparty').notNull(),
     tradeTimestamp: timestamp('trade_timestamp', WIRE_TIME).notNull(),
-    // The client's idempotency key for the booking, null for the seed, the
-    // simulator and any client that sends none. Nullable rather than defaulted:
-    // a server-generated key would be unique per request and dedupe nothing.
+    // The client's idempotency key for the booking, null when none is sent.
+    // Nullable rather than defaulted: a server-generated key would be unique per
+    // request and dedupe nothing.
     clientTradeId: text('client_trade_id'),
     status: statusEnum('status').notNull().default('ACTIVE'),
     version: integer('version').notNull().default(1),
@@ -75,14 +74,12 @@ export const trades = pgTable(
     // for trades booked in the same millisecond.
     index('trades_timestamp_idx').on(t.tradeTimestamp.desc(), t.tradeId.desc()),
     /**
-     * What actually makes a booking idempotent. The repository looks for a
-     * replay under the write lock, which covers every request that goes through
-     * it; this covers the rest, including the seed and anything that writes to
-     * the table directly, and it is the constraint a reviewer can check.
+     * The backstop that makes a booking idempotent for writers that bypass the
+     * repository's replay check under the write lock.
      *
-     * Postgres treats nulls as distinct here, so the trades booked without a key
-     * do not collide with each other. That is the default and it is the
-     * behaviour wanted, which is why there is no NULLS NOT DISTINCT.
+     * Postgres treats nulls as distinct here, so trades booked without a key do
+     * not collide with each other. That default is the behaviour wanted, which
+     * is why there is no NULLS NOT DISTINCT.
      */
     uniqueIndex('trades_client_trade_id_key').on(t.clientTradeId),
   ],
@@ -91,10 +88,8 @@ export const trades = pgTable(
 /**
  * The append-only audit trail. Never updated, never deleted.
  *
- * `seq` does three jobs: primary key of the audit trail, ordering token for the
- * realtime stream, and the seam an outbox or logical-decoding consumer would
- * attach to. Sharing one counter is why the log and the stream cannot disagree
- * about order.
+ * `seq` is both the primary key and the realtime stream's ordering token. One
+ * counter is why the log and the stream cannot disagree about order.
  *
  * mode: 'number' is required because pg returns int8 as a string, which would
  * make `seq > cursor` lexicographic. A repository test asserts the runtime type.
@@ -111,9 +106,8 @@ export const tradeEvents = pgTable(
       .references(() => trades.tradeId),
     eventType: eventTypeEnum('event_type').notNull(),
     // The full trade as it stood before and after. `before` is null for
-    // CREATED. Storing whole snapshots rather than a field-level diff keeps the
-    // history readable without replaying it, which is what the history drawer
-    // needs, and costs little at this volume.
+    // CREATED. Whole snapshots, not a field-level diff, so the history reads
+    // without replaying it.
     before: jsonb('before').$type<Trade | null>(),
     after: jsonb('after').$type<Trade>().notNull(),
     actor: text('actor').notNull(),
@@ -123,10 +117,10 @@ export const tradeEvents = pgTable(
 )
 
 /**
- * Net exposure per symbol, aggregated in numeric so every client agrees. Two
+ * Net exposure per symbol, aggregated in numeric so every client agrees: two
  * clients summing floats in different orders can disagree in the last place.
  *
- * Cancelled trades are excluded, not netted out: the trade did not happen.
+ * Cancelled trades are excluded, not netted out.
  */
 export const positionsQuery = sql`
   select

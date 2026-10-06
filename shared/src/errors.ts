@@ -21,21 +21,14 @@ export const validationFailedError = z.object({
   }),
 })
 
-/**
- * One 404 serves two cases: an unknown trade, which names it, and an unknown
- * route, which has no trade to name. Hence the optional id rather than an empty
- * string standing in for one.
- */
+/** One 404 serves both an unknown trade and an unknown route, hence the optional id. */
 export const notFoundError = z.object({
   code: z.literal('NOT_FOUND'),
   message: z.string(),
   details: z.object({ tradeId: z.string().optional() }),
 })
 
-/**
- * Someone else changed the row first. Carries currentVersion so the client can
- * offer a retry rather than just report a failure.
- */
+/** Someone else changed the row first. Carries currentVersion so the client can retry. */
 export const versionConflictError = z.object({
   code: z.literal('VERSION_CONFLICT'),
   message: z.string(),
@@ -70,11 +63,7 @@ export type ApiError = z.infer<typeof apiError>
 
 export type VersionConflictError = z.infer<typeof versionConflictError>
 
-/**
- * The single domain-error to HTTP mapping. The three-way split exists because
- * "gone", "out of date" and "cancelled" are three different things to tell a
- * user about a failed amend.
- */
+/** The single domain-error to HTTP mapping. */
 export const HTTP_STATUS: Record<ErrorCode, number> = {
   VALIDATION_FAILED: 400,
   NOT_FOUND: 404,

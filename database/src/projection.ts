@@ -3,8 +3,7 @@ import type { TradeEventRow, TradeRow } from './schema.js'
 
 /**
  * The one place a row becomes a wire object. Both the API and the seed go
- * through it, so a seeded trade and a booked trade cannot end up with different
- * timestamp formats.
+ * through it, so timestamp formats cannot diverge.
  *
  * Price stays the string pg returned: parsing it to a number here is the whole
  * precision loss the numeric column exists to avoid.

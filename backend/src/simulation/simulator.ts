@@ -10,10 +10,7 @@ import type { FastifyBaseLogger } from 'fastify'
 import type { Bus } from '../bus.js'
 import { nextAction } from './nextAction.js'
 
-/**
- * Recorded as the actor on every event the feed produces, so the audit trail is
- * honest about which rows a human touched.
- */
+/** Recorded as the actor on every event the feed produces. */
 export const SIMULATOR_ACTOR = 'simulator'
 
 export interface SimulatorOptions {
@@ -37,15 +34,10 @@ export interface Simulator {
 }
 
 /**
- * The generated trade feed.
- *
- * It writes through the injected service calls rather than publishing frames of
- * its own, so everything it produces inherits the real write path: a gap-free
- * `seq`, a correct `version` chain, a full event history and netted positions.
- * Fabricated frames would break all four and make the live demo a lie.
- *
- * Dependencies arrive as callbacks, the way HubOptions takes readSnapshot, so
- * the runner is testable without a database.
+ * The generated trade feed. It writes through the injected service calls rather
+ * than publishing frames of its own, so everything it produces inherits the
+ * real write path: a gap-free `seq`, a correct `version` chain, a full event
+ * history and netted positions.
  */
 export function createSimulator(options: SimulatorOptions): Simulator {
   const { intervalMs, maxTrades, rng, log, bus } = options
@@ -80,17 +72,16 @@ export function createSimulator(options: SimulatorOptions): Simulator {
   }
 
   /**
-   * A re-arming timeout, not setInterval. Writes serialise behind an advisory
-   * lock, so a tick slower than the interval would let setInterval queue the next
-   * one immediately and pile ticks up behind the lock. Scheduling only after a
-   * tick finishes makes the interval a floor on the gap rather than a deadline.
+   * A re-arming timeout, not setInterval: writes serialise behind an advisory
+   * lock, so a tick slower than the interval would pile ticks up behind it.
+   * Scheduling after a tick finishes makes the interval a floor, not a deadline.
    */
   function arm(): void {
     timer = setTimeout(() => {
       void tick()
     }, intervalMs)
     // Without unref this timer alone keeps the event loop alive, so a process or
-    // a test run would never exit. Same reason as the hub's ping timer.
+    // a test run would never exit.
     timer.unref()
   }
 
@@ -98,9 +89,8 @@ export function createSimulator(options: SimulatorOptions): Simulator {
     try {
       await runOnce()
     } catch (error) {
-      // A VERSION_CONFLICT here is expected, not exceptional: it is what happens
-      // when someone amends the same trade in the same instant. The feed logs it
-      // and carries on, because a demo that dies on a race is worse than a race.
+      // A VERSION_CONFLICT here is expected, not exceptional: two writes to the
+      // same trade in the same instant. Log and carry on.
       log.warn({ err: error }, 'simulated trade failed')
     }
 
@@ -117,8 +107,7 @@ export function createSimulator(options: SimulatorOptions): Simulator {
     }
     running = true
     arm()
-    // Published on a real transition only, so the route stays thin and any other
-    // caller keeps every connected client in agreement for free.
+    // Published on a real transition only.
     bus.publish({ type: 'simulation', ...currentState() })
     log.info({ intervalMs, maxTrades }, 'simulated trade feed started')
   }

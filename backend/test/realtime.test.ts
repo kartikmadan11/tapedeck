@@ -67,12 +67,9 @@ function expectSnapshot(frame: ServerFrame) {
 
 /**
  * Consumes the two frames a quiet connection opens with: the snapshot, then the
- * generated feed's state. Asserting the pair in one place means every test in
- * this file covers the handshake shape rather than only the ones that look at it.
- *
- * Quiet meaning nothing was published during the snapshot read. The feed state is
- * drained last, so a connection that raced a mutation receives the replay in
- * between and reads its frames directly instead.
+ * generated feed's state. Quiet meaning nothing was published during the
+ * snapshot read; a connection that raced a mutation gets the replay in between
+ * and reads its frames directly instead.
  */
 async function handshake(client: FrameClient) {
   const snapshot = expectSnapshot(await client.next())
@@ -93,8 +90,7 @@ describe('the handshake', () => {
 
     expect(snapshot.seq).toBe(1)
     expect(snapshot.trades).toHaveLength(1)
-    // Positions arrive with the snapshot, so the panel is populated on first
-    // paint rather than waiting for someone to mutate.
+    // Positions arrive with the snapshot, so the panel is populated on first paint.
     expect(snapshot.positions).toEqual([
       expect.objectContaining({ symbol: 'VOD', netQuantity: 1_000, netNotional: '2500.000000' }),
     ])
@@ -127,9 +123,8 @@ describe('the handshake', () => {
     const expected = await maxSeq(handle)
     expect(expected).toBe(2)
 
-    // Not handshake(): this connection is racing a write, so the frame after the
-    // snapshot may be the replay rather than the feed state. The loop skips
-    // unsequenced frames anyway, which is what makes the order irrelevant here.
+    // Not handshake(): racing a write, so the frame after the snapshot may be the
+    // replay rather than the feed state. The loop skips unsequenced frames.
     let cursor = expectSnapshot(await client.next()).seq
     while (cursor < expected) {
       const seq = frameSequence(await client.next())
@@ -169,12 +164,7 @@ describe('broadcast', () => {
     }
   })
 
-  /**
-   * A replay wrote nothing, so there is nothing to broadcast: no event means no
-   * seq to put on a frame, and a second trade.created would flash a row every
-   * client already has. The positions frame is covered by the same assertion,
-   * since a replay moved no row.
-   */
+  /** A replay wrote no event, so there is no seq to put on a frame. */
   it('publishes nothing when a booking is replayed', async () => {
     const KEY = 'a1b2c3d4-e5f6-4789-ab01-23456789abcd'
     const client = await connect()
@@ -300,8 +290,7 @@ describe('broadcast', () => {
     try {
       app.simulator.start()
 
-      // Both windows agree about the feed. A per-window toggle would leave the
-      // second client believing the blotter is idle while it is being written to.
+      // Both windows agree about the feed.
       for (const client of [one, two]) {
         const frame = await client.next()
         expect(frame).toMatchObject({ type: 'simulation', running: true })

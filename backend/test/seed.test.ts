@@ -40,8 +40,7 @@ describe('the seeded dataset', () => {
       )
     `)
 
-    // The invariant that makes the history drawer agree with the row it opened
-    // from. It holds because nothing writes status or version directly.
+    // Holds because nothing writes status or version directly.
     expect(result.rows[0]?.offenders).toBe(0)
   })
 
@@ -135,8 +134,7 @@ describe('the seeded dataset over the API', () => {
 
     expect(body.seq).toBe(615)
     expect(body.trades).toHaveLength(500)
-    // Parsed, not spot-checked: one row with a bad price or a null counterparty
-    // fails here.
+    // Parsed, not spot-checked: one bad row fails here.
     for (const row of body.trades) {
       trade.parse(row)
     }

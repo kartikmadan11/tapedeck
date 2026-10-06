@@ -26,8 +26,7 @@ const helper = createColumnHelper<Trade>()
 
 /**
  * Money columns sort by value, not by text. Price is an exact decimal string, so
- * the default comparator would place '10.000000' before '9.000000'. This is the
- * one place the decimal-string decision costs something, and it costs four lines.
+ * the default comparator would place '10.000000' before '9.000000'.
  */
 function byDecimal(rowA: Row<Trade>, rowB: Row<Trade>, columnId: string): number {
   return compareDecimal(
@@ -37,13 +36,9 @@ function byDecimal(rowA: Row<Trade>, rowB: Row<Trade>, columnId: string): number
 }
 
 /**
- * At least this many shares. A floor rather than a range, because the question
- * the panel is there to answer is "show me the size", not "show me between two
- * sizes".
- *
- * A value that is not yet a number passes everything through. The box is filtered
- * on every keystroke, and a half-typed bound that emptied the grid would read as
- * no matches rather than as not finished typing.
+ * At least this many shares. A value that is not yet a number passes everything
+ * through: the box is filtered on every keystroke, and a half-typed bound that
+ * emptied the grid would read as no matches.
  */
 function atLeastQuantity(row: Row<Trade>, columnId: string, value: string): boolean {
   const floor = Number(value)
@@ -61,36 +56,26 @@ const NUMERIC = 'text-right tabular-nums'
 /*
  * Every column states a `size`, and that is a requirement rather than a
  * preference. The table is laid out with `table-layout: fixed`, which takes the
- * widths from the colgroup and never measures a cell, and a virtualised grid has
- * no choice about that: column widths decided by the rows in view would change
- * as new rows scrolled in, so the digits down Quantity, Price and Notional would
- * drift out of line exactly while a trader was reading them.
+ * widths from the colgroup and never measures a cell.
  *
  * The numbers are the widest value each column holds, in Geist Mono at 13px,
- * plus the cell's own px-1.5. They total 1,340px, which still overflows a laptop
- * pane and is why the leftmost column is held against the edge.
+ * plus the cell's own px-1.5, and total 1,340px.
  */
 
 /**
- * Blanks a group row's cell for a column with nothing to net. Grouping now
- * drops those columns outright, so what is left for this to cover is the split:
- * grouping by symbol and splitting by book leaves the Book column aggregated on
- * the symbol rows above it, and TanStack's default of 'auto' would put some
- * reading of four book names in there.
- *
- * Set here rather than on useReactTable because what a cell shows is this file's
- * subject. Cheap as well as correct: a cell that never reads getValue never runs
- * the aggregation behind it.
+ * Blanks a group row's cell for a column with nothing to net. Covers the split
+ * case: grouping by symbol and splitting by book leaves the Book column
+ * aggregated on the symbol rows above it, and TanStack's default of 'auto' would
+ * put some reading of four book names in there.
  */
 export const DEFAULT_COLUMN: Partial<ColumnDef<Trade>> = {
   aggregatedCell: () => null,
 }
 
 /**
- * The legs a group row nets: its leaves, minus the cancelled ones. A cancelled
- * trade did not happen, so netting it in would make a group row disagree with the
- * positions panel, which sums only active trades in SQL. Trade satisfies
- * PricedLeg structurally, so no mapping is needed.
+ * The legs a group row nets: its leaves, minus the cancelled ones. Netting a
+ * cancelled trade in would make a group row disagree with the positions panel,
+ * which sums only active trades in SQL.
  *
  * leafRows, not childRows, so a Split By level's parent nets every trade beneath
  * it rather than re-netting its sub-group rows.
@@ -152,14 +137,10 @@ export function GroupToggle({
 // The return type is inferred on purpose. Annotating it as ColumnDef<Trade, T>[]
 // needs one T for columns whose values are strings, numbers and decimals alike,
 // which only `any` satisfies.
-//
-// Takes no arguments: every column is now a projection of the trade, and acting
-// on one is the selection bar's job rather than a cell's.
 export function createColumns() {
   return [
     // A reference key, not something read while scanning, so it is off by
-    // default. Keeps position zero for when it is turned on, because then it is
-    // what someone is looking for.
+    // default. Keeps position zero for when it is turned on.
     helper.accessor('tradeId', {
       header: 'Trade',
       size: 104,
@@ -201,9 +182,7 @@ export function createColumns() {
       sortingFn: byDecimal,
       enableGrouping: false,
       cell: (info) => formatDecimal(info.getValue(), 4),
-      // Volume-weighted and computed in bigint. An average execution price is
-      // read as authoritative, and it is the one figure here a reviewer would
-      // check against a calculator.
+      // Volume-weighted and computed in bigint.
       aggregationFn: (_columnId, leafRows) => vwap(activeLegs(leafRows)),
       aggregatedCell: (info) => {
         const average = info.getValue<DecimalString | null>()
@@ -244,22 +223,19 @@ export function createColumns() {
       sortingFn: byDecimal,
       enableGrouping: false,
       filterFn: atLeastDecimal,
-      // The one column that draws itself. Leaf rows only: a group row's net is
-      // measured against other nets rather than against single trades, and one
-      // bar cannot honestly carry both scales.
+      // Leaf rows only: a group row's net is measured against other nets rather
+      // than against single trades, and one bar cannot carry both scales.
       cell: (info) => <Magnitude value={info.getValue()} />,
       // Signed exposure, the same computation selectPositions runs in SQL.
       aggregationFn: (_columnId, leafRows) => netNotional(activeLegs(leafRows)),
       aggregatedCell: (info) => {
         const net = info.getValue<DecimalString>()
         // Tested against the string, not Number(net): the sign is already in the
-        // first character and crossing into float to read it would be gratuitous.
+        // first character.
         return netFigure(formatDecimal(net, 2), net.startsWith('-'))
       },
     }),
 
-    // After the economics, not in front of them: the tape is ordered by time, so
-    // the sequence is already readable down the rows without reading the column.
     helper.accessor('tradeTimestamp', {
       header: 'Time (UTC)',
       size: 152,
@@ -270,8 +246,7 @@ export function createColumns() {
 
     helper.accessor('trader', { header: 'Trader', size: 104 }),
     helper.accessor('book', { header: 'Book', size: 104 }),
-    // The widest of these is Citadel Securities, so the column is sized for the
-    // longest name the counterparty list holds rather than for the average.
+    // Sized for Citadel Securities, the longest name the counterparty list holds.
     helper.accessor('counterparty', { header: 'Counterparty', size: 160 }),
 
     helper.accessor('status', {
@@ -294,14 +269,11 @@ export function createColumns() {
       },
     }),
 
-    // Shown because it is the token the amend contract is built on: a reviewer
-    // can watch it move and see why the second amend is rejected.
     helper.accessor('version', {
       header: 'Ver',
       size: 64,
       meta: { className: NUMERIC },
-      // A sum of version numbers is not a number about anything, and grouping
-      // trades by how many times they were amended is not a view of a book.
+      // A sum of version numbers is not a number about anything.
       enableGrouping: false,
     }),
   ]
@@ -310,8 +282,7 @@ export function createColumns() {
 /**
  * The columns a group row cannot answer for, which is every one with nothing to
  * net. Read off the definitions above rather than listed again: a column nets
- * exactly when it declares an aggregationFn, so there is no second list to
- * drift. Taken once, because the definitions do not change.
+ * exactly when it declares an aggregationFn, so there is no second list to drift.
  */
 const NOTHING_TO_NET: VisibilityState = Object.fromEntries(
   createColumns()
@@ -325,16 +296,8 @@ const NOTHING_TO_NET: VisibilityState = Object.fromEntries(
  * What a grouped view shows, as an override to lay over the columns a trader
  * chose. Empty while there is no grouping, so their choice is all there is.
  *
- * Eight of the twelve columns were rendering as an empty cell on every group
- * row, which is eight columns to scroll past to reach the four figures a
- * grouped view is opened for. A group of forty trades has no one counterparty
- * and no one timestamp, so there is nothing to put there and no width worth
- * spending on it.
- *
- * Derived rather than stored, which is the whole of why this is a function and
- * not a setState. Clearing the grouping hands a trader back exactly the columns
- * they had, and a shared link carries what they chose rather than what the
- * grouping did to it.
+ * Derived rather than stored, so clearing the grouping hands a trader back
+ * exactly the columns they had.
  *
  * The columns being grouped on are forced visible: they carry the label and the
  * expander, so grouping by a column that happened to be hidden would otherwise

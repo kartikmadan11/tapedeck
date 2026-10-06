@@ -30,9 +30,8 @@ export interface SeedSummary {
 
 /**
  * Amendments and cancellations use the same shape of write as the API: read,
- * bump version, write, append an event. Nothing sets status or version directly,
- * which is what makes `version == count(events)` hold for every row, so the
- * history of a struck-through row agrees with the row.
+ * bump version, write, append an event. That is what makes
+ * `version == count(events)` hold for every row.
  */
 export async function seed(handle: DatabaseHandle): Promise<SeedSummary> {
   const { db } = handle
@@ -151,10 +150,7 @@ export async function seed(handle: DatabaseHandle): Promise<SeedSummary> {
   return { trades: TRADE_COUNT, amended, cancelled, events }
 }
 
-/**
- * Seeds only when the table is empty: `docker compose up` gets run more than
- * once, and a blotter showing 1000 trades reads as an application bug.
- */
+/** Seeds only when the table is empty, since `docker compose up` gets run more than once. */
 export async function seedIfEmpty(handle: DatabaseHandle): Promise<SeedSummary | null> {
   const [row] = await handle.db.select({ count: sql<number>`count(*)::int` }).from(trades).limit(1)
 

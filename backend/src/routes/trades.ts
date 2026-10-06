@@ -10,10 +10,8 @@ import {
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 
-// There is no authentication in this build, which the README states plainly. The
-// audit trail still needs an actor, so it comes from a header with a default.
-// Threading it through now means adding real auth changes one line here, rather
-// than retrofitting a column into an append-only table.
+// No authentication in this build. The audit trail still needs an actor, so it
+// comes from a header with a default.
 const ANONYMOUS_ACTOR = 'web'
 
 function actorOf(headers: Record<string, unknown>): string {
@@ -26,13 +24,8 @@ const tradeIdParams = z.object({ tradeId: tradeIdSchema })
 export function registerTradeRoutes(app: FastifyInstance): void {
   /**
    * Returns `{ seq, trades }`, not a bare array, so the client can reject a
-   * response older than what its socket already applied. A bare array makes
-   * every refetch a potential lost update.
-   *
-   * Windowed to the most recent BLOTTER_LIMIT unless the caller names its own
-   * limit. Cancelled trades stay on the tape, so the unwindowed form grows for
-   * as long as the feed runs and would eventually put megabytes on the wire to
-   * render rows nobody scrolls to.
+   * response older than what its socket already applied. Windowed to the most
+   * recent BLOTTER_LIMIT unless the caller names its own limit.
    */
   app.get('/api/trades', async (request) => {
     const query = tradeQuery.parse(request.query)
@@ -58,9 +51,7 @@ export function registerTradeRoutes(app: FastifyInstance): void {
 
   /**
    * 201 when a trade was booked, 200 when the body's clientTradeId had already
-   * booked one and this is a repeat. The body is the trade either way, so a
-   * client that ignores the status still gets what it asked for, and one that
-   * reads it can tell that its retry did not double-book.
+   * booked one. The body is the trade either way.
    */
   app.post('/api/trades', async (request, reply) => {
     const input = createTradeInput.parse(request.body)
@@ -78,10 +69,7 @@ export function registerTradeRoutes(app: FastifyInstance): void {
     return app.tradeService.amendTrade(tradeId, input, actorOf(request.headers))
   })
 
-  /**
-   * A sub-resource action rather than a status patch, because status is not a
-   * field a client sets. The body carries only the concurrency token.
-   */
+  /** A sub-resource action, not a status patch: status is not a field a client sets. */
   app.post('/api/trades/:tradeId/cancel', async (request) => {
     const { tradeId } = tradeIdParams.parse(request.params)
     const input = cancelTradeInput.parse(request.body)

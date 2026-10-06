@@ -20,7 +20,7 @@ interface Client {
 }
 
 export interface Hub {
-  /** Runs the snapshot handshake and registers the socket. Returns a teardown function. */
+  /** Runs the snapshot handshake and registers the socket. */
   attach: (socket: WebSocket) => Promise<void>
   readonly clientCount: number
   close: () => void
@@ -34,9 +34,7 @@ export interface HubOptions {
   readSnapshot: () => Promise<{ seq: number; trades: Trade[]; positions: Position[] }>
   /**
    * The generated feed's current state, read at handshake time so a connecting
-   * client is told whether it is running. Without this a client only ever learns
-   * the state from a toggle it happened to be connected for, so a reconnect after
-   * an API restart would leave it showing the wrong control indefinitely.
+   * client is told whether it is running.
    */
   readSimulation: () => SimulationState
 }
@@ -74,10 +72,9 @@ export function createHub(options: HubOptions): Hub {
   }
 
   /**
-   * The handshake closes a race: frames published between reading the snapshot
-   * and subscribing would be lost, and frames published before it would be
-   * duplicates. So buffer from the moment the socket arrives, read a consistent
-   * snapshot, send it, replay only what it does not contain, then register.
+   * Buffer from the moment the socket arrives, read a consistent snapshot, send
+   * it, replay only what it does not contain, then register. Subscribing after
+   * the read loses frames; subscribing before it duplicates them.
    *
    * `seq > snapshotSeq` is sound only because the advisory lock makes the
    * sequence gap-free and commit-ordered.
@@ -120,18 +117,10 @@ export function createHub(options: HubOptions): Hub {
         socket.send(JSON.stringify(latestPositions))
       }
 
-      /**
-       * The feed state is part of the handshake, not a delta: reconnecting is the
-       * resync, so a client that reconnects after a restart must be told whether
-       * the feed is running rather than keeping whatever it last heard. Without
-       * this it would show the wrong control until a reload, and pressing it would
-       * be a no-op that publishes nothing, so it would never self-correct.
-       *
-       * A frame buffered during the read wins, since it is strictly newer than
-       * what the read observed. Exactly one frame either way: an unsequenced frame
-       * matches neither the replay filter nor the positions drain, and sending two
-       * would flicker the control on connect.
-       */
+      // Feed state is part of the handshake, not a delta. A frame buffered during
+      // the read wins, being strictly newer than what the read observed. Exactly
+      // one frame either way: a simulation frame carries no seq, so it matches
+      // neither the replay filter nor the positions drain.
       const toggledDuringRead = buffer.findLast((frame) => frame.type === 'simulation')
       socket.send(
         JSON.stringify(
@@ -164,9 +153,8 @@ export function createHub(options: HubOptions): Hub {
   }
 
   /**
-   * A ping alone proves nothing. Without recording the pong and terminating on
-   * the next tick, a client that vanished without a close frame stays in the set
-   * and is sent every future frame.
+   * Without recording the pong and terminating on the next tick, a client that
+   * vanished without a close frame stays in the set and is sent every frame.
    */
   const pingTimer = setInterval(() => {
     for (const client of clients) {

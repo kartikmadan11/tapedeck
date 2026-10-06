@@ -46,9 +46,8 @@ describe('POST /api/trades', () => {
   it('returns timestamps as UTC ISO, not a Postgres literal', async () => {
     const trade = await createTrade(app, { tradeTimestamp: '2026-10-02T09:15:00.000Z' })
 
-    // A Postgres timestamptz rendered as a string would be
-    // '2026-10-02 09:15:00+00', whose offset follows the server's timezone
-    // setting. The format must not depend on a database session variable.
+    // A timestamptz rendered as a string carries an offset that follows the
+    // server's timezone setting. The format must not depend on a session variable.
     expect(trade).toMatchObject({ tradeTimestamp: '2026-10-02T09:15:00.000Z' })
     expect(trade.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
   })
@@ -107,8 +106,7 @@ describe('POST /api/trades', () => {
       payload: newTradeBody({ counterparty: 'UBSf' }),
     })
 
-    // One character off a real name. Length validation cannot tell the two
-    // apart, which is why the field is a list and not a string.
+    // One character off a real name, which is why the field is a list, not a string.
     expect(response.statusCode).toBe(400)
     const error = apiError.parse(response.json())
     if (error.code !== 'VALIDATION_FAILED') {
@@ -146,11 +144,7 @@ describe('POST /api/trades', () => {
     expect(apiError.parse(response.json()).code).toBe('VALIDATION_FAILED')
   })
 
-  /**
-   * The guarantee: a client that retries a booking it never got an answer to
-   * does not end up with two trades. Everything else in the feature is a
-   * convenience; this is the part that has to be true.
-   */
+  /** A client that retries a booking it never got an answer to gets one trade. */
   describe('the idempotency key', () => {
     const KEY = '3f2a8c1e-5b47-4d9a-8e21-0c6f4b7d9a35'
 
@@ -170,14 +164,12 @@ describe('POST /api/trades', () => {
       expect(first.statusCode).toBe(201)
       expect(second.statusCode).toBe(200)
 
-      // The same trade, not merely an equal one: the second request created
-      // nothing, so there is no second id for it to have returned.
+      // The same trade, not merely an equal one: the second request created nothing.
       expect(second.json()).toEqual(first.json())
       expect(await tradeCount()).toBe(1)
     })
 
-    // Ten presses is the case this was built for, and it is why the client mints
-    // the key once per ticket rather than once per press.
+    // Minted once per ticket, not once per press, so a jammed button sends one key.
     it('survives a key sent ten times', async () => {
       const responses = []
       for (let attempt = 0; attempt < 10; attempt += 1) {
@@ -191,10 +183,8 @@ describe('POST /api/trades', () => {
     })
 
     /**
-     * The audit trail is the reason a replay cannot just re-run the insert and
-     * let the constraint fail. One booking is one CREATED event, so a replay that
-     * appended a second would make version disagree with the event count, which
-     * the whole concurrency model rests on.
+     * One booking is one CREATED event: a second would make version disagree
+     * with the event count.
      */
     it('appends no second event for a replay', async () => {
       const first = await post({ clientTradeId: KEY })
@@ -208,11 +198,7 @@ describe('POST /api/trades', () => {
       expect((events.json() as { events: unknown[] }).events).toHaveLength(1)
     })
 
-    /**
-     * The workflow a blanket confirmation would have broken. Identical economics
-     * under two keys are two deliberate bookings, which is what working an order
-     * in clips looks like, and the server must not collapse them.
-     */
+    /** Identical economics under two keys are two deliberate bookings. */
     it('books both when identical economics carry different keys', async () => {
       const first = await post({ clientTradeId: KEY })
       const second = await post({ clientTradeId: '9c8b7a65-4321-4fed-ba98-7654321fedcb' })
@@ -224,9 +210,8 @@ describe('POST /api/trades', () => {
     })
 
     /**
-     * Nulls are distinct in the unique index, which is what lets the seed, the
-     * simulator and an un-updated client keep booking. A NULLS NOT DISTINCT index
-     * would let the first keyless trade block every one after it.
+     * Nulls are distinct in the unique index. A NULLS NOT DISTINCT index would
+     * let the first keyless trade block every one after it.
      */
     it('still books repeatedly when no key is sent', async () => {
       expect((await post({})).statusCode).toBe(201)
@@ -245,8 +230,7 @@ describe('POST /api/trades', () => {
       expect(error.details.issues.map((issue) => issue.path)).toContain('clientTradeId')
     })
 
-    // It identifies the request, not the trade. Returning it would put a value a
-    // client chose into the read model every other client parses.
+    // It identifies the request, not the trade, so it stays out of the read model.
     it('is absent from the trade it books', async () => {
       const trade = (await post({ clientTradeId: KEY })).json() as Record<string, unknown>
       expect(trade).not.toHaveProperty('clientTradeId')
@@ -307,9 +291,8 @@ describe('GET /api/trades', () => {
 
     const response = await app.inject({ method: 'GET', url: '/api/trades' })
 
-    // The default is the point: cancelled trades stay on the tape, so the book
-    // only grows, and an unbounded read must not be reachable by forgetting to
-    // ask for a bounded one.
+    // The default is the point: an unbounded read must not be reachable by
+    // forgetting to ask for a bounded one.
     expect(response.json().trades).toHaveLength(BLOTTER_LIMIT)
   })
 
@@ -361,8 +344,7 @@ describe('PATCH /api/trades/:tradeId', () => {
     expect(response.json()).toMatchObject({
       quantity: 5_000,
       price: '71.100000',
-      // Unchanged, and asserted rather than assumed: this is the field an
-      // amendment must not be able to move.
+      // Asserted, not assumed: an amendment must not be able to move this.
       counterparty: created.counterparty,
       version: 2,
       status: 'ACTIVE',
@@ -378,8 +360,7 @@ describe('PATCH /api/trades/:tradeId', () => {
       payload: { quantity: 5_000, price: '71.100000', counterparty: 'UBS', version: 1 },
     })
 
-    // A 400 and not a silent drop. Accepting the body and discarding the field
-    // would tell the caller their rebooking instruction had been carried out.
+    // A 400 and not a silent drop.
     expect(response.statusCode).toBe(400)
     const error = apiError.parse(response.json())
     if (error.code !== 'VALIDATION_FAILED') {
@@ -562,8 +543,7 @@ describe('routing and health', () => {
 
 describe('the simulation control', () => {
   afterEach(() => {
-    // The feed writes trades, so leaving it running would leak rows into the
-    // next test in this file.
+    // The feed writes trades, so leaving it running leaks rows into the next test.
     app.simulator.stop()
   })
 
@@ -571,8 +551,7 @@ describe('the simulation control', () => {
     const response = await app.inject({ method: 'GET', url: '/api/simulation' })
 
     expect(response.statusCode).toBe(200)
-    // buildApp() creates the simulator but never starts it, which is what keeps
-    // every other test in this suite free of trades it did not book.
+    // buildApp() creates the simulator but never starts it.
     expect(response.json()).toEqual({ running: false, intervalMs: 2_000 })
   })
 
@@ -611,8 +590,7 @@ describe('the simulation control', () => {
       payload: { running: true, intervalMs: 1 },
     })
 
-    // A strictObject, so asking the server to write as fast as it can is a 400
-    // rather than something it quietly ignores.
+    // A strictObject, so the cadence request is a 400, not quietly ignored.
     expect(response.statusCode).toBe(400)
   })
 })

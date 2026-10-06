@@ -22,9 +22,8 @@ export function useBlotter(): UseQueryResult<BlotterState> {
  * action lands even if the socket happens to be reconnecting.
  *
  * This is only safe because the refetch goes through the cursor guard: a bare
- * refetch replaces the cache when it lands and discards every frame that arrived
- * while it was in flight, which is the same lost update as restoring a
- * pre-mutation snapshot, just with a smaller window.
+ * refetch replaces the cache when it lands and discards every frame that
+ * arrived while it was in flight.
  */
 export function useRefreshBlotter(): () => void {
   const queryClient = useQueryClient()
@@ -43,9 +42,8 @@ type TradeMutationVariables = { tradeId: string }
  * state rather than tracked separately.
  *
  * This is what replaces an optimistic write. Guessing the next version locally
- * would briefly show a version the server never assigned, and version is the
- * token the whole concurrency story rests on, so the row is marked pending
- * instead and the broadcast clears it.
+ * would briefly show a version the server never assigned, so the row is marked
+ * pending instead and the broadcast clears it.
  */
 export function usePendingTradeIds(): ReadonlySet<string> {
   const pending = useMutationState({

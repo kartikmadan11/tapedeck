@@ -11,8 +11,7 @@ type Props = {
   onResize: (width: number) => void
 }
 
-/** One keypress of travel. Sixteen pixels crosses the panel's whole range in
- *  twenty presses, and is still fine enough to line a column up by eye. */
+/** One keypress of travel, in pixels. */
 const STEP = 16
 
 type Drag = {
@@ -32,12 +31,9 @@ type Drag = {
 /**
  * The boundary between the blotter and the fixed-width panel beside it.
  *
- * Pixels rather than the share-of-the-axis model the panes between themselves
- * use, because the two sides of this boundary are not the same kind of thing.
- * The tape is fluid and wants whatever is left; the panel holds three columns
- * and a six-figure notional, so what it needs is a floor in pixels that does not
- * move when the window does. A share would put it under that floor on a laptop
- * and waste half a screen on a desk monitor.
+ * Pixels rather than the share-of-the-axis model the panes use between
+ * themselves: the panel needs a floor that does not move when the window does,
+ * and the tape takes whatever is left.
  *
  * Writes `width` straight to the panel during the drag and commits once on
  * release, for the same reason Separator does: the sibling it is taking the
@@ -67,8 +63,8 @@ export function PanelSeparator({ label, width, min, max, onResize }: Props): Rea
     }
 
     // Subtracted, because the panel is on the far side of the handle: dragging
-    // left widens it. No measurement of either region is involved, which is why
-    // this path needs no layout and can be tested.
+    // left widens it. No measurement of either region is involved, so this path
+    // needs no layout.
     const next = clamp(current.opening - (event.clientX - current.from))
     current.width = next
     current.panel.style.width = `${next}px`

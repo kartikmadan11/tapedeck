@@ -14,9 +14,9 @@ import {
 } from './state.js'
 
 /**
- * Everything a pane can hold, so the round trip has something to lose. Both
- * directions of the column toggle are in the first pane on purpose: `book` off
- * where the default has it on, and `tradeId` on where the default has it off.
+ * Everything a pane can hold. Both directions of the column toggle are in the
+ * first pane on purpose: `book` off where the default has it on, and `tradeId` on
+ * where the default has it off.
  */
 const ARRANGED: PaneConfig[] = [
   {
@@ -34,20 +34,13 @@ const ARRANGED: PaneConfig[] = [
 ]
 
 /**
- * A pane nobody has configured, for the cases about panes that write no
- * parameters.
- *
- * The view one opens on rather than an empty object, because that is what
- * writing nothing now means: an empty sorting is a pane somebody unsorted and a
- * visibility of nothing is every column on, and both of those are decisions a
- * link has to carry.
+ * A pane nobody has configured. The default view rather than an empty object: an
+ * empty sorting is a pane somebody unsorted and a visibility of nothing is every
+ * column on, and both are decisions a link has to carry.
  */
 const PLAIN: PaneConfig = DEFAULT_VIEW
 
-/**
- * A stacked workspace of evenly sized panes, which is what a link opens on and
- * what every case about the view rather than the arrangement starts from.
- */
+/** A stacked workspace of evenly sized panes, which is what a link opens on. */
 function stacked(count: number): Region {
   const panes: Leaf[] = Array.from({ length: count }, (_, index) => ({
     kind: 'pane',
@@ -63,8 +56,7 @@ function stacked(count: number): Region {
     : { kind: 'split', id: 'split-1', axis: 'rows', weight: 1, children: panes }
 }
 
-/** Panes named `pane-n` hold the nth view, which is how the fixtures line up with
- *  the trees built out of them. */
+/** Panes named `pane-n` hold the nth view. */
 const viewer =
   (views: readonly PaneConfig[]) =>
   (id: string): PaneConfig =>
@@ -79,8 +71,8 @@ const decode = (search: string): WorkspaceLink | null =>
 /** Just the views, for the cases that are not about where the panes are. */
 const views = (search: string): PaneConfig[] | null => decode(search)?.views ?? null
 
-/** The tree the link asks for, as an expression, so an arrangement can be
- *  asserted as the shape it draws rather than as a nest of object literals. */
+/** The tree the link asks for, as an expression, so an arrangement is asserted as
+ *  the shape it draws. */
 function shape(link: WorkspaceLink): string {
   let next = 0
   const region = regionOf(
@@ -103,9 +95,8 @@ describe('encoding a workspace', () => {
   })
 
   it('spells the view out, which is the whole point of the format', () => {
-    // Asserted as the exact string rather than by parsing it back, because the
-    // readability is the feature and a round-trip test would pass just as well
-    // on an opaque blob.
+    // Asserted as the exact string rather than by parsing it back: the readability
+    // is the feature, and a round trip would pass just as well on an opaque blob.
     expect(query(ARRANGED)).toBe(
       'panes=2' +
         '&p1.group=symbol&p1.group=book' +
@@ -117,10 +108,8 @@ describe('encoding a workspace', () => {
   })
 
   it('says nothing about the view a pane opens on, and says when it is not that', () => {
-    // The complaint this answers: the default view hides the trade id, so every
-    // link carried p1.hide=tradeId and stated the obvious once per pane. What is
-    // worth sending is the difference, and in this case the difference is the
-    // other way round.
+    // What is worth sending is the difference from the default view, and here the
+    // difference is the other way round.
     expect(query([DEFAULT_VIEW])).toBe('panes=1')
     expect(query([{ ...PLAIN, columnVisibility: {} }])).toBe('panes=1&p1.show=tradeId')
   })
@@ -136,15 +125,13 @@ describe('encoding a workspace', () => {
 
   it('escapes nothing, because there is no separator to escape', () => {
     // The reason lists repeat the key instead of joining on a comma: a comma is
-    // not in the form-urlencoded safe set, so one list would have put %2C in the
-    // address bar and taken the readability with it.
+    // not in the form-urlencoded safe set, so one list would put %2C in the bar.
     expect(query(ARRANGED)).not.toContain('%')
   })
 
   it('still escapes the one thing that has to be', () => {
-    // A filter value is free text someone typed. It is the only part of the
-    // query that is not drawn from a fixed list of column ids, so it is the only
-    // part that can need escaping, and it round trips.
+    // A filter value is the only part of the query not drawn from a fixed list of
+    // column ids, so it is the only part that can need escaping.
     const typed: PaneConfig[] = [{ ...PLAIN, columnFilters: [{ id: 'trader', value: 'Société' }] }]
 
     expect(query(typed)).toBe('panes=1&p1.where.trader=Soci%C3%A9t%C3%A9')
@@ -160,19 +147,17 @@ describe('encoding a workspace', () => {
 })
 
 describe('carrying the arrangement', () => {
-  /** Three stacked panes with one stood beside another, which is the arrangement
-   *  the whole tree exists for. */
+  /** Three stacked panes with one stood beside another. */
   const BESIDE = movedPane(stacked(3), 'pane-3', 'pane-1', 'right', 'split-2')
 
   it('says nothing at all about a stack of even panes', () => {
-    // The arrangement a link opens on, so stating it would be three paths that
-    // each repeat the pane's own number and three sizes that are all a third.
+    // The arrangement a link opens on, so there is nothing to state.
     expect(query([PLAIN, PLAIN, PLAIN])).toBe('panes=3')
   })
 
   it('writes a path per pane once anything is nested', () => {
     // Numbered in the order they are drawn, so p2 is the pane that was moved and
-    // sits beside p1, and p3 is the pane that stayed where it was.
+    // sits beside p1.
     expect(encodeWorkspace(BESIDE, () => PLAIN).toString()).toBe(
       'panes=3&p1.at=0.0&p2.at=0.1&p3.at=1',
     )
@@ -211,9 +196,8 @@ describe('carrying the arrangement', () => {
   })
 
   it('reconstructs the weights that produce the shares, at every depth', () => {
-    // The two-pass reconstruction, end to end: a path puts the panes where the
-    // link says and a share says how big, and a share is the only one of the two
-    // numbers that means anything across a level.
+    // The two-pass reconstruction: a path puts the panes where the link says and a
+    // share says how big, and only a share means anything across a level.
     const link =
       decode('panes=3&p1.at=0.0&p2.at=0.1&p3.at=1&p1.size=0.1&p2.size=0.3&p3.size=0.6') ?? never()
     const panes: Leaf[] = ['a', 'b', 'c'].map((id) => ({ kind: 'pane', id, weight: 1 }))
@@ -238,8 +222,7 @@ describe('carrying a name', () => {
   it('writes the name of a pane that has one, and nothing for the rest', () => {
     const named = renamedPane(stacked(2), 'pane-1', 'EU Flow')
 
-    // A space comes out as `+`, which is in the safe set, so a name is as
-    // readable in the address bar as it is on the bar it came off.
+    // A space comes out as `+`, which is in the safe set.
     expect(encodeWorkspace(named, () => PLAIN).toString()).toBe('panes=2&p1.name=EU+Flow')
   })
 
@@ -250,8 +233,7 @@ describe('carrying a name', () => {
   })
 
   it('says nothing about a pane nobody has named', () => {
-    // A name a pane gets from its position is not a decision anybody made, and
-    // a link that stated it would be stating the pane's own number back.
+    // A name a pane gets from its position is not a decision anybody made.
     expect(query([PLAIN, PLAIN, PLAIN])).toBe('panes=3')
     expect(decode('panes=3')?.names).toEqual([null, null, null])
   })
@@ -269,8 +251,8 @@ describe('carrying a name', () => {
 
 describe('reading a link somebody typed', () => {
   it('needs nothing but the setting that is wanted', () => {
-    // The case the format exists for. Appending one parameter to a bare address
-    // is a complete request, with no count to work out and no payload to mint.
+    // Appending one parameter to a bare address is a complete request, with no
+    // count to work out and no payload to mint.
     expect(views('p1.group=symbol')).toEqual([{ ...PLAIN, grouping: ['symbol'] }])
   })
 
@@ -303,9 +285,8 @@ describe('reading a link somebody typed', () => {
   })
 
   it('hides a column off the default view rather than off nothing', () => {
-    // The other half of writing only the difference. A link that turns one
-    // column off is not a link that turns every other column on, so the trade id
-    // stays where the default put it.
+    // A link that turns one column off is not a link that turns every other column
+    // on, so the trade id stays where the default put it.
     expect(views('p1.hide=book')?.[0]?.columnVisibility).toEqual({
       book: false,
       tradeId: false,
@@ -314,8 +295,7 @@ describe('reading a link somebody typed', () => {
 
   it('takes a link that states the default, and stops stating it on the next share', () => {
     // Hand-edited links say more than Share would, and the two have to mean the
-    // same thing. Reading one and writing it back is how the format stays
-    // canonical without rejecting anything over it.
+    // same thing. Reading one and writing it back is what keeps it canonical.
     const stated = views('panes=1&p1.sort=-tradeTimestamp&p1.hide=tradeId') ?? never()
 
     expect(stated).toEqual([DEFAULT_VIEW])
@@ -323,9 +303,8 @@ describe('reading a link somebody typed', () => {
   })
 
   it('takes two paths as a complete request for a nested workspace', () => {
-    // The pane that was not given a path sits at the top level in its own
-    // numbered slot, so two paths are enough to ask for one pane beside another
-    // with the third left where it was.
+    // The pane that was not given a path sits at the top level in its own numbered
+    // slot, so two paths are a complete request.
     expect(shape(decode('panes=3&p1.at=0.0&p2.at=0.1') ?? never())).toBe('rows(columns(p1 p2) p3)')
   })
 
@@ -334,22 +313,19 @@ describe('reading a link somebody typed', () => {
   })
 
   it('reads a gap in the indices as an order and nothing more', () => {
-    // Hand-editing a path means picking numbers, and 0 and 5 say the same thing
-    // about which pane comes first as 0 and 1 do.
+    // 0 and 5 say the same thing about which pane comes first as 0 and 1 do.
     expect(shape(decode('panes=2&p1.at=0&p2.at=5') ?? never())).toBe('rows(p1 p2)')
   })
 
   it('promotes a level that holds every pane, because it divides nothing', () => {
-    // A splitter with one region on it is not a splitter, which is the same rule
-    // that applies when a pane is closed.
+    // A splitter with one region on it is not a splitter.
     expect(shape(decode('panes=2&p1.at=0.0&p2.at=0.1') ?? never())).toBe('rows(p1 p2)')
   })
 })
 
 describe('decoding something that is not a workspace', () => {
   /**
-   * A readable URL is a URL people edit, so these are reached far more often
-   * than the base64 payload's were. All of them have to leave the blotter
+   * A readable URL is a URL people edit. All of these have to leave the blotter
    * working rather than put arbitrary names into table state.
    */
   it.each([
@@ -398,17 +374,14 @@ describe('the address bar', () => {
   it('writes the link it returns', () => {
     const url = workspaceUrl(stacked(2), viewer(ARRANGED))
 
-    // The link handed over and the address bar have to be the same thing, or a
-    // trader copies one and sends the other.
+    // The link handed over and the address bar have to be the same thing.
     expect(url).toBe(window.location.href)
     expect(readWorkspace(window.location.search)?.views).toEqual(ARRANGED)
   })
 
   it('clears what the last share left behind', () => {
-    // The failure mode the single opaque parameter did not have. Sharing a
-    // smaller workspace, or putting the panes back in a stack, has to remove the
-    // parameters that went away, or the next read reassembles a workspace nobody
-    // is looking at.
+    // Sharing a smaller workspace has to remove the parameters that went away, or
+    // the next read reassembles a workspace nobody is looking at.
     const sideways = movedPane(stacked(2), 'pane-2', 'pane-1', 'right', 'split-2')
     workspaceUrl(sideways, viewer(ARRANGED))
     workspaceUrl(stacked(1), () => PLAIN)
@@ -418,8 +391,7 @@ describe('the address bar', () => {
   })
 
   it('leaves parameters it does not own alone', () => {
-    // Shared links get forwarded with tracking parameters stapled on, and the
-    // blotter has no business dropping them.
+    // Shared links get forwarded with tracking parameters stapled on.
     window.history.replaceState(null, '', '/?utm_source=mail&panes=4')
     workspaceUrl(stacked(1), () => PLAIN)
 
@@ -429,10 +401,9 @@ describe('the address bar', () => {
 
 describe('the shareable column list', () => {
   it('names every column the grid has', () => {
-    // The schema duplicates the column ids on purpose, because a schema that
-    // read its valid values out of the thing it validates would accept anything.
-    // This is what stops the copy drifting: add a column and forget it here, and
-    // it silently stops surviving a shared link.
+    // The schema duplicates the column ids on purpose, because one that read its
+    // valid values out of the thing it validates would accept anything. This is
+    // what stops the copy drifting.
     const defs = createColumns() as unknown as { id?: string; accessorKey?: string }[]
     const ids = defs.map((def) => def.id ?? def.accessorKey)
 
@@ -440,8 +411,7 @@ describe('the shareable column list', () => {
   })
 })
 
-/** For the cases where a null link is the failure, so the assertion that follows
- *  reads as the thing being tested rather than as a fallback. */
+/** For the cases where a null link is the failure rather than a fallback. */
 function never(): never {
   throw new Error('the link did not parse')
 }

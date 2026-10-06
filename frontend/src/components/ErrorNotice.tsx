@@ -4,9 +4,8 @@ import { ApiRequestError } from '../lib/api.js'
 type Props = { error: unknown; className?: string }
 
 /**
- * Renders the server's typed error rather than its status code. The three ways an
- * amend can fail are three different things to tell someone, which is why the
- * error contract is a discriminated union and not a bag with a message.
+ * Renders the server's typed error rather than its status code: the ways an
+ * amend can fail are different things to tell someone.
  */
 export function ErrorNotice({ error, className = '' }: Props): ReactElement {
   return (

@@ -9,15 +9,9 @@ import { useCancelTrade } from './useCancelTrade.js'
 type Props = { trade: Trade; onClose: () => void }
 
 /**
- * Confirms a cancellation.
- *
- * Cancelling is the one irreversible action in the blotter, and with the
- * generated feed running rows arrive and reorder underneath the pointer, which
- * makes a single-click Cancel easy to land on the wrong trade.
- *
- * The protection is naming the trade, not the extra click. Reading back the id,
- * side, size and price is what lets someone notice they are about to strike the
- * row above the one they meant.
+ * Confirms a cancellation. Cancelling is irreversible and rows reorder
+ * underneath the pointer as the feed runs, so the protection is naming the
+ * trade rather than the extra click.
  */
 export function CancelDialog({ trade, onClose }: Props): ReactElement {
   const cancel = useCancelTrade()
@@ -66,9 +60,6 @@ export function CancelDialog({ trade, onClose }: Props): ReactElement {
         {cancel.error ? <ErrorNotice error={cancel.error} className="mt-2" /> : null}
 
         <footer className="mt-3 flex items-center gap-2">
-          {/* Tinted, not filled. The one accent fill belongs to booking a
-              trade, and a second filled button would make neither read as the
-              primary one. The weight and the colour carry the warning. */}
           <button
             type="button"
             className="ml-auto h-7 cursor-pointer rounded-xs border border-tape-sell/50 bg-tape-sell/15 px-3 font-semibold uppercase tracking-[0.1em] text-tape-sell transition-colors duration-100 hover:bg-tape-sell/25 disabled:cursor-not-allowed disabled:opacity-40"

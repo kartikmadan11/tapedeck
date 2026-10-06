@@ -59,9 +59,7 @@ async function request<T>(path: string, schema: z.ZodType<T>, init?: RequestInit
     headers: {
       accept: 'application/json',
       // There is no authentication here, so the actor is the window's declared
-      // identity: asserted by the caller and trusted by the server, which is the
-      // shape a gateway-authenticated deployment has anyway. Verifying it is a
-      // change to this line and a check on the server, not to the audit model.
+      // identity: asserted by the caller and trusted by the server.
       'x-tapedeck-actor': readTrader(),
       ...(init?.body === undefined ? {} : { 'content-type': 'application/json' }),
       ...init?.headers,
@@ -78,9 +76,8 @@ async function request<T>(path: string, schema: z.ZodType<T>, init?: RequestInit
     )
   }
 
-  // Parsed against the shared schema, so the same definition that validated the
-  // request on the server validates the response in the browser. A contract
-  // drift shows up here rather than as an undefined three components deep.
+  // Parsed against the shared schema, so a contract drift shows up here rather
+  // than as an undefined three components deep.
   return schema.parse(safeJson(text))
 }
 
@@ -97,13 +94,11 @@ function safeJson(text: string): unknown {
  *
  * Unfiltered, because the cache holds every trade it is given and the table
  * filters what it renders, so an incoming frame never has to be tested against a
- * server-side predicate to know whether it belongs in the cache. The filtered
- * form of this endpoint exists and is tested, it is just not what the UI reads.
+ * server-side predicate to know whether it belongs in the cache.
  *
- * Windowed, because the book grows without bound: cancelled trades stay on the
- * tape, so the feed only ever adds rows. The limit is sent rather than left to
- * the server's default so that the window the cache trims itself to is the same
- * window it asked for, stated in one place.
+ * Windowed, because the book only ever grows: cancelled trades stay on the tape.
+ * The limit is sent rather than left to the server's default, so the window the
+ * cache trims itself to is the window it asked for.
  */
 export function fetchTrades(): Promise<TradesResponse> {
   return request(`/api/trades?limit=${BLOTTER_LIMIT}`, tradesResponse)

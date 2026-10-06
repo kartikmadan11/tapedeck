@@ -7,9 +7,8 @@ describe('barScale', () => {
   })
 
   it('leaves an exact 1, 2 or 5 where it is', () => {
-    // The point of this case: the largest trade on the tape draws a bar that
-    // reaches the end of the cell, rather than one that stops just short of it
-    // because the scale was rounded past it.
+    // The largest trade on the tape draws a bar that reaches the end of the cell,
+    // rather than one stopping short because the scale was rounded past it.
     expect(barScale(1_000_000n)).toBe(1_000_000n)
     expect(barScale(2_000_000n)).toBe(2_000_000n)
     expect(barScale(5_000_000n)).toBe(5_000_000n)
@@ -22,8 +21,7 @@ describe('barScale', () => {
       [6n, 10n],
       [1_500_000n, 2_000_000n],
       [4_000_000n, 5_000_000n],
-      // 724,650.00 of notional, which is what a 10,000 lot of a 72-pound stock
-      // comes to, scales against a round million.
+      // 724,650.00 of notional scales against a round million.
       [724_650_000_000n, 1_000_000_000_000n],
     ]
 

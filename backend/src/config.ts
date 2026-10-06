@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
-// Validated once at startup, so a missing DATABASE_URL fails in the first second
-// of `docker compose up` rather than on the first request.
+// Validated once at startup, so a missing DATABASE_URL fails before the first
+// request rather than during it.
 const configSchema = z.object({
   DATABASE_URL: z.string().min(1, { error: 'DATABASE_URL is required' }),
   PORT: z.coerce.number().int().positive().max(65_535).default(3000),
@@ -14,9 +14,6 @@ const configSchema = z.object({
   WS_PING_INTERVAL_MS: z.coerce.number().int().positive().default(30_000),
 
   /**
-   * The generated trade feed, on by default so a fresh checkout is live without
-   * anyone setting a variable.
-   *
    * Not z.coerce.boolean(): that is `Boolean(string)`, so every non-empty value
    * including "false" would parse as true and the off switch would not work.
    */
@@ -26,9 +23,8 @@ const configSchema = z.object({
     .transform((value) => value === 'true'),
   SIMULATION_INTERVAL_MS: z.coerce.number().int().positive().default(2_000),
   /**
-   * The active-trade ceiling. The feed stops booking new trades here and only
-   * amends and cancels, which keeps a long demo inside the 100-to-1,000 range
-   * the specification asks for instead of growing without bound.
+   * The active-trade ceiling, under the 1,000 the specification allows. The feed
+   * stops booking new trades here and only amends and cancels.
    */
   SIMULATION_MAX_TRADES: z.coerce.number().int().positive().default(900),
 })

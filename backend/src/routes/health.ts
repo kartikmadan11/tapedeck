@@ -3,9 +3,8 @@ import type { FastifyInstance } from 'fastify'
 
 export function registerHealthRoutes(app: FastifyInstance): void {
   /**
-   * Checks the database, not just the process. A health check that only proves
-   * the event loop is turning will report healthy while every request 500s, and
-   * the compose healthcheck depends on this to gate the container.
+   * Checks the database, not just the process. The compose healthcheck gates the
+   * container on this.
    */
   app.get('/api/health', async (_request, reply) => {
     try {

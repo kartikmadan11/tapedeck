@@ -4,8 +4,7 @@ import * as schema from './schema.js'
 
 /**
  * Asserted rather than assumed: a dependency bump that registered a coercing
- * parser for numeric would silently start rounding prices, and the symptom is a
- * penny of drift rather than a test failure.
+ * parser for numeric would silently start rounding prices.
  *
  * int8 is left alone globally. Drizzle converts it per-column via
  * mode: 'number'; a global parser would also catch bigints too large for a

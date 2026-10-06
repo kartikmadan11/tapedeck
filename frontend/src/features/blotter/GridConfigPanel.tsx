@@ -15,9 +15,7 @@ type Props = {
 const PANEL_CONTROL = `${CONTROL} w-full bg-tape-bg`
 
 /**
- * Every grid instance owns one of these rather than there being a single shared
- * one, because two panes are configured independently and one panel could only
- * ever describe one of them.
+ * One per grid instance, because two panes are configured independently.
  *
  * It holds no state. Every control reads and writes the table's own state, so
  * the panel cannot drift from the grid it describes: a header click shows up in
@@ -33,30 +31,23 @@ export function GridConfigPanel({ table, open, id }: Props): ReactElement {
   const sortable = table.getAllLeafColumns().filter((column) => column.getCanSort())
 
   /**
-   * What the grouping has done to the columns, read from the same function the
-   * grid lays over its own state, so the boxes below cannot disagree with the
-   * columns on screen.
+   * Read from the same function the grid lays over its own state, so the boxes
+   * below cannot disagree with the columns on screen.
    */
   const grouped = groupedVisibility(grouping)
 
   return (
-    // The animator. It shrinks the grid rather than covering it, so columns a
-    // trader is reading do not disappear under an overlay.
-    //
-    // inert and aria-hidden when closed, because a zero-width panel still holds
-    // real form controls: without them the next Tab out of the grid lands in an
-    // invisible select.
+    // Shrinks the grid rather than covering it. inert and aria-hidden when
+    // closed, because a zero-width panel still holds real form controls:
+    // without them the next Tab out of the grid lands in an invisible select.
     <div
       aria-hidden={!open}
       className={`tape-slide shrink-0 overflow-hidden ${open ? 'w-72' : 'w-0'}`}
       id={id}
       inert={!open}
     >
-      {/*
-       * A stated width, not a derived one. This is what makes animating the
-       * wrapper's width cheap: nothing in here relays out as the wrapper moves,
-       * because its own size never changes.
-       */}
+      {/* A stated width, not a derived one, so nothing in here relays out as
+          the wrapper animates. */}
       <div className="tape-scroll ml-2 flex h-full w-70 flex-col gap-3 overflow-y-auto rounded-sm border border-tape-line bg-tape-panel p-2">
         <Section title="Group by">
           <select
@@ -90,9 +81,8 @@ export function GridConfigPanel({ table, open, id }: Props): ReactElement {
           <select
             aria-label="Split by"
             className={`${PANEL_CONTROL} cursor-pointer`}
-            // Nothing to split until there is a level to split, and the choice
-            // already taken above is excluded below: grouping by symbol inside
-            // symbol is a level that can never divide.
+            // Nothing to split until there is a level to split. The choice taken
+            // above is excluded below: symbol inside symbol can never divide.
             disabled={groupBy === undefined}
             onChange={(event) => {
               if (groupBy === undefined) {
@@ -115,20 +105,16 @@ export function GridConfigPanel({ table, open, id }: Props): ReactElement {
         </Section>
 
         <Section title="Order by">
-          {/*
-           * The same state the column headers write, so the two cannot disagree
-           * about what the grid is sorted by. Headers stay clickable: that is
-           * the fast path and it already works.
-           */}
+          {/* The same state the column headers write, so the two cannot
+              disagree about what the grid is sorted by. */}
           <div className="flex gap-2">
             <select
               aria-label="Order by"
               className={`${PANEL_CONTROL} cursor-pointer`}
               onChange={(event) => {
                 const next = event.target.value
-                // Carries the direction across a change of column, rather than
-                // snapping back to ascending and making the tape look reordered
-                // for a reason the trader did not ask for.
+                // Carries the direction across a change of column rather than
+                // snapping back to ascending.
                 table.setSorting(next === '' ? [] : [{ id: next, desc: order?.desc ?? true }])
               }}
               value={order?.id ?? ''}
@@ -157,11 +143,6 @@ export function GridConfigPanel({ table, open, id }: Props): ReactElement {
         </Section>
 
         <Section title="Where">
-          {/*
-           * Completes the top bar rather than copying it. Symbol, trader, book,
-           * side and status are already up there where a trader's hand is, so
-           * these are the questions that row cannot answer.
-           */}
           {/* Filters whether or not the column itself is shown. */}
           <Where column={table.getColumn('tradeId')} label="Trade id" placeholder="TRD-" />
           <Where column={table.getColumn('counterparty')} label="Counterparty" placeholder="Name" />
@@ -174,8 +155,7 @@ export function GridConfigPanel({ table, open, id }: Props): ReactElement {
         </Section>
 
         <Section title="Columns">
-          {/* Says why most of them are unavailable, rather than leaving a column
-            of greyed boxes to be worked out. */}
+          {/* Says why most of them are unavailable. */}
           {groupBy === undefined ? null : (
             <p className="text-tape-muted">Grouped, so only the columns a group nets are shown.</p>
           )}
@@ -189,13 +169,10 @@ export function GridConfigPanel({ table, open, id }: Props): ReactElement {
               (column.getIsVisible() && table.getVisibleLeafColumns().length === 1)
 
             // Nothing a group row could put in it, so the grouping has taken it
-            // off the grid. Offered as unavailable rather than left tickable:
-            // the grid reads this box through the grouping's own override, so a
-            // tick would be a control that does nothing.
+            // off the grid. The grid reads this box through the grouping's own
+            // override, so a tick would be a control that does nothing.
             const dropped = grouped[column.id] === false
 
-            // The box already says which way it is set, so the label does not
-            // also need to change colour to say it again.
             return (
               <label className="flex cursor-pointer items-center gap-2" key={column.id}>
                 <input
@@ -217,8 +194,7 @@ export function GridConfigPanel({ table, open, id }: Props): ReactElement {
 
 /**
  * The column's own header text. Every header in this grid is a plain string, so
- * there is no element to render here and no second label to keep in step with
- * the one above the column.
+ * there is no element to render here.
  */
 function headerText(column: Column<Trade, unknown>): string {
   return String(column.columnDef.header)
@@ -241,8 +217,7 @@ type WhereProps = {
 
 /**
  * One filter box. The column is looked up by id, so it is typed as possibly
- * absent: an id that stops existing should quietly drop its control rather than
- * take the blotter down with it.
+ * absent: an id that stops existing drops its control rather than throwing.
  */
 function Where({ column, label, placeholder }: WhereProps): ReactElement | null {
   if (column === undefined) {

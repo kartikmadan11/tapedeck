@@ -15,12 +15,11 @@ const JITTER_MS = 250
 
 /**
  * The only socket in the application. It writes frames into the blotter cache
- * through the pure reducer, so the delivery rules are tested without a server and
- * this hook is left holding nothing but connection lifecycle.
+ * through the pure reducer, so this hook holds nothing but connection lifecycle.
  *
- * There is no explicit resync request. The server answers every connection with a
- * consistent snapshot, so reconnecting is the resync, and a detected gap is
- * handled by refetching over REST rather than by inventing a second protocol.
+ * There is no explicit resync request. The server answers every connection with
+ * a consistent snapshot, so reconnecting is the resync, and a detected gap is
+ * handled by refetching over REST.
  */
 export function useRealtime(): { status: ConnectionStatus } {
   const queryClient = useQueryClient()

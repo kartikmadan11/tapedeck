@@ -71,8 +71,8 @@ function EventCard({ event }: { event: TradeEvent }): ReactElement {
         >
           {event.eventType}
         </span>
-        {/* Not MICRO_LABEL: this line carries an actor's name, and uppercasing
-            someone's name is a different claim from styling a column label. */}
+        {/* Not MICRO_LABEL: this line carries an actor's name, which is not
+            uppercased. */}
         <span className="text-[10px] text-tape-muted">
           seq {event.seq} · {formatDateTime(event.at)} · {event.actor}
         </span>
@@ -109,9 +109,8 @@ const TRACKED = ['quantity', 'price', 'counterparty', 'status', 'version'] as co
 type Change = { field: string; before: string; after: string }
 
 /**
- * Computed here rather than stored, because the events hold whole snapshots. That
- * keeps the audit trail readable without replaying it and lets the display change
- * without a migration.
+ * Computed here rather than stored, because the events hold whole snapshots, so
+ * the display can change without a migration.
  */
 function diff(before: Trade, after: Trade): Change[] {
   return TRACKED.filter((field) => before[field] !== after[field]).map((field) => ({

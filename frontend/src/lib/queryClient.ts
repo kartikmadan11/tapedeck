@@ -26,16 +26,13 @@ export const queryKeys = {
  * path after a detected gap.
  *
  * The base is read after both requests resolve, not before, so frames applied
- * while they were in flight are part of what the cursor guard compares against
- * and a response older than the stream cannot overwrite it. A frame landing in
- * the tick between this read and the cache write would still be lost, which is
- * what gap detection on the following frame exists to catch.
+ * while they were in flight are what the cursor guard compares against and a
+ * response older than the stream cannot overwrite it.
  *
  * Positions are folded in before trades so the trades read sets the cursor:
  * either response may be the newer one, and a positions payload tagged behind
  * the trades payload would otherwise be refused as stale, leaving the panel
- * blank. The two reads are not one transaction, so the panel can lag the rows by
- * one mutation until the snapshot frame replaces both.
+ * blank.
  */
 export async function loadBlotter(client: QueryClient): Promise<BlotterState> {
   const [trades, positions] = await Promise.all([fetchTrades(), fetchPositions()])

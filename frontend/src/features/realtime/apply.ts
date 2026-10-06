@@ -28,14 +28,12 @@ function byRecency(a: Trade, b: Trade): number {
  * The most recent BLOTTER_LIMIT trades, which is the window the server was asked
  * for and so the window the cache holds.
  *
- * Trimming on the way in rather than at render time is the point. Without it the
- * bounded first load drifts straight back to unbounded: the socket delivers a
- * frame for every write, cancelled trades stay on the tape, and nothing ever
- * leaves the array. An hour of the feed running is another 1,800 rows.
+ * Trimmed on the way in rather than at render time. Without it the bounded first
+ * load drifts back to unbounded: cancelled trades stay on the tape and nothing
+ * ever leaves the array.
  *
  * Safe to cut from the end because the array is sorted newest first, so what
- * falls off is the oldest trade held, which is exactly what the server would have
- * dropped from the same window.
+ * falls off is the oldest trade held.
  */
 function windowed(trades: Trade[]): Trade[] {
   return trades.length > BLOTTER_LIMIT ? trades.slice(0, BLOTTER_LIMIT) : trades
@@ -79,8 +77,8 @@ export function apply(state: BlotterState, frame: ServerFrame): BlotterState {
       return {
         seq: frame.seq,
         // Windowed as well as sorted, even though the handshake snapshot is
-        // already windowed server-side. The invariant then belongs to this
-        // function rather than to an agreement between two files.
+        // already windowed server-side, so the invariant belongs here rather
+        // than to an agreement between two files.
         trades: windowed(frame.trades.slice().sort(byRecency)),
         positions: frame.positions,
       }

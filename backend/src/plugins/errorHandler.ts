@@ -53,9 +53,8 @@ export function registerErrorHandler(app: FastifyInstance, options: ErrorHandler
   })
 
   /**
-   * An unknown /api route returns JSON, not the SPA shell: otherwise a typo in a
-   * curl returns 200 and a page of HTML. Everything else falls through to
-   * index.html so the client router owns client routes.
+   * An unknown /api route returns JSON, not the SPA shell; everything else falls
+   * through to index.html so the client router owns client routes.
    *
    * Cannot call reply.callNotFound(), which would re-enter this handler.
    */
@@ -74,7 +73,6 @@ export function registerErrorHandler(app: FastifyInstance, options: ErrorHandler
 
 /**
  * One issue per offending field, so a form can attach each message to an input.
- *
  * An unrecognized_keys issue names the keys in `keys` and leaves `path` empty, so
  * posting `symbol` to an amend would otherwise return a field-less error.
  */
