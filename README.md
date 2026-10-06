@@ -143,6 +143,17 @@ symbols, 70 amended, 321 filled, 45 part filled, 27 cancelled, 863 events.
 
 ## How to run tests
 
+The backend tests run against a real Postgres, so start one first. The frontend
+and shared projects need nothing:
+
+```sh
+docker compose up -d db
+```
+
+They use `postgres://tapedeck:tapedeck@localhost:5433/tapedeck_test`, overridable
+with `TEST_DATABASE_URL`, and create that database themselves if it is not there
+yet. Then:
+
 ```sh
 npm run check         # typecheck, lint, palette, tests. The one to run
 npm test              # all four workspaces
@@ -151,17 +162,8 @@ npm run lint          # biome
 npm run lint:palette  # no raw colour in a .tsx
 ```
 
-643 tests across 28 files. The database-backed ones need a database, defaulting
-to `postgres://tapedeck:tapedeck@localhost:5433/tapedeck_test` and overridable
-with `TEST_DATABASE_URL`:
-
-```sh
-docker compose up -d db
-docker compose exec db createdb -U tapedeck tapedeck_test
-npm test
-```
-
-They truncate and reseed, so they want their own database.
+643 tests across 28 files. They truncate and reseed between files, which is why
+they get a database of their own rather than sharing `tapedeck`.
 [`docs/DECISIONS.md`](docs/DECISIONS.md) lists the heaviest and what they hold.
 
 ## Assumptions made

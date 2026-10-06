@@ -15,6 +15,9 @@ export default defineConfig({
           name: 'backend',
           environment: 'node',
           include: ['backend/test/**/*.test.ts'],
+          // Creates tapedeck_test if a fresh clone has not got one. On this
+          // project only, so a frontend run still needs no database.
+          globalSetup: ['./backend/test/helpers/globalSetup.ts'],
           // Every file truncates the one test database, so they cannot overlap.
           fileParallelism: false,
           // Migrations on a cold database plus a real listener are slower than
