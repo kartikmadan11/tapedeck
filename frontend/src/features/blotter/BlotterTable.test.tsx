@@ -951,15 +951,16 @@ describe("a pane's own menu", () => {
     rightClick()
 
     // A blotter with no workspace around it can open, duplicate, share and close
-    // nothing, so four of the six are refused and the keyboard skips them.
+    // nothing, and a right-click off a row has no trade to act on, so seven of
+    // the nine are refused and the keyboard skips them.
     const menu = screen.getByRole('menu')
     expect(screen.getByRole('menuitem', { name: 'Config' })).toHaveFocus()
 
     fireEvent.keyDown(menu, { key: 'ArrowDown' })
     expect(screen.getByRole('menuitem', { name: 'Reset' })).toHaveFocus()
 
-    // Down from the last item offered wraps past Close, New pane and Duplicate
-    // rather than stopping on any of them.
+    // Down from the last item offered wraps past Close, the three trade items and
+    // then New pane and Duplicate rather than stopping on any of them.
     fireEvent.keyDown(menu, { key: 'ArrowDown' })
     expect(screen.getByRole('menuitem', { name: 'Config' })).toHaveFocus()
   })
@@ -1022,11 +1023,77 @@ describe("a pane's own menu", () => {
   })
 })
 
+describe("a trade's own items in the menu", () => {
+  /** The same order a browser fires the two in, raised on a row rather than on
+   *  the pane, so the menu has a trade to be about. */
+  function rightClickRow(tradeId: string): void {
+    const node = tradeRow(tradeId)
+    fireEvent.pointerDown(node)
+    fireEvent.contextMenu(node)
+  }
+
+  const item = (name: string): HTMLElement => screen.getByRole('menuitem', { name })
+
+  it('picks the row it was raised on, so the items are about that trade', () => {
+    const { onAmend } = renderBlotter()
+    rightClickRow('TRD-100004')
+
+    // The rail agrees with the menu, which is the point of picking it first.
+    expect(screen.getByRole('status')).toHaveTextContent('BARC')
+
+    fireEvent.click(item('Amend trade'))
+    expect(onAmend).toHaveBeenCalledWith(expect.objectContaining({ tradeId: 'TRD-100004' }))
+  })
+
+  it('carries the key that does the same thing from the grid', () => {
+    renderBlotter()
+    rightClickRow('TRD-100004')
+
+    // On the item rather than in its label, so the shortcut is announced as a
+    // property of the item and not read as part of its name.
+    expect(item('Amend trade')).toHaveAttribute('aria-keyshortcuts', 'a')
+    expect(item('Cancel trade')).toHaveAttribute('aria-keyshortcuts', 'c')
+    expect(item('Trade history')).toHaveAttribute('aria-keyshortcuts', 'h')
+  })
+
+  it('refuses all three while no row is picked', () => {
+    renderBlotter()
+    fireEvent.contextMenu(paneRegion())
+
+    // Offered and refused rather than left out, so the pane's own items do not
+    // move under a pointer going on muscle memory.
+    expect(item('Amend trade')).toBeDisabled()
+    expect(item('Cancel trade')).toBeDisabled()
+    expect(item('Trade history')).toBeDisabled()
+  })
+
+  it('refuses the writes on a cancelled trade and still offers its history', () => {
+    renderBlotter()
+    rightClickRow('TRD-100003')
+
+    // The same rule the chips and the keys enforce: a menu item that did what a
+    // disabled chip refuses would be a third answer to one question.
+    expect(item('Amend trade')).toBeDisabled()
+    expect(item('Cancel trade')).toBeDisabled()
+    expect(item('Trade history')).toBeEnabled()
+  })
+
+  it('leaves the selection alone for a right-click off a row', () => {
+    renderBlotter()
+    fireEvent.click(tradeRow('TRD-100004'))
+    fireEvent.contextMenu(paneRegion())
+
+    // The menu is still about the picked trade, so the items stay offered.
+    expect(screen.getByRole('status')).toHaveTextContent('BARC')
+    expect(item('Amend trade')).toBeEnabled()
+  })
+})
+
 describe('the rail under the tape', () => {
   it('says what the pane is holding while no row is picked', () => {
     renderBlotter()
 
-    expect(screen.getByText('4 trades, pick one to amend, cancel or see its history')).toBeVisible()
+    expect(screen.getByText('4 trades')).toBeVisible()
   })
 
   it('counts what the filter left, against what the pane was handed', () => {
@@ -1051,7 +1118,7 @@ describe('the rail under the tape', () => {
     renderBlotter()
     fireEvent.click(tradeRow('TRD-100004'))
 
-    expect(screen.queryByText(/pick one/)).toBeNull()
+    expect(screen.queryByText('4 trades')).toBeNull()
     expect(screen.getByRole('button', { name: 'Amend' })).toBeInTheDocument()
   })
 })
@@ -1072,7 +1139,7 @@ describe('a pointer down away from the pane', () => {
     fireEvent.pointerDown(document.body)
 
     expect(held()).toBe(false)
-    expect(screen.getByText(/pick one/)).toBeVisible()
+    expect(screen.getByText('4 trades')).toBeVisible()
   })
 
   it('keeps it for a pointer down inside the pane', () => {

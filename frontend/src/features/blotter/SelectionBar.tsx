@@ -16,8 +16,8 @@ type Props = {
   pending: boolean
   actions: RowActions
   /** What the bar says while nothing is picked, so the height it holds is never
-   *  blank. The pane counts its own rows, so it supplies the line. */
-  hint: string
+   *  blank. The pane counts its own rows, so it supplies the figure. */
+  count: string
 }
 
 /**
@@ -39,7 +39,7 @@ export function canWrite(trade: Trade, pending: boolean): boolean {
  * resize every time a row is picked or dropped. That is why it carries the row
  * count: a bar that holds its height has to be worth the height it holds.
  */
-export function SelectionBar({ trade, pending, actions, hint }: Props): ReactElement {
+export function SelectionBar({ trade, pending, actions, count }: Props): ReactElement {
   if (trade === null) {
     return (
       <div className={BAR}>
@@ -48,7 +48,7 @@ export function SelectionBar({ trade, pending, actions, hint }: Props): ReactEle
           count stays outside it: rows arrive every two seconds, and a screen
           reader reading each new total is noise. */}
         <output />
-        <span className={MICRO_LABEL}>{hint}</span>
+        <span className={MICRO_LABEL}>{count}</span>
       </div>
     )
   }

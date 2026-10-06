@@ -15,6 +15,9 @@ export type MenuItem = {
   disabled?: boolean | undefined
   /** Draws a rule above this item, which is all the grouping the list needs. */
   separated?: boolean | undefined
+  /** The key that does the same thing from the grid, shown so the menu teaches
+   *  it. Announced through aria-keyshortcuts, so it stays out of the item's name. */
+  keys?: string | undefined
   /**
    * For an item that opens something and leaves it open: the panel still has to
    * be announced as open, which a plain menu item cannot say.
@@ -143,7 +146,8 @@ export function PaneMenu({ label, at, items, onDismiss }: Props): ReactElement {
             <button
               aria-controls={item.controls}
               aria-expanded={item.expanded}
-              className="block w-full cursor-pointer px-3 py-1 text-left text-tape-text hover:bg-tape-raised disabled:cursor-not-allowed disabled:text-tape-muted disabled:opacity-40 disabled:hover:bg-transparent"
+              aria-keyshortcuts={item.keys}
+              className="flex w-full cursor-pointer items-baseline gap-4 px-3 py-1 text-left text-tape-text hover:bg-tape-raised disabled:cursor-not-allowed disabled:text-tape-muted disabled:opacity-40 disabled:hover:bg-transparent"
               disabled={item.disabled === true}
               onClick={() => {
                 item.onSelect()
@@ -157,6 +161,13 @@ export function PaneMenu({ label, at, items, onDismiss }: Props): ReactElement {
               type="button"
             >
               {item.label}
+              {/* aria-hidden: the shortcut is on the button as a property of it,
+                  so reading it as text would say it twice. */}
+              {item.keys === undefined ? null : (
+                <span aria-hidden="true" className="ml-auto text-tape-accent">
+                  {item.keys}
+                </span>
+              )}
             </button>
           </Fragment>
         ))}

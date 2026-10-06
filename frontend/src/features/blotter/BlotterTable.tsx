@@ -322,8 +322,6 @@ export function BlotterTable({
     leaves.length === trades.length
       ? `${trades.length} trades`
       : `${leaves.length} of ${trades.length} trades`
-  const hint =
-    leaves.length === 0 ? counted : `${counted}, pick one to amend, cancel or see its history`
 
   /** Two bands under a split, the blocks above the measures they span. One otherwise. */
   const headerRows = table.getHeaderGroups()
@@ -522,6 +520,19 @@ export function BlotterTable({
             return
           }
           event.preventDefault()
+
+          // A right-click on a row picks it first, so the three trade items and
+          // the rail below them are about the row under the pointer rather than
+          // whatever was picked before. A right-click anywhere else leaves the
+          // selection alone: the menu is still about it.
+          const id =
+            event.target instanceof Element
+              ? event.target.closest('[data-trade-id]')?.getAttribute('data-trade-id')
+              : null
+          if (id !== null && id !== undefined) {
+            setSelectedId(id)
+          }
+
           // A context menu raised from the keyboard carries no coordinates in
           // every browser, so the pane's own corner is the fallback.
           const corner = event.currentTarget.getBoundingClientRect()
@@ -545,10 +556,48 @@ export function BlotterTable({
           <PaneMenu
             at={menuAt}
             items={[
+              /**
+               * The row's three actions, first, because a right-click on a trade
+               * is about the trade. Refused rather than left out when nothing is
+               * picked, so the items below them never move. Same rule as the
+               * chips and the keys: a menu item that did what a disabled chip
+               * refuses would be a third answer to one question.
+               */
+              {
+                label: 'Amend trade',
+                onSelect: () => {
+                  if (selectedTrade !== null) {
+                    actions.onAmend(selectedTrade)
+                  }
+                },
+                disabled: !writable,
+                keys: 'a',
+              },
+              {
+                label: 'Cancel trade',
+                onSelect: () => {
+                  if (selectedTrade !== null) {
+                    actions.onCancel(selectedTrade)
+                  }
+                },
+                disabled: !writable,
+                keys: 'c',
+              },
+              {
+                label: 'Trade history',
+                onSelect: () => {
+                  if (selectedTrade !== null) {
+                    actions.onHistory(selectedTrade)
+                  }
+                },
+                disabled: selectedTrade === null,
+                keys: 'h',
+              },
               {
                 label: 'New pane',
                 onSelect: () => onNewPane?.(),
                 disabled: onNewPane === undefined,
+                separated: true,
               },
               {
                 label: 'Duplicate',
@@ -801,7 +850,7 @@ export function BlotterTable({
           trade={selectedTrade}
           pending={selectedTrade !== null && pendingIds.has(selectedTrade.tradeId)}
           actions={actions}
-          hint={hint}
+          count={counted}
         />
       </section>
     </MagnitudeScale>
