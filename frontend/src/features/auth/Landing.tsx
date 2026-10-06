@@ -20,10 +20,14 @@ const SECONDARY = `${ENTRY} border border-tape-line text-tape-text hover:border-
  *  and a centred hero would be the one screen that is not. */
 export function Landing({ onEnter }: Props): ReactElement {
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-[68ch] flex-col justify-center gap-7 px-6 py-12">
+    // 72ch, not 68: px-6 takes 6.15ch out of the column, and the line below needs
+    // 64 left over.
+    <main className="mx-auto flex min-h-screen w-full max-w-[72ch] flex-col justify-center gap-7 px-6 py-12">
       <Wordmark className="self-start text-[clamp(3rem,12vw,6rem)]" filled />
 
-      <p className="max-w-[58ch]">
+      {/* Two lines, 63 and 57. The sentence is 121 characters, so a measure under
+        63ch spills a third line holding two words. */}
+      <p className="max-w-[64ch]">
         An equity trade blotter for a shared book. Bookings, amendments and cancellations reach
         every open screen as they happen.
       </p>
