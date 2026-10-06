@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import type { Trade, TradeEvent, TradeEventType } from '@tapedeck/shared'
 import type { ReactElement } from 'react'
-import { useEffect } from 'react'
+import { useEffect, useId } from 'react'
 import { ErrorNotice } from '../../components/ErrorNotice.js'
 import { fetchTradeEvents } from '../../lib/api.js'
 import { formatDateTime } from '../../lib/format.js'
@@ -15,6 +15,9 @@ type Props = { tradeId: string; onClose: () => void }
  * looked at rarely and the rows never change once written.
  */
 export function HistoryDrawer({ tradeId, onClose }: Props): ReactElement {
+  /** Names the drawer off its own heading, as in the two dialogs. */
+  const titleId = useId()
+
   const events = useQuery({
     queryKey: queryKeys.tradeEvents(tradeId),
     queryFn: () => fetchTradeEvents(tradeId),
@@ -31,9 +34,17 @@ export function HistoryDrawer({ tradeId, onClose }: Props): ReactElement {
   }, [onClose])
 
   return (
-    <div className="fixed inset-y-0 right-0 z-40 flex w-[32rem] max-w-full flex-col border-l border-tape-line bg-tape-panel shadow-[-24px_0_64px_-12px_rgb(0_0_0/0.9)]">
+    // A dialog rather than a region: Escape closes it, which is the behaviour a
+    // dialog's name buys. No aria-modal, since nothing underneath is inert.
+    <div
+      aria-labelledby={titleId}
+      className="fixed inset-y-0 right-0 z-40 flex w-[32rem] max-w-full flex-col border-l border-tape-line bg-tape-panel shadow-[-24px_0_64px_-12px_rgb(0_0_0/0.9)]"
+      role="dialog"
+    >
       <header className="flex shrink-0 items-center justify-between border-b border-tape-line px-3 py-2">
-        <h2 className="text-sm font-semibold">History of {tradeId}</h2>
+        <h2 className="text-sm font-semibold" id={titleId}>
+          History of {tradeId}
+        </h2>
         <button type="button" className={CHIP} onClick={onClose}>
           Close
         </button>

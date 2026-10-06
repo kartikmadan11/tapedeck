@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import type { Trade } from '@tapedeck/shared'
 import { amendTradeInput, formatDecimal } from '@tapedeck/shared'
 import type { ReactElement } from 'react'
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import type { z } from 'zod'
 import { ErrorNotice } from '../../components/ErrorNotice.js'
@@ -22,6 +22,9 @@ type Props = { trade: Trade; onClose: () => void }
 
 export function AmendDialog({ trade, onClose }: Props): ReactElement {
   const amend = useAmendTrade()
+
+  /** Names the dialog off its own heading, rather than restating the heading. */
+  const titleId = useId()
 
   /**
    * The version the user opened, held deliberately rather than read live from the
@@ -75,78 +78,84 @@ export function AmendDialog({ trade, onClose }: Props): ReactElement {
        * A cast shadow rather than a blur. backdrop-filter would establish a
        * containing block, and the scrim above is already fixed with no
        * transformed ancestor, which is what keeps it covering the viewport.
+       *
+       * The role is on the box rather than on the scrim, because the scrim is
+       * the whole viewport and the dialog is not. No aria-modal: focus is not
+       * trapped, so claiming a boundary would be claiming something untrue.
        */}
-      <form
+      <div
+        aria-labelledby={titleId}
         className="w-full max-w-md rounded-sm border border-tape-line bg-tape-panel p-4 shadow-[0_24px_64px_-12px_rgb(0_0_0/0.9)]"
-        onSubmit={form.handleSubmit(onSubmit)}
-        noValidate
+        role="dialog"
       >
-        <header className="mb-3 flex items-baseline justify-between">
-          <h2 className="text-sm font-semibold">
-            Amend {trade.tradeId}
-            <span className="ml-2 text-tape-muted">
-              {trade.side} {trade.symbol}
-            </span>
-          </h2>
-          <span className={MICRO_LABEL}>editing version {editingVersion}</span>
-        </header>
+        <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
+          <header className="mb-3 flex items-baseline justify-between">
+            <h2 className="text-sm font-semibold" id={titleId}>
+              Amend {trade.tradeId}
+              <span className="ml-2 text-tape-muted">
+                {trade.side} {trade.symbol}
+              </span>
+            </h2>
+            <span className={MICRO_LABEL}>editing version {editingVersion}</span>
+          </header>
 
-        <div className="grid grid-cols-3 gap-2">
-          {/* The label span is a sibling of the input, so the uppercase and the
-              10px do not inherit into the field the user types in. */}
-          <label className="block">
-            <span className={`mb-1 block ${MICRO_LABEL}`}>Quantity</span>
-            <input
-              className={`${INPUT} text-right tabular-nums`}
-              inputMode="numeric"
-              {...form.register('quantity', { valueAsNumber: true })}
-            />
-            {errors.quantity ? <Hint>{errors.quantity.message}</Hint> : null}
-          </label>
+          <div className="grid grid-cols-3 gap-2">
+            {/* The label span is a sibling of the input, so the uppercase and the
+                10px do not inherit into the field the user types in. */}
+            <label className="block">
+              <span className={`mb-1 block ${MICRO_LABEL}`}>Quantity</span>
+              <input
+                className={`${INPUT} text-right tabular-nums`}
+                inputMode="numeric"
+                {...form.register('quantity', { valueAsNumber: true })}
+              />
+              {errors.quantity ? <Hint>{errors.quantity.message}</Hint> : null}
+            </label>
 
-          <label className="block">
-            <span className={`mb-1 block ${MICRO_LABEL}`}>Price</span>
-            <input
-              className={`${INPUT} text-right tabular-nums`}
-              inputMode="decimal"
-              {...form.register('price')}
-            />
-            {errors.price ? <Hint>{errors.price.message}</Hint> : null}
-          </label>
+            <label className="block">
+              <span className={`mb-1 block ${MICRO_LABEL}`}>Price</span>
+              <input
+                className={`${INPUT} text-right tabular-nums`}
+                inputMode="decimal"
+                {...form.register('price')}
+              />
+              {errors.price ? <Hint>{errors.price.message}</Hint> : null}
+            </label>
 
-          {/* Shown, not offered: who a trade is with is fixed at booking. A div
-              rather than a label because there is no control to name. */}
-          <div>
-            <span className={`mb-1 block ${MICRO_LABEL}`}>Counterparty</span>
-            <p className="h-7 truncate leading-7">{trade.counterparty}</p>
-            <span className="mt-1 block text-[10px] text-tape-muted">
-              Cancel and rebook to change
-            </span>
+            {/* Shown, not offered: who a trade is with is fixed at booking. A div
+                rather than a label because there is no control to name. */}
+            <div>
+              <span className={`mb-1 block ${MICRO_LABEL}`}>Counterparty</span>
+              <p className="h-7 truncate leading-7">{trade.counterparty}</p>
+              <span className="mt-1 block text-[10px] text-tape-muted">
+                Cancel and rebook to change
+              </span>
+            </div>
           </div>
-        </div>
 
-        {amend.error ? <ErrorNotice error={amend.error} className="mt-2" /> : null}
+          {amend.error ? <ErrorNotice error={amend.error} className="mt-2" /> : null}
 
-        <footer className="mt-3 flex items-center gap-2">
-          {conflicted ? (
-            <button
-              type="button"
-              className="h-7 cursor-pointer rounded-xs border border-tape-accent px-2 text-tape-accent transition-colors duration-100 hover:bg-tape-accent/15"
-              onClick={adoptCurrent}
-            >
-              Load version {trade.version} ({formatQuantityHint(trade)})
+          <footer className="mt-3 flex items-center gap-2">
+            {conflicted ? (
+              <button
+                type="button"
+                className="h-7 cursor-pointer rounded-xs border border-tape-accent px-2 text-tape-accent transition-colors duration-100 hover:bg-tape-accent/15"
+                onClick={adoptCurrent}
+              >
+                Load version {trade.version} ({formatQuantityHint(trade)})
+              </button>
+            ) : null}
+
+            <button type="submit" className={`ml-auto ${ACTION}`} disabled={amend.isPending}>
+              {amend.isPending ? 'Saving' : 'Save amendment'}
             </button>
-          ) : null}
 
-          <button type="submit" className={`ml-auto ${ACTION}`} disabled={amend.isPending}>
-            {amend.isPending ? 'Saving' : 'Save amendment'}
-          </button>
-
-          <button type="button" className={CHIP} onClick={onClose}>
-            Close
-          </button>
-        </footer>
-      </form>
+            <button type="button" className={CHIP} onClick={onClose}>
+              Close
+            </button>
+          </footer>
+        </form>
+      </div>
     </div>
   )
 }

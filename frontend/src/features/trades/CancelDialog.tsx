@@ -1,7 +1,7 @@
 import type { Trade } from '@tapedeck/shared'
 import { formatDecimal } from '@tapedeck/shared'
 import type { ReactElement } from 'react'
-import { useEffect } from 'react'
+import { useEffect, useId } from 'react'
 import { ErrorNotice } from '../../components/ErrorNotice.js'
 import { CHIP } from '../../lib/ui.js'
 import { useCancelTrade } from './useCancelTrade.js'
@@ -15,6 +15,9 @@ type Props = { trade: Trade; onClose: () => void }
  */
 export function CancelDialog({ trade, onClose }: Props): ReactElement {
   const cancel = useCancelTrade()
+
+  /** Names the dialog off its own heading, as in the amend dialog. */
+  const titleId = useId()
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
@@ -35,10 +38,16 @@ export function CancelDialog({ trade, onClose }: Props): ReactElement {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-tape-bg/80 p-4">
-      {/* Shadow rather than backdrop-blur, for the containing-block reason
-          documented on the amend dialog. */}
-      <div className="w-full max-w-md rounded-sm border border-tape-line bg-tape-panel p-4 shadow-[0_24px_64px_-12px_rgb(0_0_0/0.9)]">
-        <h2 className="mb-3 text-sm font-semibold">Cancel {trade.tradeId}?</h2>
+      {/* Shadow rather than backdrop-blur, and the role on the box rather than
+          the scrim, both for the reasons documented on the amend dialog. */}
+      <div
+        aria-labelledby={titleId}
+        className="w-full max-w-md rounded-sm border border-tape-line bg-tape-panel p-4 shadow-[0_24px_64px_-12px_rgb(0_0_0/0.9)]"
+        role="dialog"
+      >
+        <h2 className="mb-3 text-sm font-semibold" id={titleId}>
+          Cancel {trade.tradeId}?
+        </h2>
 
         <p className="text-tape-muted">
           <span className={trade.side === 'BUY' ? 'text-tape-buy' : 'text-tape-sell'}>
