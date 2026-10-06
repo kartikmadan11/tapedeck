@@ -45,6 +45,10 @@ export const HANDLE =
 export const HANDLE_ROW = 'h-2 w-full cursor-row-resize before:h-0.5 before:w-8'
 export const HANDLE_COLUMN = 'h-full w-2 cursor-col-resize before:h-8 before:w-0.5'
 
+/** The w-2 above as a number, for the one caller that has to slide a handle off
+ *  the screen along with what it resizes. */
+export const HANDLE_PX = 8
+
 /** Everything about the commit action except its fill, so the two fills below
  *  cannot drift in height, tracking or focus ring. */
 const ACTION_BASE =

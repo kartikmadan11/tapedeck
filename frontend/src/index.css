@@ -93,12 +93,24 @@ body {
   transition: width 180ms ease-out;
 }
 
+/* The positions panel, which leaves the screen rather than narrowing. It is a
+   drag target as well as a drawer, and the drag writes its width on every
+   pointer move: a width transition would make the panel chase the pointer. So
+   the slide moves it instead, and gives its space back with a negative margin
+   the drag never touches. */
+.tape-drawer {
+  transition:
+    margin-right 180ms ease-out,
+    transform 180ms ease-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tape-flash {
     animation: none;
   }
 
-  .tape-slide {
+  .tape-slide,
+  .tape-drawer {
     transition: none;
   }
 }

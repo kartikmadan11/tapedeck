@@ -192,7 +192,7 @@ describe('App', () => {
     expect(within(panel).getByText('724,650.00')).toBeInTheDocument()
   })
 
-  it('hides the positions panel and the boundary beside it, and gives both back', async () => {
+  it('slides the positions panel off the screen with the boundary beside it', async () => {
     renderApp()
     await findRow('TRD-100001')
 
@@ -201,14 +201,26 @@ describe('App', () => {
 
     fireEvent.click(toggle)
 
-    // The handle goes with the panel. It resizes its own next sibling, so one
-    // left behind would be a boundary with nothing on the far side of it.
+    // Out of reach while it is away, and the handle with it: it resizes its own
+    // next sibling, so one left behind would be a boundary with nothing on the
+    // far side of it.
     expect(screen.queryByRole('complementary')).toBeNull()
     expect(screen.queryByRole('separator', { name: 'Resize the positions panel' })).toBeNull()
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
 
+    // Still mounted, which is what lets it slide rather than vanish, and inert,
+    // which is what keeps a handle it can no longer see out of the tab order.
+    expect(screen.getByRole('complementary', { hidden: true }).closest('[inert]')).not.toBeNull()
+
     fireEvent.click(toggle)
     expect(within(screen.getByRole('complementary')).getByText('VOD')).toBeInTheDocument()
+  })
+
+  // The reload itself is jsdom's one unstubbable navigation, so what is held
+  // here is that the wordmark is a control rather than a heading again.
+  it('offers the wordmark as the way back to a clean start', () => {
+    renderApp()
+    expect(screen.getByRole('button', { name: 'tapedeck' })).toHaveAttribute('title', 'Reload')
   })
 
   it('connects to the same origin it was served from', () => {

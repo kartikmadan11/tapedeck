@@ -15,7 +15,7 @@ export const PANEL_MAX_WIDTH = 560
 
 type Props = {
   width: number
-  /** Referenced by the header toggle's aria-controls, so it is passed in. */
+  /** Referenced by the rail's aria-controls, so it is passed in. */
   id: string
 }
 

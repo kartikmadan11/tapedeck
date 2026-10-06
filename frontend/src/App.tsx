@@ -20,13 +20,18 @@ import { CancelDialog } from './features/trades/CancelDialog.js'
 import { TradeForm } from './features/trades/TradeForm.js'
 import { useBlotter, usePendingTradeIds, useRefreshBlotter } from './features/trades/useTrades.js'
 import { Workspace } from './features/workspace/Workspace.js'
-import { CHIP, CHIP_ON } from './lib/ui.js'
+import { CHIP, HANDLE_PX } from './lib/ui.js'
 
 /**
  * Optional, so the existing tests can render the blotter on its own without
  * standing a session up first. The Gate always passes it.
  */
 type Props = { onSignOut?: (() => void) | undefined }
+
+/** A tab on the edge of the screen, not a chip in the bar: it is the panel's
+ *  own control and it has to be reachable with the panel off screen. */
+const RAIL =
+  'ml-2 flex w-5 shrink-0 cursor-pointer items-center justify-center rounded-sm border border-tape-line bg-tape-panel text-tape-muted transition-colors duration-100 hover:border-tape-accent hover:text-tape-accent focus-visible:border-tape-focus focus-visible:outline-none'
 
 export function App({ onSignOut }: Props = {}): ReactElement {
   useRealtime()
@@ -89,20 +94,20 @@ export function App({ onSignOut }: Props = {}): ReactElement {
     // cannot clip them.
     <div className="flex h-screen flex-col gap-2 overflow-hidden bg-tape-bg p-3 text-tape-text">
       <header className="flex items-baseline gap-3 border-b border-tape-line pb-2">
-        <h1 className="text-sm font-semibold uppercase tracking-[0.2em]">tapedeck</h1>
-        <div className="ml-auto flex items-center gap-2">
-          {/* A disclosure, so the label names the thing and the accent border
-            says it is showing. aria-controls only while the panel is mounted:
-            it has to name an element that is there. */}
+        {/* The wordmark is the way back to a clean start: a reload keeps the
+          address bar, so the workspace comes back and the socket, the cache and
+          the panes are rebuilt from it. */}
+        <h1 className="text-sm font-semibold uppercase tracking-[0.2em]">
           <button
-            aria-controls={positionsOpen ? positionsId : undefined}
-            aria-expanded={positionsOpen}
-            className={positionsOpen ? CHIP_ON : CHIP}
-            onClick={() => setPositionsOpen((open) => !open)}
+            className="cursor-pointer tracking-[0.2em] hover:text-tape-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-tape-focus"
+            onClick={() => window.location.reload()}
+            title="Reload"
             type="button"
           >
-            Positions
+            tapedeck
           </button>
+        </h1>
+        <div className="ml-auto flex items-center gap-2">
           <SimulationToggle />
           <RefreshButton onRefresh={refresh} refreshing={blotter.isFetching} />
           <IdentityBadge trader={trader} />
@@ -118,24 +123,56 @@ export function App({ onSignOut }: Props = {}): ReactElement {
 
       {blotter.error ? <ErrorNotice error={blotter.error} /> : null}
 
-      {/* No gap: the handle between them is the gap, so the boundary a pointer
-        aims at is the line that divides the two. */}
-      <div className="flex min-h-0 flex-1">
+      {/* overflow-hidden is what the panel slides out into. No gap between the
+        tape and the panel: the handle between them is the gap, so the boundary a
+        pointer aims at is the line that divides the two. */}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         <Workspace trades={trades} pendingIds={pendingIds} actions={actions} />
-        {/* The handle goes with the panel: it resizes its own next sibling, so
-          one left behind would drag whatever took the panel's place. */}
-        {positionsOpen ? (
-          <>
-            <PanelSeparator
-              label="Resize the positions panel"
-              max={PANEL_MAX_WIDTH}
-              min={PANEL_MIN_WIDTH}
-              onResize={setPanelWidth}
-              width={panelWidth}
-            />
-            <PositionsPanel id={positionsId} width={panelWidth} />
-          </>
-        ) : null}
+
+        {/*
+         * The handle travels with the panel: it resizes its own next sibling, so
+         * one left behind would drag whatever took the panel's place.
+         *
+         * Mounted in both states and moved rather than narrowed. A drag writes
+         * the panel's width on every pointer move, so a width transition here
+         * would make the panel chase the pointer; the margin gives the space
+         * back to the tape and the drag never touches it. inert and aria-hidden
+         * while it is off screen, because it still holds a handle and a scroller.
+         */}
+        <div
+          aria-hidden={!positionsOpen}
+          className="tape-drawer flex shrink-0"
+          inert={!positionsOpen}
+          style={{
+            marginRight: positionsOpen ? 0 : -(panelWidth + HANDLE_PX),
+            transform: positionsOpen ? 'translateX(0)' : 'translateX(100%)',
+          }}
+        >
+          <PanelSeparator
+            label="Resize the positions panel"
+            max={PANEL_MAX_WIDTH}
+            min={PANEL_MIN_WIDTH}
+            onResize={setPanelWidth}
+            width={panelWidth}
+          />
+          <PositionsPanel id={positionsId} width={panelWidth} />
+        </div>
+
+        {/* The one control, and it is in the same place in both states: the
+          arrow that sends the panel away is the arrow that brings it back. Named
+          for the thing rather than the action, so aria-expanded carries the
+          state and the name does not change under a screen reader. */}
+        <button
+          aria-controls={positionsId}
+          aria-expanded={positionsOpen}
+          aria-label="Positions"
+          className={RAIL}
+          onClick={() => setPositionsOpen((open) => !open)}
+          title={positionsOpen ? 'Hide positions' : 'Show positions'}
+          type="button"
+        >
+          {positionsOpen ? '▸' : '◂'}
+        </button>
       </div>
 
       {amending ? <AmendDialog trade={amending} onClose={closeAmend} /> : null}
