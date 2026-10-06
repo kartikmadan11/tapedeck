@@ -21,7 +21,6 @@ import { CancelDialog } from './features/trades/CancelDialog.js'
 import { TradeForm } from './features/trades/TradeForm.js'
 import { useBlotter, usePendingTradeIds, useRefreshBlotter } from './features/trades/useTrades.js'
 import { Workspace } from './features/workspace/Workspace.js'
-import { MICRO_LABEL } from './lib/ui.js'
 
 export function App(): ReactElement {
   const { status } = useRealtime()
@@ -98,7 +97,6 @@ export function App(): ReactElement {
       <header className="flex items-baseline gap-3 border-b border-tape-line pb-2">
         {/* Letterspacing rather than point size: the viewport belongs to the grid. */}
         <h1 className="text-sm font-semibold uppercase tracking-[0.2em]">tapedeck</h1>
-        <span className={MICRO_LABEL}>equity trade blotter</span>
         <div className="ml-auto flex items-center gap-2">
           {/* display:contents, so an empty slot is not a gap in the row: what
             the workspace puts here is a flex item of this row rather than of a

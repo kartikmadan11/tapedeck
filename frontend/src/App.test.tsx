@@ -542,7 +542,7 @@ describe('acting on a row', () => {
 
     // Three buttons on every row was 186px of a grid that did not have it, and
     // the same offer repeated for every trade on the tape.
-    expect(readback()).toHaveTextContent('Select a row')
+    expect(readback()).toBeEmptyDOMElement()
     expect(screen.queryByRole('button', { name: 'Amend' })).not.toBeInTheDocument()
 
     selectRow('TRD-100001')
@@ -598,6 +598,6 @@ describe('acting on a row', () => {
     expect(readback()).toHaveTextContent('TRD-100001')
 
     fireEvent.keyDown(grid, { key: 'Escape' })
-    expect(readback()).toHaveTextContent('Select a row')
+    expect(readback()).toBeEmptyDOMElement()
   })
 })

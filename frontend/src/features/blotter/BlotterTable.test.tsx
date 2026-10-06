@@ -344,7 +344,7 @@ describe('a group row is not a trade', () => {
 
     // TanStack builds a group row out of its first leaf trade, so a selectable
     // group header would hand the bar a real trade and offer to amend it.
-    expect(readback()).toHaveTextContent('Select a row to amend')
+    expect(readback()).toBeEmptyDOMElement()
     // The click was not swallowed, it opened the group.
     expect(screen.getByRole('button', { name: 'VOD, 2 trades' })).toHaveAttribute(
       'aria-expanded',
@@ -374,7 +374,7 @@ describe('a group row is not a trade', () => {
     // Everything is closed, so there is no trade to move to and the selection
     // must not settle on a group.
     fireEvent.keyDown(grid, { key: 'ArrowDown' })
-    expect(readback()).toHaveTextContent('Select a row to amend')
+    expect(readback()).toBeEmptyDOMElement()
 
     fireEvent.click(screen.getByRole('button', { name: 'VOD, 2 trades' }))
     fireEvent.keyDown(grid, { key: 'ArrowDown' })

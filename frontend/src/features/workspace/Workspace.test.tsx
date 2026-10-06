@@ -214,7 +214,7 @@ describe('the workspace', () => {
     // was duplicated keeps its selection. The second pane arriving must not
     // remount the first one, which is what would clear it.
     expect(first().getByRole('status')).toHaveTextContent('TRD-100001')
-    expect(second().getByRole('status')).toHaveTextContent('Select a row to amend')
+    expect(second().getByRole('status')).toBeEmptyDOMElement()
   })
 
   it('names the panes apart, so two grids are two things to a screen reader', () => {

@@ -42,9 +42,13 @@ export function canWrite(trade: Trade, pending: boolean): boolean {
  */
 export function SelectionBar({ trade, pending, actions }: Props): ReactElement {
   if (trade === null) {
+    // Empty, not absent. The rail holds its place, and the live region has to
+    // exist before it has anything to say or the first selection announces
+    // nothing. It said what to do with a row, which is a sentence a trader
+    // reads once and then scrolls past for the rest of the session.
     return (
       <div className={BAR}>
-        <output className={MICRO_LABEL}>Select a row to amend, cancel or view its history</output>
+        <output />
       </div>
     )
   }
