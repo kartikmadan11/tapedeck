@@ -12,6 +12,19 @@ type Props = {
   id: string
   /** The names the Counterparty box offers, taken off the tape. */
   counterparties: readonly string[]
+
+  /**
+   * The pane's own grouping: the level the rows are cut by, then the column the
+   * measures are pivoted across. A prop rather than table state, because the
+   * table is only ever told the first of the two.
+   */
+  grouping: readonly string[]
+
+  /** Whether the split took, which decides what the Columns note says. */
+  pivoted: boolean
+
+  onGrouping: (next: string[]) => void
+
   /** Closes the panel from inside it, so the right-click menu is not the only
    *  way back out. Expected to move focus, since the panel it was pressed in
    *  becomes inert. */
@@ -32,8 +45,17 @@ const NUDGE =
  * the panel cannot drift from the grid it describes: a header click shows up in
  * Order By because both are looking at `sorting`.
  */
-export function GridConfigPanel({ table, open, id, counterparties, onHide }: Props): ReactElement {
-  const { grouping, sorting, columnOrder } = table.getState()
+export function GridConfigPanel({
+  table,
+  open,
+  id,
+  counterparties,
+  grouping,
+  pivoted,
+  onGrouping,
+  onHide,
+}: Props): ReactElement {
+  const { sorting, columnOrder } = table.getState()
   const groupBy = grouping[0]
   const splitBy = grouping[1]
   const order = sorting[0]
@@ -45,7 +67,7 @@ export function GridConfigPanel({ table, open, id, counterparties, onHide }: Pro
    * Read from the same function the grid lays over its own state, so the boxes
    * below cannot disagree with the columns on screen.
    */
-  const grouped = groupedVisibility(grouping)
+  const grouped = groupedVisibility(groupBy, pivoted)
 
   /**
    * The trader's own order, not the table's: a grouping hoists its column to the
@@ -95,16 +117,14 @@ export function GridConfigPanel({ table, open, id, counterparties, onHide }: Pro
             className={`${PANEL_CONTROL} cursor-pointer`}
             onChange={(event) => {
               const next = event.target.value
-              // Clearing Group By clears Split By with it. A grouping of
-              // [undefined, 'book'] is not a view, and TanStack would read the
-              // second level as the first.
+              // Clearing Group By clears Split By with it. A split is blocks of
+              // netted columns across a group row, so with nothing grouped there
+              // is nothing for it to lie across.
               if (next === '') {
-                table.setGrouping([])
+                onGrouping([])
                 return
               }
-              table.setGrouping(
-                splitBy === undefined || splitBy === next ? [next] : [next, splitBy],
-              )
+              onGrouping(splitBy === undefined || splitBy === next ? [next] : [next, splitBy])
             }}
             value={groupBy ?? ''}
           >
@@ -121,15 +141,16 @@ export function GridConfigPanel({ table, open, id, counterparties, onHide }: Pro
           <select
             aria-label="Split by"
             className={`${PANEL_CONTROL} cursor-pointer`}
-            // Nothing to split until there is a level to split. The choice taken
-            // above is excluded below: symbol inside symbol can never divide.
+            // Nothing to split across until there are group rows to lay the
+            // blocks across. The choice taken above is excluded below: a block
+            // per symbol inside a group per symbol is one block.
             disabled={groupBy === undefined}
             onChange={(event) => {
               if (groupBy === undefined) {
                 return
               }
               const next = event.target.value
-              table.setGrouping(next === '' ? [groupBy] : [groupBy, next])
+              onGrouping(next === '' ? [groupBy] : [groupBy, next])
             }}
             value={splitBy ?? ''}
           >
@@ -205,7 +226,11 @@ export function GridConfigPanel({ table, open, id, counterparties, onHide }: Pro
 
           {/* Says why most of them are unavailable. */}
           {groupBy === undefined ? null : (
-            <p className="text-tape-muted">Grouped, so only the columns a group nets are shown.</p>
+            <p className="text-tape-muted">
+              {pivoted
+                ? 'Split, so the netted columns are repeated under each value.'
+                : 'Grouped, so only the columns a group nets are shown.'}
+            </p>
           )}
 
           {ordered.map((id, index) => {

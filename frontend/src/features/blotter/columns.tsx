@@ -1,5 +1,5 @@
-import type { ColumnDef, Row, RowData, VisibilityState } from '@tanstack/react-table'
-import { createColumnHelper } from '@tanstack/react-table'
+import type { CellContext, ColumnDef, Row, RowData, VisibilityState } from '@tanstack/react-table'
+import { createColumnHelper, flexRender } from '@tanstack/react-table'
 import type { DecimalString, Trade, TradeStatus } from '@tapedeck/shared'
 import {
   compareDecimal,
@@ -63,10 +63,9 @@ const NUMERIC = 'text-right tabular-nums'
  */
 
 /**
- * Blanks a group row's cell for a column with nothing to net. Covers the split
- * case: grouping by symbol and splitting by book leaves the Book column
- * aggregated on the symbol rows above it, and TanStack's default of 'auto' would
- * put some reading of four book names in there.
+ * Blanks a group row's cell for a column with nothing to net. The floor rather
+ * than a case: TanStack's default of 'auto' would put a sum or a first value in
+ * a cell that has no aggregate to report.
  */
 export const DEFAULT_COLUMN: Partial<ColumnDef<Trade>> = {
   aggregatedCell: () => null,
@@ -76,9 +75,6 @@ export const DEFAULT_COLUMN: Partial<ColumnDef<Trade>> = {
  * The legs a group row nets: its leaves, minus the cancelled ones. Netting a
  * cancelled trade in would make a group row disagree with the positions panel,
  * which sums only active trades in SQL.
- *
- * leafRows, not childRows, so a Split By level's parent nets every trade beneath
- * it rather than re-netting its sub-group rows.
  */
 function activeLegs(leafRows: Row<Trade>[]): Trade[] {
   return leafRows.filter((row) => row.original.status !== 'CANCELLED').map((row) => row.original)
@@ -107,8 +103,7 @@ function activeLeaves(row: Row<Trade>): Trade[] {
 
 /**
  * Opens a group and counts the trades it nets. Rides the grouped column, which
- * the config panel locks visible, so the control cannot be hidden. depth is the
- * indent, so a split reads as nested.
+ * the config panel locks visible, so the control cannot be hidden.
  */
 export function GroupToggle({
   row,
@@ -132,7 +127,6 @@ export function GroupToggle({
       aria-expanded={open}
       aria-label={`${String(row.groupingValue)}, ${legs} trades`}
       className="flex cursor-pointer items-center gap-1.5 text-tape-text hover:text-tape-accent"
-      style={{ paddingLeft: `${row.depth * 0.75}rem` }}
     >
       {/* Fixed width so the label does not shift when the group opens. */}
       <span aria-hidden="true" className="inline-block w-2 text-tape-accent">
@@ -312,21 +306,41 @@ export function createColumns() {
   ]
 }
 
+/**
+ * A definition as the table will read it, which is the type the derived lists
+ * below and the split builder all work in. `any` is the value type because one
+ * list holds columns over strings, numbers and decimals alike.
+ */
+// biome-ignore lint/suspicious/noExplicitAny: a heterogeneous column list has no single value type, which is why createColumns leaves its own return type inferred.
+type AnyColumn = ColumnDef<Trade, any>
+
 /** The id the table gives a column: its accessor key, or its stated id. */
-function idOf(def: ReturnType<typeof createColumns>[number]): string {
+function idOf(def: AnyColumn): string {
   return String('accessorKey' in def ? def.accessorKey : def.id)
 }
 
 /**
- * The columns a group row cannot answer for, which is every one with nothing to
- * net. Read off the definitions above rather than listed again: a column nets
- * exactly when it declares an aggregationFn, so there is no second list to drift.
+ * The columns that net, which is what a group row can answer for and what a
+ * split repeats under each of its values. Read off the definitions above rather
+ * than listed again: a column nets exactly when it declares an aggregationFn, so
+ * there is no second list to drift.
  */
+const MEASURES: AnyColumn[] = createColumns().filter((def) => def.aggregationFn !== undefined)
+
+/** The columns a group row cannot answer for, which is every other one. */
 const NOTHING_TO_NET: VisibilityState = Object.fromEntries(
   createColumns()
     .filter((def) => def.aggregationFn === undefined)
     .map((def) => [idOf(def), false]),
 )
+
+/** The measures a split takes over, since it shows one of each per block. */
+const MEASURES_OFF: VisibilityState = Object.fromEntries(MEASURES.map((def) => [idOf(def), false]))
+
+/** The columns a grid may cut by, which is every one not opted out of grouping. */
+const DIVIDERS: readonly string[] = createColumns()
+  .filter((def) => def.enableGrouping !== false)
+  .map(idOf)
 
 /** Definition order, which is the order a pane opens on. */
 export const BASE_ORDER: readonly string[] = createColumns().map(idOf)
@@ -348,14 +362,106 @@ export function orderedColumnIds(columnOrder: readonly string[]): string[] {
  * Derived rather than stored, so clearing the grouping hands a trader back
  * exactly the columns they had.
  *
- * The columns being grouped on are forced visible: they carry the label and the
- * expander, so grouping by a column that happened to be hidden would otherwise
- * produce groups that can be neither read nor opened.
+ * The grouped column is forced visible: it carries the label and the expander,
+ * so grouping by a column that happened to be hidden would produce groups that
+ * can be neither read nor opened. Pivoted, the measures come off as well,
+ * because the split shows one of each per block and the single column beside
+ * them would net across the lot.
  */
-export function groupedVisibility(grouping: readonly string[]): VisibilityState {
-  if (grouping.length === 0) {
+export function groupedVisibility(groupBy: string | undefined, pivoted: boolean): VisibilityState {
+  if (groupBy === undefined) {
     return {}
   }
 
-  return { ...NOTHING_TO_NET, ...Object.fromEntries(grouping.map((id) => [id, true])) }
+  const grouped = { ...NOTHING_TO_NET, [groupBy]: true }
+  return pivoted ? { ...grouped, ...MEASURES_OFF } : grouped
+}
+
+/**
+ * How many values a split will pivot across. Every value is a whole block of
+ * measures, so an uncapped split is an uncapped grid.
+ */
+const MAX_BLOCKS = 8
+
+/** Unit separator, which no value on the tape contains. */
+const JOIN = '\u001f'
+
+/**
+ * The blocks a split would lay across the grid, as one opaque key. A string
+ * rather than a list because the grid memoises its column model on it, and a
+ * fresh list on every frame of the feed would rebuild the columns every two
+ * seconds for a set that almost never changes.
+ *
+ * Read off the whole book rather than off the rows a filter left, so typing in a
+ * filter box cannot change the shape of the grid under the cursor. Sorted, so a
+ * block holds its place as the feed arrives, and capped by the order rather than
+ * by arrival.
+ *
+ * Empty when there is nothing to split by, which also disposes of a hand-edited
+ * link naming a column that cannot divide.
+ */
+export function splitBlocks(trades: readonly Trade[], splitBy: string | undefined): string {
+  if (splitBy === undefined || !DIVIDERS.includes(splitBy)) {
+    return ''
+  }
+
+  const values = new Set<string>()
+  for (const trade of trades) {
+    const value = trade[splitBy as keyof Trade]
+    if (typeof value === 'string') {
+      values.add(value)
+    }
+  }
+
+  return [...values].sort().slice(0, MAX_BLOCKS).join(JOIN)
+}
+
+/**
+ * One column group per block, each holding the measures netted over that block's
+ * trades alone. The group's header is what spans them, which is what makes a
+ * split read across the grid rather than down it.
+ */
+export function splitColumns(splitBy: string, blocks: string): AnyColumn[] {
+  return blocks.split(JOIN).map((value) => ({
+    id: `${splitBy}=${value}`,
+    header: value,
+    columns: MEASURES.map((measure) => blockMeasure(measure, splitBy, value)),
+  }))
+}
+
+/**
+ * One measure, narrowed to one block. Everything but the netting is the base
+ * column's, so a block reads exactly like the column it repeats: same heading,
+ * width, alignment and renderers.
+ */
+function blockMeasure(measure: AnyColumn, splitBy: string, value: string): AnyColumn {
+  const within = (row: Row<Trade>): boolean => String(row.getValue(splitBy)) === value
+  const net = measure.aggregationFn
+
+  // Object.assign, not a spread into a literal. A ColumnDef is a union of four
+  // shapes, and a literal is checked against every one of them rather than
+  // against the one the measure came from.
+  //
+  // The stated id wins over the accessorKey carried across, so a block reads the
+  // same field under a name of its own.
+  return Object.assign({}, measure, {
+    id: `${splitBy}=${value}:${idOf(measure)}`,
+    // Structural, so none of it is a trader's to operate: sorting one block
+    // would reorder rows every other block also describes, and filtering one
+    // would take trades out of all of them.
+    enableSorting: false,
+    enableColumnFilter: false,
+    enableGrouping: false,
+    // A trade belongs to one block, so it reports under that one and leaves the
+    // rest of its row blank.
+    cell: (info: CellContext<Trade, unknown>) =>
+      within(info.row) ? flexRender(measure.cell, info) : null,
+    // The base netting over this block's legs. leafRows, not childRows: a group
+    // row nets every trade beneath it, and only some of them are in this block.
+    aggregationFn:
+      typeof net === 'function'
+        ? (columnId: string, leafRows: Row<Trade>[], childRows: Row<Trade>[]) =>
+            net(columnId, leafRows.filter(within), childRows)
+        : net,
+  })
 }

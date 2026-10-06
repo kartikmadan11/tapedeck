@@ -1,5 +1,5 @@
 import type { Trade } from '@tapedeck/shared'
-import { trade as tradeSchema } from '@tapedeck/shared'
+import { COUNTERPARTIES, trade as tradeSchema } from '@tapedeck/shared'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { PaneConfig } from '../workspace/paneConfig.js'
@@ -311,30 +311,141 @@ describe('grouping and aggregation', () => {
     expect(cells(leaf)[0]).toBe('')
     expect(cells(leaf)[2]).toBe('10,000')
   })
+})
 
-  it('nests a split inside the group it splits', () => {
-    renderBlotter()
+describe('a split pivots the measures across the grid', () => {
+  /** Group by symbol, then one block of measures per side. */
+  function splitBySide(): void {
     openConfig()
     set('Group by', 'symbol')
-    set('Split by', 'book')
+    set('Split by', 'side')
+  }
+
+  it('lays the blocks across the columns rather than down the rows', () => {
+    renderBlotter()
+    splitBySide()
+
+    // Two bands: the values across the top, the measures repeated under each.
+    // The first cell of the top band is empty because Symbol's heading belongs
+    // on the band with the measures rather than above them.
+    expect(headers()).toEqual(['', 'BUY', 'SELL', 'Symbol', ...NETTED, ...NETTED])
+    expect(document.querySelectorAll('colgroup col')).toHaveLength(9)
+  })
+
+  it('spans a block heading over the measures it names', () => {
+    renderBlotter()
+    splitBySide()
+
+    // Without the colSpan the heading sits over the first of its four measures
+    // and reads as a figure about that one column.
+    expect(screen.getByRole('columnheader', { name: 'BUY' })).toHaveAttribute('colspan', '4')
+  })
+
+  it('nets each block over its own trades alone', () => {
+    renderBlotter()
+    splitBySide()
+
+    // The buy block is the half-executed 10,000 and the sell block the done
+    // 4,000, rather than the 6,000 the two read as together. The cancelled buy
+    // is out of both, as it is out of the plain grouping.
+    expect(cells(groupRow('VOD, 2 trades'))).toEqual([
+      '▸VOD(2)',
+      '72.4650',
+      '10,000',
+      '6,000',
+      '724,650.00',
+      '73.1000',
+      '-4,000',
+      '-4,000',
+      '-292,400.00',
+    ])
+  })
+
+  it('leaves a trade blank in every block but its own', () => {
+    renderBlotter()
+    splitBySide()
     fireEvent.click(screen.getByRole('button', { name: 'VOD, 2 trades' }))
 
-    // The inner level nets only its own leaves, and sits indented under the
-    // outer one.
-    const inner = screen.getByRole('button', { name: 'EQ-LDN-01, 2 trades' })
-    expect(inner).toHaveStyle({ paddingLeft: '0.75rem' })
-
-    // Both levels lead the row, in the order they were asked for, with the outer
-    // one blank here because it is on the group row above. Left where Book is
-    // declared, this label would sit after the three figures it heads.
-    expect(cells(groupRow('EQ-LDN-01, 2 trades'))).toEqual([
+    // A buy reports under BUY and says nothing under SELL, so a leaf reads along
+    // the same blocks its group row does.
+    expect(cells(tradeRow('TRD-100001'))).toEqual([
       '',
-      '▸EQ-LDN-01(2)',
-      '72.6464',
+      '72.4650',
+      '10,000',
       '6,000',
-      '2,000',
-      '432,250.00',
+      '724,650.00',
+      '',
+      '',
+      '',
+      '',
     ])
+  })
+
+  it('takes the blocks off the book rather than off the filter', () => {
+    renderBlotter()
+    splitBySide()
+    set('Filter by side', 'BUY')
+
+    // Read off the rows a filter left, a keystroke would take columns out from
+    // under the cursor. The block stays and reports nothing: no average price to
+    // give, and a flat zero either side of it.
+    expect(headers().slice(1, 3)).toEqual(['BUY', 'SELL'])
+    expect(cells(groupRow('VOD, 1 trades')).slice(-4)).toEqual(['-', '0', '0', '0.00'])
+  })
+
+  it('caps how many blocks a split lays across the grid', () => {
+    renderBlotter(
+      COUNTERPARTIES.map((counterparty, index) =>
+        aTrade({ tradeId: `TRD-10000${index}`, counterparty }),
+      ),
+    )
+    openConfig()
+    set('Group by', 'symbol')
+    set('Split by', 'counterparty')
+
+    // Every value is a whole block of measures, so ten names would be forty
+    // columns. Capped in the sorted order rather than in arrival order, so the
+    // two left out are the same two on every frame of the feed. Symbol is the
+    // next band starting, which is what says the cap held.
+    expect(headers().slice(1, 10)).toEqual([
+      'BNP Paribas',
+      'Barclays',
+      'Citadel Securities',
+      'Deutsche Bank',
+      'Goldman Sachs',
+      'HSBC',
+      'JP Morgan',
+      'Jane Street',
+      'Symbol',
+    ])
+  })
+
+  it('leaves a block out of the sort, since one block cannot reorder the rows', () => {
+    renderBlotter()
+    splitBySide()
+
+    // A heading is a button only where its column can be sorted, and sorting the
+    // buy block would reorder rows the sell block also describes.
+    expect(screen.queryAllByRole('button', { name: 'Price' })).toHaveLength(0)
+  })
+
+  it('counts both header bands when it numbers the rows', () => {
+    renderBlotter()
+    splitBySide()
+
+    // Two groups under two bands. Numbered off the band count, or a split would
+    // put the first group on top of a header row.
+    expect(screen.getByRole('grid')).toHaveAttribute('aria-rowcount', '4')
+    expect(groupRow('VOD, 2 trades')).toHaveAttribute('aria-rowindex', '3')
+  })
+
+  it('ignores a split on a column that cannot divide the tape', () => {
+    renderBlotter(BOOK, { ...DEFAULT_VIEW, grouping: ['symbol', 'price'] })
+
+    // Only a hand-edited link can ask for this, because the panel offers the
+    // groupable columns alone. A block per price is a block per trade, so the
+    // grid falls back to the plain grouping rather than to one column per cell.
+    expect(headers()).toEqual(['Symbol', ...NETTED])
   })
 })
 
@@ -489,8 +600,8 @@ describe('the configuration panel', () => {
     set('Group by', 'symbol')
     expect(screen.getByLabelText('Split by')).toBeEnabled()
 
-    // Grouping by symbol inside symbol is a level that can never divide, so it
-    // is not on the list.
+    // A block per symbol inside a group per symbol is one block, so it is not
+    // on the list.
     const options = within(screen.getByLabelText('Split by')).getAllByRole('option')
     expect(options.map((option) => option.textContent)).not.toContain('Symbol')
   })
@@ -502,8 +613,8 @@ describe('the configuration panel', () => {
     set('Split by', 'book')
     set('Group by', '')
 
-    // A grouping of [undefined, 'book'] is not a view, and TanStack would read
-    // the second level as the first.
+    // A split is blocks of netted columns across a group row, so with nothing
+    // grouped there is nothing left for it to lie across.
     expect(screen.getByLabelText('Split by')).toHaveValue('')
     expect(row('TRD-100001')).not.toBeNull()
   })

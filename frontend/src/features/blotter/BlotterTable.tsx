@@ -1,9 +1,11 @@
 import type {
   Cell,
+  Column,
   ColumnFiltersState,
   ColumnOrderState,
   ExpandedState,
   GroupingState,
+  Header,
   Row,
   SortingState,
   Table,
@@ -27,7 +29,14 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { CONTROL } from '../../lib/ui.js'
 import type { PaneConfig } from '../workspace/paneConfig.js'
 import { DEFAULT_VIEW } from '../workspace/paneConfig.js'
-import { createColumns, DEFAULT_COLUMN, GroupToggle, groupedVisibility } from './columns.js'
+import {
+  createColumns,
+  DEFAULT_COLUMN,
+  GroupToggle,
+  groupedVisibility,
+  splitBlocks,
+  splitColumns,
+} from './columns.js'
 import { GridConfigPanel } from './GridConfigPanel.js'
 import { barScale, MagnitudeScale } from './magnitude.js'
 import type { Point } from './PaneMenu.js'
@@ -116,6 +125,22 @@ const PINNED = 'sticky left-0 z-10 border-r border-tape-line'
  */
 const ROW_PX = 32
 
+/**
+ * Divides one block of a split from the next, in the header and down the body,
+ * so a row is read across in blocks rather than as one run of figures.
+ */
+const BLOCK_EDGE = 'border-l border-tape-line'
+
+/**
+ * Whether a column is where a block starts: either a block's own heading, which
+ * spans the measures below it, or the first of those measures. Nothing starts a
+ * block while there is no split, since nothing has a parent.
+ */
+function startsBlock(column: Column<Trade, unknown>): boolean {
+  const block = column.parent
+  return block === undefined ? column.columns.length > 0 : block.columns[0]?.id === column.id
+}
+
 export function BlotterTable({
   trades,
   pendingIds,
@@ -136,12 +161,16 @@ export function BlotterTable({
   )
 
   /**
-   * Group By is grouping[0] and Split By is grouping[1]. TanStack nests them and
-   * row.depth carries the level, so the second grouping needs no mechanism of its
-   * own. Groups start closed.
+   * Two things rather than two levels. grouping[0] cuts the rows; grouping[1] is
+   * the column the measures are pivoted across, which is columns and not a
+   * second level of rows, so the table is only ever told the first. Groups start
+   * closed.
    */
   const [grouping, setGrouping] = useState<GroupingState>(initialConfig.grouping)
   const [expanded, setExpanded] = useState<ExpandedState>({})
+
+  const groupBy = grouping[0]
+  const splitBy = grouping[1]
 
   /**
    * The columns the trader chose, which is not the same thing as the columns on
@@ -157,9 +186,19 @@ export function BlotterTable({
    *  front on top of this, which is what keeps the group label leading. */
   const [columnOrder, setColumnOrder] = useState<ColumnOrderState>(initialConfig.columnOrder)
 
+  /** One level, whatever the grouping holds. */
+  const rowGrouping = useMemo(() => (groupBy === undefined ? [] : [groupBy]), [groupBy])
+
+  /**
+   * The split's blocks, which the column model below is rebuilt on. Empty when
+   * the grouping asks for no split, or for one its column cannot divide.
+   */
+  const blocks = useMemo(() => splitBlocks(trades, splitBy), [trades, splitBy])
+  const pivoted = blocks !== ''
+
   const shownColumns = useMemo(
-    () => ({ ...columnVisibility, ...groupedVisibility(grouping) }),
-    [columnVisibility, grouping],
+    () => ({ ...columnVisibility, ...groupedVisibility(groupBy, pivoted) }),
+    [columnVisibility, groupBy, pivoted],
   )
 
   /**
@@ -216,7 +255,19 @@ export function BlotterTable({
    */
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
-  const columns = useMemo(() => createColumns(), [])
+  /**
+   * The base columns, plus one block of measures per split value. The base
+   * measures stay in the model and go dark instead of being taken out: the Where
+   * boxes filter on them, and TanStack silently skips a filter whose column it
+   * cannot resolve.
+   */
+  const columns = useMemo(
+    () =>
+      splitBy === undefined || blocks === ''
+        ? createColumns()
+        : [...createColumns(), ...splitColumns(splitBy, blocks)],
+    [splitBy, blocks],
+  )
 
   const table = useReactTable({
     data: trades,
@@ -225,14 +276,16 @@ export function BlotterTable({
     state: {
       sorting,
       columnFilters,
-      grouping,
+      grouping: rowGrouping,
       expanded,
       columnVisibility: shownColumns,
       columnOrder,
     },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
-    onGroupingChange: setGrouping,
+    // No onGroupingChange. The pane's grouping holds the row level and the
+    // split, the table is told only the first, so a handler taking back what the
+    // table reports would drop the second. The config panel writes it instead.
     onExpandedChange: setExpanded,
     onColumnVisibilityChange: onVisibilityChange,
     onColumnOrderChange: setColumnOrder,
@@ -257,6 +310,9 @@ export function BlotterTable({
 
   const rows = table.getRowModel().rows
   const leaves = table.getFilteredRowModel().rows
+
+  /** Two bands under a split, the blocks above the measures they span. One otherwise. */
+  const headerRows = table.getHeaderGroups()
 
   /**
    * What a full-width magnitude bar means. Taken over the filtered leaves, so
@@ -521,10 +577,10 @@ export function BlotterTable({
               role="grid"
               tabIndex={0}
               aria-label={`${label}. Use the arrow keys to select a row.`}
-              // The whole tape plus the header band, not the handful of rows
+              // The whole tape plus the header bands, not the handful of rows
               // drawn. Without it a virtualised grid tells a screen reader it
               // holds only the rows that happen to be on screen.
-              aria-rowcount={rows.length + 1}
+              aria-rowcount={rows.length + headerRows.length}
               onKeyDown={onKeyDown}
               className="w-full table-fixed border-separate border-spacing-0 text-left focus:outline-none"
             >
@@ -546,16 +602,23 @@ export function BlotterTable({
                * corner wins over the body cells it crosses.
                */}
               <thead className="sticky top-0 z-20 bg-tape-panel">
-                {table.getHeaderGroups().map((group) => (
+                {headerRows.map((group, band) => (
                   // The band height lives here and the cells carry no vertical
                   // padding.
-                  <tr key={group.id} aria-rowindex={1} className="h-8">
+                  <tr key={group.id} aria-rowindex={band + 1} className="h-8">
                     {group.headers.map((header, index) => {
                       const meta = header.column.columnDef.meta
+                      // A block's own heading, which names the value its measures
+                      // are netted over and so is centred over them rather than
+                      // right-aligned on one of them.
+                      const spanning = header.colSpan > 1
 
                       return (
                         <th
                           key={header.id}
+                          // Without it the heading sits over the first of the
+                          // measures it names instead of across them.
+                          colSpan={header.colSpan}
                           // A pinned header needs its own background: the thead's
                           // scrolls sideways with the table, so it cannot be what
                           // hides the columns passing underneath.
@@ -563,20 +626,11 @@ export function BlotterTable({
                           // numeric headers over their columns.
                           className={`whitespace-nowrap border-b border-tape-line bg-tape-panel px-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-tape-muted ${
                             index === 0 ? PINNED : ''
+                          } ${startsBlock(header.column) ? BLOCK_EDGE : ''} ${
+                            spanning ? 'text-center text-tape-accent' : ''
                           } ${meta?.className ?? ''}`}
                         >
-                          {header.column.getCanSort() ? (
-                            <button
-                              type="button"
-                              className="cursor-pointer hover:text-tape-text"
-                              onClick={header.column.getToggleSortingHandler()}
-                            >
-                              {flexRender(header.column.columnDef.header, header.getContext())}
-                              <SortMarker direction={header.column.getIsSorted()} />
-                            </button>
-                          ) : (
-                            flexRender(header.column.columnDef.header, header.getContext())
-                          )}
+                          <HeaderLabel header={header} />
                         </th>
                       )
                     })}
@@ -606,9 +660,9 @@ export function BlotterTable({
                     return (
                       <tr
                         key={row.id}
-                        // Plus two: one for the header band, and one because
+                        // Past the header bands, and one more because
                         // aria-rowindex is 1-based.
-                        aria-rowindex={item.index + 2}
+                        aria-rowindex={item.index + headerRows.length + 1}
                         // No data-trade-id: this is not a trade row.
                         aria-expanded={row.getIsExpanded()}
                         // bg-tape-panel, the header's colour, so a group reads as a
@@ -627,7 +681,7 @@ export function BlotterTable({
                   return (
                     <tr
                       key={row.id}
-                      aria-rowindex={item.index + 2}
+                      aria-rowindex={item.index + headerRows.length + 1}
                       data-trade-id={row.id}
                       // The only thing that tells a screen reader what the tint
                       // means.
@@ -678,7 +732,10 @@ export function BlotterTable({
 
           <GridConfigPanel
             counterparties={suggestions.counterparty}
+            grouping={grouping}
             id={configPanelId}
+            onGrouping={setGrouping}
+            pivoted={pivoted}
             onHide={() => {
               setConfigOpen(false)
               // The panel is about to go inert with focus inside it, which would
@@ -762,7 +819,7 @@ function BodyCell({ cell, index, isSelected }: BodyCellProps): ReactElement {
       // it.
       className={`whitespace-nowrap border-b border-tape-line/60 px-1.5 ${
         leading ? `bg-inherit ${PINNED}` : ''
-      } ${
+      } ${startsBlock(cell.column) ? BLOCK_EDGE : ''} ${
         leading && isSelected ? 'shadow-[inset_2px_0_0_0_var(--color-tape-accent)]' : ''
       } ${meta?.className ?? ''}`}
     >
@@ -787,6 +844,36 @@ function renderCell(cell: Cell<Trade, unknown>): ReactNode {
   }
 
   return flexRender(cell.getIsAggregated() ? column.aggregatedCell : column.cell, cell.getContext())
+}
+
+/**
+ * A heading, with the sort control on it where the column can be sorted.
+ *
+ * A placeholder is a column with no heading at this level, which under a split
+ * is the grouped column: its name belongs on the band with the measures, not
+ * repeated above them.
+ */
+function HeaderLabel({ header }: { header: Header<Trade, unknown> }): ReactNode {
+  if (header.isPlaceholder) {
+    return null
+  }
+
+  const label = flexRender(header.column.columnDef.header, header.getContext())
+
+  if (!header.column.getCanSort()) {
+    return label
+  }
+
+  return (
+    <button
+      type="button"
+      className="cursor-pointer hover:text-tape-text"
+      onClick={header.column.getToggleSortingHandler()}
+    >
+      {label}
+      <SortMarker direction={header.column.getIsSorted()} />
+    </button>
+  )
 }
 
 function SortMarker({ direction }: { direction: false | 'asc' | 'desc' }): ReactElement | null {
