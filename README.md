@@ -389,6 +389,14 @@ conversion without rounding at the boundary. Six places is also enough for the
 fractional venue prices that do occur. The regex on the way in allows up to
 twelve integer digits and six decimals, and nothing wider is accepted.
 
+**Every price is in one currency, and there is no currency column.** The twelve
+seeded instruments are FTSE names quoted in pence, so a notional is comparable
+across symbols and a group's net notional is a number rather than a mixed sum.
+Adding a second currency means adding the column, and then either a subtotal per
+currency or an FX rate the brief never supplies, which would be invented data in
+the same way a P&L view would be. Stated here rather than left to be inferred
+from the seed.
+
 **`quantity` is an `integer`,** capping a single trade near 2.1 billion shares.
 That is above any realistic equity order and keeps the arithmetic in a type that
 cannot drift. A build that needed more would move to `bigint` with the same

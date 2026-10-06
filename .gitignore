@@ -27,6 +27,8 @@ docs/prompt-log-raw.md
 .turbo/
 
 # editor and OS
+# ~$ files are the owner locks Word leaves beside an open .docx
+~$*
 .vscode/*
 !.vscode/extensions.json
 .idea/
