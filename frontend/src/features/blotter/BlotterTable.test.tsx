@@ -1021,3 +1021,37 @@ describe("a pane's own menu", () => {
     expect(screen.getByRole('combobox', { name: 'Group by' })).toHaveAttribute('data-value', '')
   })
 })
+
+describe('the rail under the tape', () => {
+  it('says what the pane is holding while no row is picked', () => {
+    renderBlotter()
+
+    expect(screen.getByText('4 trades, pick one to amend, cancel or see its history')).toBeVisible()
+  })
+
+  it('counts what the filter left, against what the pane was handed', () => {
+    renderBlotter()
+    fireEvent.change(screen.getByLabelText('Filter by symbol'), { target: { value: 'BARC' } })
+
+    expect(screen.getByText(/^1 of 4 trades/)).toBeVisible()
+  })
+
+  it('counts the leaves rather than the group rows', () => {
+    renderBlotter()
+    openConfig()
+    set('Group by', 'symbol')
+
+    // Two groups over four trades. A count that read the rows on screen would
+    // say two, and the rail would be reporting the grouping back to the trader
+    // who just set it.
+    expect(screen.getByText(/^4 trades/)).toBeVisible()
+  })
+
+  it('gives the line up to the trade once a row is picked', () => {
+    renderBlotter()
+    fireEvent.click(tradeRow('TRD-100004'))
+
+    expect(screen.queryByText(/pick one/)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Amend' })).toBeInTheDocument()
+  })
+})

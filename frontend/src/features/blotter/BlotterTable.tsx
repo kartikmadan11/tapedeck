@@ -313,6 +313,18 @@ export function BlotterTable({
   const rows = table.getRowModel().rows
   const leaves = table.getFilteredRowModel().rows
 
+  /**
+   * What the rail under the tape says while no row is picked. Leaves either way,
+   * so a grouping does not turn the count into a number of rails, and the figure
+   * the pane was handed rather than the book: the server sends a window.
+   */
+  const counted =
+    leaves.length === trades.length
+      ? `${trades.length} trades`
+      : `${leaves.length} of ${trades.length} trades`
+  const hint =
+    leaves.length === 0 ? counted : `${counted}, pick one to amend, cancel or see its history`
+
   /** Two bands under a split, the blocks above the measures they span. One otherwise. */
   const headerRows = table.getHeaderGroups()
 
@@ -753,6 +765,7 @@ export function BlotterTable({
           trade={selectedTrade}
           pending={selectedTrade !== null && pendingIds.has(selectedTrade.tradeId)}
           actions={actions}
+          hint={hint}
         />
       </section>
     </MagnitudeScale>

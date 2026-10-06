@@ -151,7 +151,7 @@ npm run lint          # biome
 npm run lint:palette  # no raw colour in a .tsx
 ```
 
-600 tests across 25 files. The database-backed ones need a database, defaulting
+605 tests across 25 files. The database-backed ones need a database, defaulting
 to `postgres://tapedeck:tapedeck@localhost:5433/tapedeck_test` and overridable
 with `TEST_DATABASE_URL`:
 
@@ -223,7 +223,7 @@ Each of these is argued at length in [`docs/DECISIONS.md`](docs/DECISIONS.md).
   own columns, shrinking the tape rather than covering it, and both a pane's
   actions and the workspace's own sit behind a right-click that answers
   anywhere. The cost is discoverability, which is why the demo above says so.
-  The positions panel slides off from an arrow at its own edge and opens
+  The positions panel slides off from an arrow in its own header and opens
   showing, since net exposure is most of the reason to keep a blotter open.
 - **A workspace is a tree of splits, and travels as a readable link**:
   `?panes=2&p1.group=symbol&p2.where.symbol=BARC` is the whole format, carrying
