@@ -48,6 +48,9 @@ type Props = {
 /** Said rather than copied, because the clipboard needs a secure context. */
 const STRANDED = 'Copy failed, the link is in the address bar'
 
+/** How long a copy's outcome stays up. The action is over; the line should go. */
+const COPIED_MS = 4_000
+
 /**
  * How long the address bar waits behind the workspace.
  *
@@ -264,7 +267,16 @@ export function Workspace({ trades, pendingIds, actions, nav }: Props): ReactEle
   /** The pane and edge being aimed at, which is what the preview is drawn from. */
   const [over, setOver] = useState<{ pane: string; edge: Edge } | null>(null)
 
-  const [shared, setShared] = useState<string | null>(null)
+  /** An object, not a string, so pressing Share twice restarts the timer below. */
+  const [shared, setShared] = useState<{ text: string } | null>(null)
+
+  useEffect(() => {
+    if (shared === null) {
+      return
+    }
+    const timer = setTimeout(() => setShared(null), COPIED_MS)
+    return () => clearTimeout(timer)
+  }, [shared])
 
   /**
    * dragover fires continuously while a pointer is held still, so this is called
@@ -399,10 +411,12 @@ export function Workspace({ trades, pendingIds, actions, nav }: Props): ReactEle
 
     const copy = navigator.clipboard?.writeText(url)
     if (copy === undefined) {
-      setShared(STRANDED)
+      setShared({ text: STRANDED })
       return
     }
-    void copy.then(() => setShared('Link copied')).catch(() => setShared(STRANDED))
+    void copy
+      .then(() => setShared({ text: 'Link copied' }))
+      .catch(() => setShared({ text: STRANDED }))
   }
 
   const order = panesOf(root)
@@ -596,23 +610,18 @@ export function Workspace({ trades, pendingIds, actions, nav }: Props): ReactEle
         ? null
         : createPortal(<NewPane onOpen={addPane} />, nav)}
 
-      {/* The workspace is the subject here too, which is why the copy of this in
-        every pane's menu is named: "Share workspace" there, where an unqualified
-        Share inside a pane could not say whether it meant that pane or all of
-        them. This one stays on the workspace's own strip rather than moving up
-        beside New pane, because what it leaves behind is a line of text and the
-        nav has no room for one. It is also where that line appears when the menu
-        is what pressed it, since the strip is the only place with room. */}
-      <div className="flex shrink-0 items-center justify-end gap-2">
-        {shared === null ? null : (
-          <span className={MICRO_LABEL} role="status">
-            {shared}
-          </span>
-        )}
-        <button className={CHIP} onClick={share} type="button">
-          Share
-        </button>
-      </div>
+      {/* Fixed, so a line that is up for four seconds costs the panes no height.
+        Kept rather than dropped with the button because the clipboard can refuse
+        outright, and then this is the only thing that says the link is in the
+        address bar instead. Above the pane menu that usually raises it. */}
+      {shared === null ? null : (
+        <p
+          className={`fixed right-3 bottom-3 z-50 rounded-xs border border-tape-line bg-tape-panel px-2 py-1 ${MICRO_LABEL}`}
+          role="status"
+        >
+          {shared.text}
+        </p>
+      )}
 
       {/*
        * The root split, which is the one region that always fills what it is

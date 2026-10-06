@@ -16,7 +16,7 @@ function aTrade(overrides: Record<string, unknown> = {}): Trade {
     quantity: 10_000,
     price: '72.465000',
     trader: 'k.madan',
-    book: 'EQ-LDN-1',
+    book: 'EQ-LDN-01',
     counterparty: 'GSIL',
     tradeTimestamp: '2026-10-02T09:15:00.000Z',
     status: 'ACTIVE',
@@ -327,7 +327,7 @@ describe('naming a pane', () => {
     address('?panes=2')
     renderWorkspace()
     rename('Trades, pane 2', 'Cancels')
-    fireEvent.click(screen.getByRole('button', { name: 'Share' }))
+    choose('Trades', 'Share workspace')
 
     // The second pane was named and the first was not, so the link states one
     // name. A name a position gives a pane is not a decision to carry.
@@ -785,7 +785,7 @@ describe('arranging the panes', () => {
       screen.getByRole('separator', { name: 'Resize Trades against Trades, pane 2' }),
       { key: 'ArrowRight' },
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Share' }))
+    choose('Trades', 'Share workspace')
     const written = window.location.search
 
     cleanup()
@@ -1017,7 +1017,7 @@ describe('sharing a workspace', () => {
     choose('Trades', 'Duplicate')
     fireEvent.change(second().getByLabelText('Filter by trader'), { target: { value: 'k.m' } })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Share' }))
+    choose('Trades', 'Share workspace')
     expect(await screen.findByText('Link copied')).toBeInTheDocument()
 
     // Each pane reports its own view out, so the link describes both of them
@@ -1044,7 +1044,7 @@ describe('sharing a workspace', () => {
 
   it('leaves the link in the address bar as well as on the clipboard', async () => {
     renderWorkspace()
-    fireEvent.click(screen.getByRole('button', { name: 'Share' }))
+    choose('Trades', 'Share workspace')
     await screen.findByText('Link copied')
 
     expect(window.location.href).toBe(copied[0])
@@ -1056,7 +1056,7 @@ describe('sharing a workspace', () => {
     Reflect.deleteProperty(navigator, 'clipboard')
     renderWorkspace()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Share' }))
+    choose('Trades', 'Share workspace')
     expect(await screen.findByText(/the link is in the address bar/)).toBeInTheDocument()
     // Told where it is, and now able to read it when they get there, which is
     // most of what makes that message a usable fallback rather than an apology.

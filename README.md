@@ -215,7 +215,7 @@ npm run typecheck   # tsc --noEmit over both the node and the web projects
 npm run lint        # biome
 ```
 
-507 tests across 20 files. The ones that matter most:
+509 tests across 20 files. The ones that matter most:
 
 - **concurrency**: two amends submitted at the same `version`, where the second
   gets a 409 `VERSION_CONFLICT` naming the current version
@@ -554,10 +554,10 @@ needed it is named for it. **New pane** means what it says wherever it is
 pressed. **Share workspace** does not: an unqualified Share sitting among a
 pane's own controls could not say whether it meant that pane or all of them,
 which is the argument that kept it off a pane's bar in the first place, and
-naming the item answers it. The strip's copy stays **Share**, because the strip
-is the workspace's own and has nothing to disambiguate from. It is also where the
-line of text lands when the menu is what pressed it, since a menu that has closed
-cannot say it worked.
+naming the item answers it. The menu is now the only route to it: the strip that
+used to carry a Share chip above the panes is gone, and its height went to the
+panes. What a closed menu cannot say for itself, that the copy worked or that the
+clipboard refused, is said by a line fixed to the bottom right for four seconds.
 
 Four details that make the menu usable rather than merely present. Holding
 **Shift** while right-clicking falls through to the browser's own menu, since a
@@ -692,9 +692,9 @@ resize and rearrangement through the component that also holds the booking form
 and the positions panel. So the app leaves a `display: contents` slot in the nav
 and the workspace fills it through a portal: the button's markup, its place in
 the tab order and its place in a screen reader's reading of the page are all in
-the nav, and the state behind it never leaves the workspace. **Share** stays on
-the workspace's own strip, where there is room for the line of text it leaves
-behind.
+the nav, and the state behind it never leaves the workspace. **Share workspace**
+is reached from a pane's menu instead, since it needs no slot of its own and a
+chip for it cost the panes a strip of height.
 
 **A pane can be named, and the name belongs to the pane rather than to the slot.**
 Clicking the title on a pane's bar turns it into a box, which is also why there is
