@@ -23,7 +23,7 @@ import {
 } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { DecimalString, Trade } from '@tapedeck/shared'
-import { toMinorUnits } from '@tapedeck/shared'
+import { BLOTTER_LIMIT, toMinorUnits } from '@tapedeck/shared'
 import type { KeyboardEvent, ReactElement, ReactNode } from 'react'
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { SelectOption } from '../../components/Select.js'
@@ -315,13 +315,15 @@ export function BlotterTable({
 
   /**
    * What the rail under the tape says while no row is picked. Leaves either way,
-   * so a grouping does not turn the count into a number of rails, and the figure
-   * the pane was handed rather than the book: the server sends a window.
+   * so a grouping does not turn the count into a number of rails.
+   *
+   * A full window says `latest`, because the figure stops being a count of the
+   * book at that point and starts being the bound: a booking arrives at the top
+   * and the oldest trade leaves the bottom, so 500 holds while the tape moves.
    */
-  const counted =
-    leaves.length === trades.length
-      ? `${trades.length} trades`
-      : `${leaves.length} of ${trades.length} trades`
+  const held =
+    trades.length === BLOTTER_LIMIT ? `latest ${BLOTTER_LIMIT} trades` : `${trades.length} trades`
+  const counted = leaves.length === trades.length ? held : `${leaves.length} of ${held}`
 
   /** Two bands under a split, the blocks above the measures they span. One otherwise. */
   const headerRows = table.getHeaderGroups()

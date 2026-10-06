@@ -1,5 +1,5 @@
 import type { Trade } from '@tapedeck/shared'
-import { COUNTERPARTIES, trade as tradeSchema } from '@tapedeck/shared'
+import { BLOTTER_LIMIT, COUNTERPARTIES, trade as tradeSchema } from '@tapedeck/shared'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { PaneConfig } from '../workspace/paneConfig.js'
@@ -1120,6 +1120,27 @@ describe('the rail under the tape', () => {
 
     expect(screen.queryByText('4 trades')).toBeNull()
     expect(screen.getByRole('button', { name: 'Amend' })).toBeInTheDocument()
+  })
+
+  /** A full window, which is what the pane holds in any running instance. */
+  const FULL = Array.from({ length: BLOTTER_LIMIT }, (_, index) =>
+    aTrade({ tradeId: `TRD-2${String(index).padStart(5, '0')}` }),
+  )
+
+  it('calls a full window the latest, not a count of the book', () => {
+    renderBlotter(FULL)
+
+    // Booking a trade cannot move this figure: the new row arrives at the top
+    // and the oldest leaves the bottom. '500 trades' read as a book that had
+    // stopped growing, which is the one thing it does not mean.
+    expect(screen.getByText(`latest ${BLOTTER_LIMIT} trades`)).toBeVisible()
+  })
+
+  it('counts the filter against the window it filtered', () => {
+    renderBlotter([...FULL.slice(1), aTrade({ symbol: 'BARC' })])
+    fireEvent.change(screen.getByLabelText('Filter by symbol'), { target: { value: 'BARC' } })
+
+    expect(screen.getByText(`1 of latest ${BLOTTER_LIMIT} trades`)).toBeVisible()
   })
 })
 
