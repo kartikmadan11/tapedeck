@@ -1055,3 +1055,42 @@ describe('the rail under the tape', () => {
     expect(screen.getByRole('button', { name: 'Amend' })).toBeInTheDocument()
   })
 })
+
+describe('a pointer down away from the pane', () => {
+  /** Picked for the three tests below, and writable, so Amend is the thing that
+   *  says whether the pane still holds a selection. */
+  function pick(): void {
+    renderBlotter()
+    fireEvent.click(tradeRow('TRD-100004'))
+    expect(screen.getByRole('button', { name: 'Amend' })).toBeInTheDocument()
+  }
+
+  const held = (): boolean => screen.queryByRole('button', { name: 'Amend' }) !== null
+
+  it('drops the selection, which is what clicking off a row means', () => {
+    pick()
+    fireEvent.pointerDown(document.body)
+
+    expect(held()).toBe(false)
+    expect(screen.getByText(/pick one/)).toBeVisible()
+  })
+
+  it('keeps it for a pointer down inside the pane', () => {
+    pick()
+    fireEvent.pointerDown(screen.getByLabelText('Filter by symbol'))
+
+    expect(held()).toBe(true)
+  })
+
+  it('keeps it for a pointer down in a layer the pane raised', () => {
+    pick()
+    fireEvent.contextMenu(paneRegion())
+
+    // The sheet portals to the body, so it is outside the pane in the tree while
+    // being about the row that is selected. Reaching for Amend through the menu
+    // must not take the selection away on the way.
+    fireEvent.pointerDown(screen.getByRole('menuitem', { name: 'Config' }))
+
+    expect(held()).toBe(true)
+  })
+})

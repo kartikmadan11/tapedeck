@@ -538,6 +538,18 @@ describe('cancelling a trade', () => {
     expect(() => lastWrite()).toThrow(/nothing was written/)
   })
 
+  it('keeps the row selected while its confirmation is over the tape', async () => {
+    await openCancelDialog()
+    const dialog = await screen.findByRole('dialog')
+
+    // A press in the dialog is not a press somewhere else on the tape, and a
+    // pane drops its selection on one of those. Without the distinction,
+    // confirming a cancellation would deselect the trade the dialog names.
+    fireEvent.pointerDown(dialog)
+
+    expect(screen.getByRole('status')).toHaveTextContent('TRD-100001')
+  })
+
   it('writes nothing when the confirmation is dismissed', async () => {
     await openCancelDialog()
     await screen.findByText('Cancel TRD-100001?')

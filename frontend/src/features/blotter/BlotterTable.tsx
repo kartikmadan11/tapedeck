@@ -360,6 +360,9 @@ export function BlotterTable({
   /** The element the rows scroll inside, which the virtualiser measures. */
   const scroller = useRef<HTMLDivElement>(null)
 
+  /** The pane itself, for telling a pointer inside it from one somewhere else. */
+  const pane = useRef<HTMLElement>(null)
+
   /**
    * estimateSize is a constant and nothing is measured, because every row is
    * exactly ROW_PX tall by construction: the height is on the tr and no cell
@@ -402,6 +405,38 @@ export function BlotterTable({
     setSelectedId(row.id)
     grid.current?.focus({ preventScroll: true })
   }, [])
+
+  /**
+   * A pointer down away from the pane drops its selection, which is what
+   * clicking off a row means. Escape already did it from the keyboard.
+   *
+   * A layer raised over the tape does not count as away: the two dialogs, the
+   * history drawer, both menus and every dropdown are opened by the pane or by
+   * the row that is selected, and they sit or portal outside it. Without that,
+   * confirming a cancel would deselect the trade it names.
+   */
+  useEffect(() => {
+    if (selectedId === null) {
+      return
+    }
+
+    const away = (event: Event): void => {
+      const target = event.target instanceof Element ? event.target : null
+      if (
+        target === null ||
+        pane.current?.contains(target) === true ||
+        target.closest('[role="dialog"], [role="menu"], [role="listbox"]') !== null
+      ) {
+        return
+      }
+      setSelectedId(null)
+    }
+
+    // Capture, as the menus do, so a handler that stops the event on its way up
+    // cannot leave a row selected in a pane nobody is pointing at.
+    document.addEventListener('pointerdown', away, true)
+    return () => document.removeEventListener('pointerdown', away, true)
+  }, [selectedId])
 
   /**
    * Resolved from what is actually on screen. Both the buttons and the keys read
@@ -475,6 +510,7 @@ export function BlotterTable({
       <section
         aria-label={label}
         className="flex min-h-0 min-w-0 flex-1 flex-col"
+        ref={pane}
         // On the pane rather than on the tape, so the bar, the rows and the
         // config panel all answer to the same right-click. Shift is let through
         // to the browser's own menu, and so is a box someone is typing in: cut,
