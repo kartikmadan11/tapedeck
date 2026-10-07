@@ -1,4 +1,4 @@
-<img src="frontend/public/favicon.svg" alt="" width="64" height="64">
+<img src="frontend/public/logo.svg" alt="" width="200">
 
 # tapedeck
 
