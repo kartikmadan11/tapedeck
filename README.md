@@ -1,3 +1,5 @@
+<img src="frontend/public/favicon.svg" alt="" width="64" height="64">
+
 # tapedeck
 
 A real-time equity trade blotter.
