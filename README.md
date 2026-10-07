@@ -1,8 +1,6 @@
 # tapedeck
 
-A real-time equity trade blotter. Book, amend and cancel trades; every connected
-browser sees each change as it happens, with netted positions alongside and a
-full audit trail per trade.
+A real-time equity trade blotter. Book, amend and cancel trades; every connected browser sees each change as it happens, with netted positions alongside and a full audit trail per trade.
 
 ```sh
 docker compose up --build
@@ -11,70 +9,67 @@ docker compose up --build
 Open <http://localhost:3000>, press **Log in**, and sign in as `k.madan` with
 the password `tapedeck`. Nothing else to install or configure.
 
-It is already moving when it opens: a generated feed books, amends and cancels
-every couple of seconds, so the real-time behaviour demonstrates itself.
+It is already moving when it opens: a generated feed books, amends and cancels every couple of seconds, so the real-time behaviour demonstrates itself.
 **Pause feed** stops it for every connected window.
 
 ## The two-minute demo
 
 **Two traders, one book.** Open a second window as
-<http://localhost:3000/?actor=j.okonkwo>, whose sign-in form starts on that
-name. Book a trade in each and watch both rows appear in both.
+<http://localhost:3000/?actor=j.okonkwo>, whose sign-in form starts on that name. Book a trade in each and watch both rows appear in both.
 
-**A conflict, shown rather than described.** Pause the feed, then amend the same
-trade from both windows without reloading. The second attempt is told the row
-changed underneath it, and which version it is now on.
+**Mitigate a conflict** Pause the feed, then amend the same
+trade from both windows without reloading. The second attempt is told the row changed underneath it, and which version it is now on.
 
-**Right-click a pane** for its own controls: another pane, a duplicate, its
-configuration, a reset, a workspace link and a close. Holding **Shift** gives
-the browser its own menu back.
+**Right-click a pane** for its own controls: another pane, a duplicate, its configuration, a reset, a workspace link and a close. Holding **Shift** gives the browser its own menu back.
 
-**The check worth making.** Pause the feed and set **Group by** to symbol. Every
-group row's net quantity and net notional equal the positions panel's row for
-that symbol, digit for digit: one in `bigint` in the browser, the other in
-`numeric` in Postgres. The seed is 400 trades against a 500-row window, so it
-holds from a fresh start until the feed books 100 more, then legitimately stops.
+**The check worth making.** Pause the feed and set **Group by** to symbol. Every group row's net quantity and net notional equal the positions panel's row for that symbol, digit for digit: one in `bigint` in the browser, the other in `numeric` in Postgres.
+
+## The product
+
+**The name.**
+The tape is the trade feed, a blotter is what you read it on, a deck is what you play it on.
+
+**The screen is black.**
+A blotter is stared at all day, and it keeps colour for meaning: green buy, rose sell, amber held, indigo row flash.
+Every colour is a named `tape-` token, and a build gate fails on a raw hex.
+
+**Everything is monospace.**
+Geist Mono, self-hosted. Every digit is the same width, so columns line up and a wrong order of magnitude is visible without reading the number.
+
+**A trader arranges their own screen.**
+A workspace is a tree of panes you split, resize, duplicate and close, each with its own grouping, sort, filters and columns.
+It all lives in the URL, so a screen is something you send rather than describe.
 
 ## Architecture decisions
 
-One npm workspace, four packages: `shared` holds the contracts, `database` the
-schema and queries, `backend` the HTTP and websocket server, `frontend` the
-client. Both halves import `shared`, so a change to the trade shape breaks
-compilation on both sides at once rather than at runtime on one.
+One npm workspace, four packages: `shared` holds the types both sides agree on, `database` the tables and queries, `backend` the server, `frontend` the browser app.
+Both halves import `shared`, so changing the shape of a trade breaks the build on both sides at once instead of failing at runtime on one.
 
-- **The contracts are the design.** `AmendTradeInput` has exactly `quantity`,
-  `price` and `version`, so amending a symbol is not a check that can be
-  forgotten but a type that cannot be written. Cancellation is a sub-resource
-  rather than a status patch for the same reason.
-- **Price is an exact decimal string end to end**, `numeric(18,6)` in Postgres
-  and a string on the wire, with notional computed in `bigint` minor units.
-  Startup asserts that no type parser is coercing `numeric` to a float.
-- **`trade_events` is append-only, and its `bigserial` key is the websocket
-  sequence number.** One table is the audit trail, the stream's ordering and the
-  seam an outbox would slot into. The invariant is `version == count(events)`.
-- **Every mutating transaction opens with a constant-keyed
-  `pg_advisory_xact_lock`.** `bigserial` allocates before commit, so without it
-  seq 7 can commit before seq 6 and a client that snapshotted at 7 rejects 6 as
-  stale. The window is microseconds, which is why a test will not find it.
-- **Conflicts are diagnosed inside the locked transaction**, not inferred from a
-  zero-row UPDATE: absent is 404 `NOT_FOUND`, already cancelled is 409
-  `INVALID_STATE`, a version mismatch is 409 `VERSION_CONFLICT` carrying
-  `currentVersion`.
-- **The connection handshake is the resync.** A snapshot of trades, positions
-  and `max(seq)` read in one repeatable-read transaction, then exactly the
-  frames after it, then whether the feed is running. Frames arriving during the
-  read are buffered and replayed, so reconnecting is the only resync there is.
-- **One client cache, two writers, one guard.** The REST load and the socket
-  both write one TanStack Query entry holding `{ seq, trades, positions }`, and
-  both refuse a payload whose `seq` is behind the cached one, which is what
-  makes **Refresh** safe at any time. Positions inside it are netted in Postgres
-  and never derived in the browser, so the panel is right on first paint.
-- **No optimistic writes.** One would have to guess `version + 1` locally,
-  displaying a version the server never assigned, when version is the token the
-  whole concurrency story rests on. A row with a mutation in flight is dimmed.
-
-The reasoning behind each of these is in
-[`docs/DECISIONS.md`](docs/DECISIONS.md), under the same heading.
+- **The types are the design.**
+  `AmendTradeInput` has only `quantity`, `price` and `version`, so amending a symbol does not compile.
+- **Prices are exact decimals, never floats.**
+  `numeric(18,6)` in Postgres, a string on the wire, notional in whole pennies as `bigint`.
+  Startup asserts nothing is coercing `numeric` to a float.
+- **`trade_events` is append-only, and its `bigserial` id is the websocket sequence number.**
+  One table gives the audit trail, the feed's ordering and a seam for a message queue later.
+  A trade's version is its event count.
+- **Every write takes the same `pg_advisory_xact_lock` first.**
+  `bigserial` hands out ids before commit, so without it seq 7 can land before seq 6 and a client caught up at 7 drops 6 forever.
+- **Conflicts are decided inside that lock**, not guessed from an UPDATE that changed no rows.
+  404 `NOT_FOUND`, 409 `INVALID_STATE`, 409 `VERSION_CONFLICT` with `currentVersion`, because the client handles each differently.
+- **Reconnecting is the only catch-up.**
+  One snapshot of trades, positions and `max(seq)`, then the frames after it.
+  Anything arriving mid-snapshot is held and replayed, so nothing is lost or applied twice.
+- **Only frames with a real place in the order carry a `seq`.**
+  Positions are derived, so that frame has none. Two frames on the same cursor would break gap detection.
+- **One cache entry, two writers, one rule.**
+  The REST load and the socket both write `{ seq, trades, positions }`, and both reject anything older than what is cached.
+  That is what makes **Refresh** safe at any moment.
+- **Positions are netted in Postgres, never in the browser.**
+  They arrive with the snapshot, so the panel is right on first paint.
+  Grid group totals are summed in `bigint` and match it digit for digit.
+- **No optimistic updates.**
+  They would put a `version` on screen the server never issued. A row with a request in flight is dimmed instead.
 
 ### API
 
@@ -164,126 +159,80 @@ npm run lint:palette  # no raw colour in a .tsx
 
 They truncate and reseed between files, which is why they get a database of their
 own rather than sharing `tapedeck`.
-[`docs/DECISIONS.md`](docs/DECISIONS.md) lists the heaviest and what they hold.
+
+`npm run check` runs the four gates in the order whose failure is cheapest to read: types, lint, palette, tests.
+The two `tsc` projects are split by environment, and the root `tsconfig.json` only points an editor at both, which stops a language server inventing its own project and reporting errors the build does not have.
+
+The tests are organised around the hard problems, not around files.
+`backend/test/concurrency.test.ts` is the one that matters: two amends at the same version, `INVALID_STATE` beating a stale version on a cancelled trade, numbering staying gap-free past a digit boundary, and `version == count(events)` under load.
+The websocket tests bind port 0 and connect real `ws` clients, because `app.inject()` performs no HTTP upgrade.
 
 ## Assumptions made
 
-Each of these is argued at length in [`docs/DECISIONS.md`](docs/DECISIONS.md).
-
-- **The brief contradicts itself on the trade model**, so the sample JSON's
-  shape was taken as the superset of its TypeScript interface: `tradeId` and
-  `tradeTimestamp`, with `book` and `counterparty`.
-- **Sign-in is mocked, and the trade routes are deliberately not behind it.**
-  Accounts and tokens are Maps in the API process, and writes take the actor
-  from an `x-tapedeck-actor` header the caller asserts, which is the seam a
-  verified claim would arrive on.
-- **A session belongs to the window, not the browser**, as one `sessionStorage`
-  entry, so two windows are two traders. `?actor=` pre-fills the form rather
-  than granting an identity, and is removed from the address bar because that
-  bar also carries the workspace link.
-- **Every price is in one currency, and there is no currency column.** The
-  twelve seeded instruments are FTSE names quoted in pence, and a second
-  currency means an FX rate the brief never supplies.
-- **`numeric(18,6)` rather than four decimal places**, so a price that has been
-  through a conversion is not rounded at the boundary. `quantity` is an
-  `integer`, capping one trade near 2.1 billion shares.
-- **All times are rendered in UTC and labelled as such**, because a blotter
-  spanning venues in one local timezone is a trap.
-- **The generated feed writes through the service layer, never onto the wire**,
-  so what it produces carries a gap-free `seq`, a correct version chain and
-  netted positions. It records `simulator` as the actor while booking under a
-  real trader name.
-- **The blotter is a window on the most recent 500 trades, not the whole book.**
-  `BLOTTER_LIMIT` lives in `shared` because the REST read, the handshake
-  snapshot and the cache trim have to agree. Positions stay firm-wide, being a
-  fact about the book rather than about what is on screen.
-- **P&L is marked against the instrument master's reference price, not a market
-  price.** The brief asks for aggregate P&L by symbol and supplies no market
-  data. A reference price is a static indicative level, so the figure moves when
-  the book moves rather than when the market does, and the column is headed
-  `P&L vs ref` rather than `P&L`. A symbol the master no longer carries reads as
-  a dash rather than as a zero, since a zero there would mean a flat position.
-- **Symbol, book and counterparty are all picklists over reference data**, so a
-  booking cannot name an instrument that does not exist: the ticker is resolved
-  against an instrument master that the API, the form and the feed all read from
-  one list. Counterparty cannot be amended either, since it drives the credit
-  check, the settlement and the regulatory report, and changing who a trade is
-  with is a cancel and rebook. The picklists closed a live defect: the form
-  prefilled `EQ-LDN-1` against a list that said `EQ-LDN-01`.
-- **Status is a fill lifecycle rather than a flag**: `NEW`, `PARTIALLY_FILLED`,
-  `FILLED`, `CANCELLED`, with `filledQuantity` the figure behind it and a check
-  constraint tying the two, so a `FILLED` row short of its quantity cannot be
-  written. Nothing is ever deleted, cancellation being a status, so a struck row
-  and its history stay. Exposure nets booked quantity rather than executed,
-  because a working order is risk a desk is already carrying.
-- **Group aggregates exclude cancelled trades**, or the grid would disagree with
-  the positions panel. A group's average price is a `bigint` VWAP weighted by
-  absolute quantity, so a sell leg pulls the average rather than leaving the
-  denominator.
-- **Split by pivots across the columns, not down the rows.** Grouped by symbol
-  and split by side gives a `BUY` block of netted columns and a `SELL` block
-  beside it, so one line reads the whole symbol. The values are read off the
-  whole book rather than off the rows a filter left, so a keystroke cannot
-  reshape the grid, and capped at eight, since each one is a block of columns.
-- **The multi-pane workspace keeps its controls on the pane, not in a shared
-  bar.** One top bar could only ever describe one of two open panes, so each
-  grid owns a side panel that groups, orders, filters, hides and reorders its
-  own columns, shrinking the tape rather than covering it, and both a pane's
-  actions and the workspace's own sit behind a right-click that answers
-  anywhere. The cost is discoverability, which is why the demo above says so.
-  The positions panel slides off from an arrow in its own header and opens
-  showing, since net exposure is most of the reason to keep a blotter open.
-- **A workspace is a tree of splits, and travels as a readable link**:
-  `?panes=2&p1.group=symbol&p2.where.symbol=BARC` is the whole format, carrying
-  the view and the arrangement, never the data. A flat axis with a weight per
-  pane could not express "beside this one".
-- **The magnitude bar is drawn on notional**, scaled over the filtered rows and
-  quantised up, because 10,000 shares of a 72p stock and of a 400p stock are not
-  comparable sizes and a bar re-scaling on every arrival is noise.
-- **Booking is protected against the repeat, not against the press**, since
-  working an order in clips means booking the same ticket on purpose. An
-  identical ticket inside five seconds holds the button, one over 250,000
-  notional holds and says the limit, and every ticket mints a `clientTradeId`
-  under a unique index.
+- **The brief contradicts itself on the trade model**, so the sample JSON was taken as the superset: `tradeId` and `tradeTimestamp`, with `book` and `counterparty`.
+- **Sign-in is fake, and the trade endpoints are deliberately not behind it.**
+  Accounts and tokens are Maps in the API process, and writes take the actor from an `x-tapedeck-actor` header the caller asserts.
+  That header is the seam a verified identity would arrive on.
+- **A session belongs to the window, not the browser**, as one `sessionStorage` entry, so two windows are two traders.
+  `?actor=` only pre-fills the form, and is stripped from the address bar because that bar also carries the workspace link.
+- **One currency, no currency column.**
+  The twelve seeded instruments are FTSE names in pence, and a second currency needs an FX rate the brief never supplies.
+- **`numeric(18,6)` rather than four decimal places**, so a converted price is not rounded at the boundary.
+  `quantity` is an `integer`, capping a trade near 2.1 billion shares.
+- **All times are shown in UTC and labelled as such**, because a blotter spanning venues should not guess a local zone.
+- **The generated feed writes through the service layer, never straight onto the wire**, so it gets gap-free `seq`, a correct version chain and netted positions like anything else.
+  It records `simulator` as the actor while booking under a real trader's name.
+- **The blotter shows the most recent 500 trades, not the whole book.**
+  `BLOTTER_LIMIT` lives in `shared` because the REST read, the snapshot and the cache trim must agree.
+  Positions stay firm-wide, being a fact about the book rather than about the screen.
+- **P&L is marked against the instrument list's reference price, not a market price.**
+  The brief supplies no market data, so the column is headed `P&L vs ref` and moves when the book moves rather than when the market does.
+  A symbol the list no longer carries shows a dash, since a zero would mean a flat position.
+- **Symbol, book and counterparty are dropdowns over reference data**, so a booking cannot name an instrument that does not exist.
+  Counterparty cannot be amended either, since it drives credit, settlement and reporting, so changing it is a cancel and rebook.
+  The dropdowns closed a live defect: the form prefilled `EQ-LDN-1` against a list that said `EQ-LDN-01`.
+- **Status is a fill lifecycle, not a flag**: `NEW`, `PARTIALLY_FILLED`, `FILLED`, `CANCELLED`, with `filledQuantity` behind it and a check constraint tying the two.
+  Nothing is ever deleted, since cancelling is a status.
+  Exposure nets what was booked rather than what executed, because a working order is risk the desk already carries.
+- **Group totals exclude cancelled trades**, or the grid would disagree with the positions panel.
+  Average price is a `bigint` VWAP weighted by absolute quantity, so a sell leg pulls the average rather than padding the denominator.
+- **Split by pivots across the columns, not down the rows.**
+  Grouped by symbol and split by side gives a `BUY` block and a `SELL` block beside it, so one line reads the whole symbol.
+  Values are read off the whole book, so a keystroke cannot reshape the grid, and it is capped at eight.
+- **Pane controls live on the pane, not in a shared top bar**, since one bar could only ever describe one of two open panes.
+  Each grid owns a side panel for grouping, sorting, filtering and columns, and both pane and workspace actions sit behind a right-click.
+  The cost is discoverability, which is why the demo spells it out.
+- **A workspace is a tree of splits and travels as a readable link**: `?panes=2&p1.group=symbol&p2.where.symbol=BARC` is the whole format, carrying the view but never the data.
+  A flat list with a weight per pane could not express "beside this one".
+- **The magnitude bar is drawn on notional**, scaled over the filtered rows and rounded up, because 10,000 shares of a 72p stock and of a 400p stock are not comparable sizes.
+- **Booking guards against the repeat, not the press**, since working an order in clips means booking the same ticket on purpose.
+  An identical ticket within five seconds holds the button, one over 250,000 notional holds and says the limit, and every ticket mints a `clientTradeId` behind a unique index.
 
 ## Trade-offs accepted
 
-- **Writes serialise through one advisory lock**, which is what makes the
-  sequence gap-free and is also a throughput ceiling. The replacement is
-  broker-side ordering or logical decoding, not a cleverer lock.
-- **The client holds the unfiltered trade set and filters in the browser**, or
-  every broadcast delta would need a decision about whether the new row belongs
-  in the current view. At 500 rows the filtering is free.
-- **A splitter writes to the DOM while being dragged and commits once, on
-  release**, the one deliberate exception to holding state in React: a pane is a
-  virtualised grid of 500 trades, so a resize through state would re-render both
-  panes on every pointer move.
-- **Dragging a pane uses native drag and drop, so the drop zones are
-  mouse-only.** The keyboard route is the handle's arrow keys, making the same
-  four requests a drop does, and the ghost preview calls the functions the drop
-  calls, so it cannot promise an outcome the drop will not deliver.
-- **The positions panel's width is the one part of the layout a link does not
-  carry.** It survives a drag and not a reload, left for the deadline.
-- **Rows are virtualised against a stated 32px row height rather than a measured
-  one**, which is most of what makes a second pane cheap. It forces
-  `table-layout: fixed` with an explicit `colgroup`, since otherwise column
-  widths shift as the tape scrolls, and keeping the digits on a vertical line is
-  the brief's one explicit UX requirement.
-- **Both booking guards are advisory, and the limit is one hardcoded number**,
-  because they are about what the hand just did, which only the client knows.
-  The idempotency key is the enforced half, by a unique index.
-- **A replayed booking answers 200 and publishes nothing**, since a replay wrote
-  no event, so 201 is no longer a reliable signal that a POST created something.
-- **`typescript@6.0.3`, not 7**, whose package ships no `tsserver` and puts the
-  compiler API under `./unstable/*`, so it cannot drive an editor. Likewise
-  **`@tanstack/react-table@8.21.3`**: v9 keeps the v8 API behind `./legacy`.
-- **The image runs TypeScript through `tsx` rather than a compiled bundle**, for
-  one fewer build step at the cost of a slower cold start.
-- **Three named omissions.** No rate limiting, which belongs at the gateway and
-  would otherwise 429 the reviewer's own smoke test. No CI workflow with a
-  Postgres service container, so the database-backed tests are a documented
-  local one-liner. And no type-aware lint rules, because Biome has none, though
-  `tsc` under `strict` and `noUncheckedIndexedAccess` covers most of that gap.
+- **All writes queue behind one advisory lock.**
+  That is what keeps the sequence gap-free and commit-ordered, and it is a throughput ceiling taken knowingly.
+  The replacement is broker-side ordering or logical decoding, not a cleverer lock.
+- **The browser holds all the trades and filters locally.**
+  At 500 rows it is free; it moves into the query the moment the window is the whole book.
+- **A splitter writes straight to the DOM while dragging and commits once, on release.**
+  The one deliberate exception to holding state in React: a pane is a virtualised grid of 500 rows, so resizing through state would re-render both panes on every pointer move.
+- **Dragging a pane uses native drag and drop, so the drop zones are mouse-only.**
+  The keyboard route is the handle's arrow keys, making the same four requests a drop does.
+- **The positions panel's width is the one part of the layout a link does not carry.**
+  It survives a drag but not a reload, left that way for the deadline.
+- **Rows are assumed 32px tall rather than measured**, which is most of what makes a second pane cheap.
+  It forces `table-layout: fixed` with an explicit `colgroup`, and the cost is that a row cannot grow to its content.
+- **Both booking guards are advisory and the limit is one hardcoded number**, because they are about what the hand just did, which only the client knows.
+  The idempotency key is the enforced half, backed by a unique index.
+- **A replayed booking answers 200 and publishes nothing**, since a replay wrote no event, so 201 is no longer a reliable signal that a POST created something.
+- **`typescript@6.0.3`, not 7**, whose package ships no `tsserver` and puts the compiler API under `./unstable/*`.
+  Same story with **`@tanstack/react-table@8.21.3`**: v9 keeps the v8 API behind `./legacy`.
+- **The image runs TypeScript through `tsx` rather than a compiled bundle**, for one fewer build step at the cost of a slower cold start.
+- **Three omissions, named rather than hidden.**
+  No rate limiting, which belongs at the gateway and would otherwise 429 a reviewer's own smoke test.
+  No CI workflow with a Postgres service container, so the database-backed tests are a documented local one-liner.
+  No type-aware lint rules, because Biome cannot read types, though `strict` and `noUncheckedIndexedAccess` cover most of that gap.
 
 ## Deployment
 
@@ -292,17 +241,10 @@ postgres attach`. Idle suspend is off, since it would drop every open websocket.
 
 ## Repository layout
 
-```
+```text
 shared/     contracts: trade, error union, websocket frames, decimal money
 database/   drizzle schema, migrations, deterministic seed
 backend/    fastify app, repositories, services, websocket hub
 frontend/   react client: landing, blotter, positions, trade entry, history
 docker/     the container entrypoint
-docs/       the long-form decisions, AI usage notes and the prompt log
 ```
-
-[`docs/DECISIONS.md`](docs/DECISIONS.md) is the argument behind every line
-above, [`docs/WHAT-WE-BUILT.md`](docs/WHAT-WE-BUILT.md) maps the brief's
-requirements and bonus items onto what is here, and
-[`docs/AI-USAGE.md`](docs/AI-USAGE.md) records how an AI assistant was used,
-drawing on [`docs/prompt-log.md`](docs/prompt-log.md).
