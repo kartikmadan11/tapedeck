@@ -343,7 +343,8 @@ describe('App', () => {
 
     const callsBefore = fetchMock.mock.calls.length
 
-    fireEvent.change(screen.getByLabelText('Filter by symbol'), { target: { value: 'HSBA' } })
+    fireEvent.click(screen.getByLabelText('Filter by symbol'))
+    fireEvent.click(screen.getByRole('option', { name: 'HSBA' }))
 
     expect(row('TRD-100001')).toBeNull()
     expect(row('TRD-100002')).not.toBeNull()

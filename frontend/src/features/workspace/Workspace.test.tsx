@@ -250,7 +250,7 @@ describe('the workspace', () => {
     choose('Trades', 'Duplicate')
 
     // Filtering one pane must not reach the other: the cache entry is all they share.
-    fireEvent.change(second().getByLabelText('Filter by symbol'), { target: { value: 'BARC' } })
+    pick('Trades, pane 2', 'Filter by symbol', 'BARC')
 
     expect(row('Trades, pane 2', 'TRD-100002')).not.toBeNull()
     expect(row('Trades, pane 2', 'TRD-100001')).toBeNull()
@@ -571,17 +571,21 @@ describe('arranging the panes', () => {
 
   it('keeps a moved pane on the view it was showing', () => {
     three()
-    fireEvent.change(pane('Trades, pane 3').getByLabelText('Filter by symbol'), {
-      target: { value: 'BARC' },
-    })
+    pick('Trades, pane 3', 'Filter by symbol', 'BARC')
 
     drag('Trades, pane 3')
     fireEvent.drop(zone(1, 'right'))
 
     // Standing a pane beside another reparents it, which React can only do by
     // remounting, so a pane comes back on the view it reported, not its defaults.
-    expect(pane('Trades, pane 2').getByLabelText('Filter by symbol')).toHaveValue('BARC')
-    expect(pane('Trades, pane 3').getByLabelText('Filter by symbol')).toHaveValue('')
+    expect(pane('Trades, pane 2').getByLabelText('Filter by symbol')).toHaveAttribute(
+      'data-value',
+      'BARC',
+    )
+    expect(pane('Trades, pane 3').getByLabelText('Filter by symbol')).toHaveAttribute(
+      'data-value',
+      '',
+    )
   })
 
   it('keeps a named pane on its name through a move, where a position would not', () => {
@@ -624,7 +628,7 @@ describe('arranging the panes', () => {
   it('stands the workspace up sideways when a pane is dropped on a left edge', () => {
     two()
     // Filtered, so which pane ended up where is read off its view, not its name.
-    fireEvent.change(second().getByLabelText('Filter by symbol'), { target: { value: 'BARC' } })
+    pick('Trades, pane 2', 'Filter by symbol', 'BARC')
 
     drag('Trades, pane 2')
     fireEvent.dragOver(zone(1, 'left'))
@@ -632,8 +636,8 @@ describe('arranging the panes', () => {
 
     // Nothing left to nest inside, so the whole workspace turns.
     expect(tree().shape).toBe('columns(pane-2 pane-1)')
-    expect(first().getByLabelText('Filter by symbol')).toHaveValue('BARC')
-    expect(second().getByLabelText('Filter by symbol')).toHaveValue('')
+    expect(first().getByLabelText('Filter by symbol')).toHaveAttribute('data-value', 'BARC')
+    expect(second().getByLabelText('Filter by symbol')).toHaveAttribute('data-value', '')
   })
 
   it('carries a share with the pane when it moves', () => {
@@ -656,7 +660,7 @@ describe('arranging the panes', () => {
 
   it('moves a pane with the arrow keys, and keeps the handle focused', () => {
     two()
-    fireEvent.change(second().getByLabelText('Filter by symbol'), { target: { value: 'BARC' } })
+    pick('Trades, pane 2', 'Filter by symbol', 'BARC')
 
     const handle = grip('Trades, pane 2')
     handle.focus()
@@ -665,21 +669,21 @@ describe('arranging the panes', () => {
     // Up is the same request a drop on a top edge makes, so the pane and its
     // filter move together. Still stacked: up and down are the axis it is on.
     expect(tree().shape).toBe('rows(pane-2 pane-1)')
-    expect(first().getByLabelText('Filter by symbol')).toHaveValue('BARC')
+    expect(first().getByLabelText('Filter by symbol')).toHaveAttribute('data-value', 'BARC')
     // The same element, moved rather than rebuilt, so the key can be held down.
     expect(document.activeElement).toBe(grip('Trades'))
   })
 
   it('turns the axis for a pane with no neighbour that way, and keeps the order', () => {
     two()
-    fireEvent.change(second().getByLabelText('Filter by symbol'), { target: { value: 'BARC' } })
+    pick('Trades, pane 2', 'Filter by symbol', 'BARC')
 
     // Right on the last pane of a stack: no neighbour that way, so it reads as
     // "stand to the right of the one beside me", which turns the axis.
     fireEvent.keyDown(grip('Trades, pane 2'), { key: 'ArrowRight' })
 
     expect(tree().shape).toBe('columns(pane-1 pane-2)')
-    expect(second().getByLabelText('Filter by symbol')).toHaveValue('BARC')
+    expect(second().getByLabelText('Filter by symbol')).toHaveAttribute('data-value', 'BARC')
   })
 
   it('does nothing for a pane already against the edge it is sent to', () => {
@@ -936,7 +940,7 @@ describe('sharing a workspace', () => {
     choose('Trades', 'Config')
     pick('Trades', 'Group by', 'book')
     choose('Trades', 'Duplicate')
-    fireEvent.change(second().getByLabelText('Filter by trader'), { target: { value: 'k.m' } })
+    pick('Trades, pane 2', 'Filter by trader', 'k.madan')
 
     choose('Trades', 'Share workspace')
     expect(await screen.findByText('Link copied')).toBeInTheDocument()
@@ -946,7 +950,7 @@ describe('sharing a workspace', () => {
     const shared = decodeWorkspace(new URL(link).searchParams)
     expect(shared?.views).toHaveLength(2)
     expect(shared?.views[0]?.grouping).toEqual(['book'])
-    expect(shared?.views[1]?.columnFilters).toEqual([{ id: 'trader', value: 'k.m' }])
+    expect(shared?.views[1]?.columnFilters).toEqual([{ id: 'trader', value: 'k.madan' }])
   })
 
   it('shares the workspace from a pane, and says which it means', async () => {
@@ -1000,12 +1004,12 @@ describe('the address bar', () => {
     expect(screen.getByRole('region', { name: 'EU Flow' })).toBeInTheDocument()
   })
 
-  it('follows a view once the typing stops, rather than once per keystroke', async () => {
+  it('follows a view once the changes stop, rather than once per change', async () => {
     renderWorkspace()
     const writes = vi.spyOn(window.history, 'replaceState')
 
-    for (const value of ['V', 'VO', 'VOD']) {
-      fireEvent.change(first().getByLabelText('Filter by symbol'), { target: { value } })
+    for (const value of ['BARC', 'VOD']) {
+      pick('Trades', 'Filter by symbol', value)
     }
 
     await waitFor(() => expect(window.location.search).toBe('?panes=1&p1.where.symbol=VOD'))

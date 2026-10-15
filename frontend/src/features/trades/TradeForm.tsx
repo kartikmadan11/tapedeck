@@ -8,6 +8,8 @@ import type { z } from 'zod'
 import { ErrorNotice } from '../../components/ErrorNotice.js'
 import type { SelectOption } from '../../components/Select.js'
 import { Select } from '../../components/Select.js'
+import type { TypeaheadOption } from '../../components/Typeahead.js'
+import { Typeahead } from '../../components/Typeahead.js'
 import { DEFAULT_TRADER } from '../../lib/identity.js'
 import { ACTION, ACTION_HELD, CONTROL, MICRO_LABEL } from '../../lib/ui.js'
 import type { Guard, LastBooking } from './guards.js'
@@ -43,6 +45,11 @@ const SIDES: SelectOption[] = [
   { value: 'BUY', label: 'BUY' },
   { value: 'SELL', label: 'SELL' },
 ]
+/** Value is the ticker, label the name, so the list reads as a master. */
+const INSTRUMENT_CHOICES: TypeaheadOption[] = INSTRUMENTS.map((instrument) => ({
+  value: instrument.symbol,
+  label: instrument.name,
+}))
 const BOOK_CHOICES: SelectOption[] = BOOKS.map((name) => ({ value: name, label: name }))
 const COUNTERPARTY_CHOICES: SelectOption[] = COUNTERPARTIES.map((name) => ({
   value: name,
@@ -128,24 +135,35 @@ export function TradeForm({ trader }: Props): ReactElement {
       noValidate
     >
       <div className="flex flex-wrap items-end gap-2">
-        {/* A typeahead, not a select: a real master holds thousands of lines. */}
+        {/* A typeahead, not a select: a real master holds thousands of lines. Its
+            own list rather than a datalist, which the browser draws in light grey. */}
         <Field name="symbol" label="Symbol" error={errors.symbol?.message} width="w-24">
-          <input
-            id="symbol"
-            autoComplete="off"
-            className={INPUT}
-            list="instruments"
-            {...form.register('symbol')}
+          <Controller
+            control={form.control}
+            name="symbol"
+            render={({ field }) => (
+              <Typeahead
+                className={INPUT}
+                id="symbol"
+                label="Symbol"
+                name={field.name}
+                onBlur={field.onBlur}
+                onChange={field.onChange}
+                // A pick fires no input event, so the form's onChange below does
+                // not see it: the same retraction, made here.
+                onPick={() => {
+                  setGuard(null)
+                  if (errors.symbol !== undefined) {
+                    form.clearErrors('symbol')
+                  }
+                }}
+                options={INSTRUMENT_CHOICES}
+                ref={field.ref}
+                value={field.value}
+              />
+            )}
           />
         </Field>
-        {/* Value is the ticker, label the name, so the list reads as a master. */}
-        <datalist id="instruments">
-          {INSTRUMENTS.map((instrument) => (
-            <option key={instrument.symbol} value={instrument.symbol}>
-              {instrument.name}
-            </option>
-          ))}
-        </datalist>
 
         {/* Controller, not register: a button and a listbox fire no input change. */}
         <Field name="side" label="Side" error={errors.side?.message} width="w-24">

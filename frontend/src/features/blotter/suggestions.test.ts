@@ -1,7 +1,7 @@
 import type { Trade } from '@tapedeck/shared'
 import { trade as tradeSchema } from '@tapedeck/shared'
 import { describe, expect, it } from 'vitest'
-import { suggestionsOf } from './suggestions.js'
+import { filterChoices, suggestionsOf } from './suggestions.js'
 
 function aTrade(overrides: Record<string, unknown> = {}): Trade {
   return tradeSchema.parse({
@@ -52,5 +52,25 @@ describe('suggestionsOf', () => {
       book: [],
       counterparty: [],
     })
+  })
+})
+
+describe('filterChoices', () => {
+  it('puts no filter first, then each value under its own name', () => {
+    expect(filterChoices(['BARC', 'VOD'], '', 'All symbols')).toEqual([
+      { value: '', label: 'All symbols' },
+      { value: 'BARC', label: 'BARC' },
+      { value: 'VOD', label: 'VOD' },
+    ])
+  })
+
+  it('keeps the value in force when the tape does not hold it, in order', () => {
+    const values = filterChoices(['BARC', 'VOD'], 'HSBA', 'All symbols').map((each) => each.value)
+
+    expect(values).toEqual(['', 'BARC', 'HSBA', 'VOD'])
+  })
+
+  it('lists a value the tape holds once, not twice', () => {
+    expect(filterChoices(['BARC', 'VOD'], 'VOD', 'All symbols')).toHaveLength(3)
   })
 })

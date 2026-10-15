@@ -135,6 +135,8 @@ export function createColumns() {
     helper.accessor('symbol', {
       header: 'Symbol',
       size: 104,
+      // Exact: the filter is a picklist of what is on the tape, so VOD is not VODX.
+      filterFn: 'equals',
       cell: (info) => <span className="font-semibold">{info.getValue()}</span>,
     }),
 
@@ -233,8 +235,9 @@ export function createColumns() {
       },
     }),
 
-    helper.accessor('trader', { header: 'Trader', size: 104 }),
-    helper.accessor('book', { header: 'Book', size: 104 }),
+    // Exact, for the same reason as symbol: EQ-LDN-01 must not also catch EQ-LDN-010.
+    helper.accessor('trader', { header: 'Trader', size: 104, filterFn: 'equals' }),
+    helper.accessor('book', { header: 'Book', size: 104, filterFn: 'equals' }),
     // Sized for Citadel Securities, the longest name the counterparty list holds.
     helper.accessor('counterparty', { header: 'Counterparty', size: 160 }),
 

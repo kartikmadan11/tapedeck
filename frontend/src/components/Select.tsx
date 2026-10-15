@@ -15,8 +15,31 @@ type Props = {
   id?: string | undefined
 }
 
+/** The marker on every picklist, and on the ticket's symbol typeahead, which
+ *  draws this in place of the browser's own so the two cannot drift. */
+export function Chevron({ className = '' }: { className?: string }): ReactElement {
+  return (
+    <span aria-hidden="true" className={`shrink-0 text-tape-muted ${className}`}>
+      ▾
+    </span>
+  )
+}
+
+/** The popup sheet, shared with the ticket's symbol typeahead so the two lists
+ *  cannot drift. Positioned fixed by the caller, off the control's box. */
+export const LISTBOX =
+  'tape-scroll fixed z-50 max-h-64 overflow-y-auto rounded-xs border border-tape-line bg-tape-panel py-1 shadow-lg'
+
+/** One row of the sheet: lifted under the keys or the pointer, accented when it
+ *  is the value already held. */
+export function optionClass(active: boolean, chosen: boolean): string {
+  return `cursor-pointer whitespace-nowrap px-2 ${active ? 'bg-tape-raised' : ''} ${
+    chosen ? 'text-tape-accent' : 'text-tape-text'
+  }`
+}
+
 /** Clear of the control, so the list does not sit on the box it came out of. */
-const GAP = 2
+export const GAP = 2
 
 /** Keeps the list off the edge when the control is near one. */
 const PAD = 4
@@ -189,9 +212,7 @@ export function Select({
         {/* truncate, so a long counterparty shortens rather than widening the
             control and pushing its row onto a second line. */}
         <span className="truncate">{options[chosen]?.label ?? ''}</span>
-        <span aria-hidden="true" className="shrink-0 text-tape-muted">
-          ▾
-        </span>
+        <Chevron />
       </button>
 
       {/* Portaled: every one of these sits inside something that clips. */}
@@ -200,7 +221,7 @@ export function Select({
         : createPortal(
             <div
               aria-label={label}
-              className="tape-scroll fixed z-50 max-h-64 overflow-y-auto rounded-xs border border-tape-line bg-tape-panel py-1 shadow-lg"
+              className={LISTBOX}
               id={listId}
               // Keeps focus on the button, where the keys are bound.
               onMouseDown={(event) => event.preventDefault()}
@@ -213,9 +234,7 @@ export function Select({
                 // biome-ignore lint/a11y/useKeyWithClickEvents: the keyboard route is the combobox's own keydown, for the same reason.
                 <div
                   aria-selected={option.value === value}
-                  className={`cursor-pointer whitespace-nowrap px-2 ${
-                    index === active ? 'bg-tape-raised' : ''
-                  } ${option.value === value ? 'text-tape-accent' : 'text-tape-text'}`}
+                  className={optionClass(index === active, option.value === value)}
                   data-value={option.value}
                   id={`${listId}-${index}`}
                   key={option.value}

@@ -47,7 +47,7 @@ import { PaneMenu } from './PaneMenu.js'
 import type { RowActions } from './SelectionBar.js'
 import { canWrite, SelectionBar } from './SelectionBar.js'
 import type { Suggestions } from './suggestions.js'
-import { SuggestionList, suggestionsOf } from './suggestions.js'
+import { suggestionsOf, useFilterChoices } from './suggestions.js'
 import { useRowFlash } from './useRowFlash.js'
 
 type Props = {
@@ -170,7 +170,7 @@ export function BlotterTable({
 
   const [configOpen, setConfigOpen] = useState(false)
   // Generated, not a literal: a second grid's aria-controls must not point at
-  // this panel. The filter boxes hang their suggestion lists off it too.
+  // this panel. The Where boxes hang their suggestion lists off it too.
   const configPanelId = useId()
 
   const suggestions = useMemo(() => suggestionsOf(trades), [trades])
@@ -434,13 +434,7 @@ export function BlotterTable({
           )
         }}
       >
-        <FilterBar
-          grip={grip}
-          idPrefix={configPanelId}
-          nameplate={nameplate}
-          suggestions={suggestions}
-          table={table}
-        />
+        <FilterBar grip={grip} nameplate={nameplate} suggestions={suggestions} table={table} />
 
         {menuAt === null ? null : (
           <PaneMenu
@@ -821,24 +815,21 @@ type FilterBarProps = {
   grip: ReactNode | undefined
   nameplate: ReactNode | undefined
   suggestions: Suggestions
-  /** Unique per grid, so a second pane's boxes do not read this one's lists. */
-  idPrefix: string
 }
 
 /** Filtering is client-side: the cache holds every trade, so a frame outside the
  *  filter still belongs in it and clearing needs no round trip. */
-function FilterBar({
-  table,
-  grip,
-  nameplate,
-  suggestions,
-  idPrefix,
-}: FilterBarProps): ReactElement {
+function FilterBar({ table, grip, nameplate, suggestions }: FilterBarProps): ReactElement {
   const value = (id: string): string => (table.getColumn(id)?.getFilterValue() as string) ?? ''
   const set = (id: string, next: string): void => {
     table.getColumn(id)?.setFilterValue(next === '' ? undefined : next)
   }
-  const listId = (column: string): string => `${idPrefix}-${column}`
+
+  // Off the whole tape, so a new symbol, trader or book in the stream is offered
+  // as it arrives. The value is the filter state, so a tick cannot reset it.
+  const symbols = useFilterChoices(suggestions.symbol, value('symbol'), 'All symbols')
+  const traders = useFilterChoices(suggestions.trader, value('trader'), 'All traders')
+  const books = useFilterChoices(suggestions.book, value('book'), 'All books')
 
   return (
     <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -846,35 +837,31 @@ function FilterBar({
       {grip}
       {nameplate}
 
-      <input
-        aria-label="Filter by symbol"
-        placeholder="Symbol"
-        className={`${FILTER} w-24`}
-        list={listId('symbol')}
+      {/* Picklists, as side and status are: each filters on an exact value. The
+          no-filter row names the control, as the placeholder did. */}
+      <Select
+        className={`${FILTER} w-32`}
+        label="Filter by symbol"
+        onChange={(next) => set('symbol', next)}
+        options={symbols}
         value={value('symbol')}
-        onChange={(event) => set('symbol', event.target.value.toUpperCase())}
       />
-      <SuggestionList id={listId('symbol')} values={suggestions.symbol} />
 
-      <input
-        aria-label="Filter by trader"
-        placeholder="Trader"
+      <Select
         className={`${FILTER} w-32`}
-        list={listId('trader')}
+        label="Filter by trader"
+        onChange={(next) => set('trader', next)}
+        options={traders}
         value={value('trader')}
-        onChange={(event) => set('trader', event.target.value)}
       />
-      <SuggestionList id={listId('trader')} values={suggestions.trader} />
 
-      <input
-        aria-label="Filter by book"
-        placeholder="Book"
+      <Select
         className={`${FILTER} w-32`}
-        list={listId('book')}
+        label="Filter by book"
+        onChange={(next) => set('book', next)}
+        options={books}
         value={value('book')}
-        onChange={(event) => set('book', event.target.value)}
       />
-      <SuggestionList id={listId('book')} values={suggestions.book} />
 
       <Select
         className={`${FILTER} w-28`}

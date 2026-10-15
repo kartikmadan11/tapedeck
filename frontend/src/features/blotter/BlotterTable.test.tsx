@@ -551,7 +551,7 @@ describe('magnitude bars', () => {
     renderBlotter(TWO_SIZES)
 
     // Scaled against the whole book, a filtered tape shows only unreadable bars.
-    fireEvent.change(screen.getByLabelText('Filter by symbol'), { target: { value: 'BARC' } })
+    set('Filter by symbol', 'BARC')
     expect(bar('TRD-100002')).toHaveStyle({ width: '100%' })
   })
 
@@ -807,41 +807,74 @@ describe('the configuration panel', () => {
   })
 })
 
-describe('the filters suggest what is on the tape', () => {
-  /** The values a box offers, read through the list it actually points at. */
-  function offered(label: string): string[] {
-    const box = screen.getByLabelText(label)
-    const list = document.getElementById(box.getAttribute('list') ?? '')
-    return Array.from(list?.querySelectorAll('option') ?? []).map((option) => option.value)
+describe('the filters offer what is on the tape', () => {
+  /** The values a picklist offers, read off its open list, then closed again. */
+  function offered(label: string): (string | null)[] {
+    const control = screen.getByLabelText(label)
+    fireEvent.click(control)
+    const values = Array.from(
+      screen.getByRole('listbox', { name: label }).querySelectorAll('[role="option"]'),
+    ).map((each) => each.getAttribute('data-value'))
+    fireEvent.click(control)
+    return values
   }
 
-  it('offers the symbols, traders and books the pane holds', () => {
+  it('offers no filter first, then the symbols, traders and books the pane holds', () => {
     renderBlotter()
 
-    expect(offered('Filter by symbol')).toEqual(['BARC', 'VOD'])
-    expect(offered('Filter by book')).toEqual(['EQ-LDN-01', 'EQ-LDN-02'])
-    expect(offered('Filter by trader')).toEqual(['k.madan'])
+    expect(offered('Filter by symbol')).toEqual(['', 'BARC', 'VOD'])
+    expect(offered('Filter by book')).toEqual(['', 'EQ-LDN-01', 'EQ-LDN-02'])
+    expect(offered('Filter by trader')).toEqual(['', 'k.madan'])
   })
 
-  it('leaves the box free text, so a part of a value still filters', () => {
+  it('names the control on its no-filter row, as the placeholder did', () => {
     renderBlotter()
 
-    // Why a datalist and not a select: LDN-02 is nobody's book.
-    fireEvent.change(screen.getByLabelText('Filter by book'), { target: { value: 'LDN-02' } })
+    expect(screen.getByLabelText('Filter by symbol')).toHaveTextContent('All symbols')
+    expect(screen.getByLabelText('Filter by trader')).toHaveTextContent('All traders')
+    expect(screen.getByLabelText('Filter by book')).toHaveTextContent('All books')
+  })
 
+  it('filters on the value picked, and clears on the no-filter row', () => {
+    renderBlotter()
+
+    set('Filter by book', 'EQ-LDN-02')
     expect(row('TRD-100004')).not.toBeNull()
     expect(row('TRD-100001')).toBeNull()
+
+    set('Filter by book', '')
+    expect(row('TRD-100001')).not.toBeNull()
   })
 
-  it('gives each pane its own lists, so two panes cannot share one id', () => {
-    renderBlotter()
-    renderBlotter([aTrade({ symbol: 'HSBA' })])
+  it('matches exactly, so a part of a value from an old link filters everything out', () => {
+    renderBlotter(BOOK, { ...DEFAULT_VIEW, columnFilters: [{ id: 'book', value: 'LDN-02' }] })
 
-    const ids = screen.getAllByLabelText('Filter by symbol').map((box) => box.getAttribute('list'))
+    expect(row('TRD-100004')).toBeNull()
+    expect(row('TRD-100001')).toBeNull()
+    // Kept on the control, so the empty grid has a visible reason.
+    expect(screen.getByLabelText('Filter by book')).toHaveAttribute('data-value', 'LDN-02')
+    expect(offered('Filter by book')).toEqual(['', 'EQ-LDN-01', 'EQ-LDN-02', 'LDN-02'])
+  })
 
-    expect(new Set(ids).size).toBe(2)
-    // A shared id would have both boxes offering the first pane's symbols.
-    expect(ids.map((id) => document.getElementById(id ?? '')?.children.length)).toEqual([2, 1])
+  it('offers a symbol the stream brings, without dropping the one picked', () => {
+    const props = {
+      actions: { onAmend: vi.fn(), onCancel: vi.fn(), onHistory: vi.fn() },
+      pendingIds: new Set<string>(),
+    }
+    const { rerender } = render(<BlotterTable {...props} trades={BOOK} />)
+    set('Filter by symbol', 'BARC')
+
+    rerender(
+      <BlotterTable
+        {...props}
+        trades={[aTrade({ tradeId: 'TRD-100005', symbol: 'HSBA' }), ...BOOK]}
+      />,
+    )
+
+    expect(offered('Filter by symbol')).toEqual(['', 'BARC', 'HSBA', 'VOD'])
+    expect(screen.getByLabelText('Filter by symbol')).toHaveAttribute('data-value', 'BARC')
+    expect(row('TRD-100004')).not.toBeNull()
+    expect(row('TRD-100005')).toBeNull()
   })
 })
 
@@ -884,9 +917,10 @@ describe("a pane's own menu", () => {
 
   it('leaves a box someone is typing in its own menu', () => {
     renderBlotter()
+    openConfig()
 
     // Cut, copy and paste belong to the field.
-    const box = screen.getByLabelText('Filter by symbol')
+    const box = screen.getByLabelText('Trade id')
     expect(fireEvent.contextMenu(box)).toBe(true)
     expect(sheet()).toBeNull()
   })
@@ -1032,7 +1066,7 @@ describe('the rail under the tape', () => {
 
   it('counts what the filter left, against what the pane was handed', () => {
     renderBlotter()
-    fireEvent.change(screen.getByLabelText('Filter by symbol'), { target: { value: 'BARC' } })
+    set('Filter by symbol', 'BARC')
 
     expect(screen.getByText(/^1 of 4 trades/)).toBeVisible()
   })
@@ -1069,7 +1103,7 @@ describe('the rail under the tape', () => {
 
   it('counts the filter against the window it filtered', () => {
     renderBlotter([...FULL.slice(1), aTrade({ symbol: 'BARC' })])
-    fireEvent.change(screen.getByLabelText('Filter by symbol'), { target: { value: 'BARC' } })
+    set('Filter by symbol', 'BARC')
 
     expect(screen.getByText(`1 of latest ${BLOTTER_LIMIT} trades`)).toBeVisible()
   })
